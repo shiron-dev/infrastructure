@@ -1,0 +1,25 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  cd:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Run ansible playbook
+        run: |
+          cd ansible
+          ansible-playbook -i hosts site.yml
