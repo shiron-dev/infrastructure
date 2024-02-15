@@ -10,51 +10,42 @@
 - name: Make named.conf
   become: True
   template:
-    src: named.conf.j2
+    src: bind-dns/named.conf.j2
     dest: /etc/bind/named.conf
   notify: restart bind
 
 - name: Make named.conf.options
   become: True
   template:
-    src: named.conf.options.j2
+    src: bind-dns/named.conf.options.j2
     dest: /etc/bind/named.conf.options
   notify: restart bind
 
 - name: Make named.conf.logging
   become: True
   template:
-    src: named.conf.logging.j2
+    src: bind-dns/named.conf.logging.j2
     dest: /etc/bind/named.conf.logging
   notify: restart bind
-
-- name: Make dir /var/log/named
-  become: True
-  file:
-    path: /var/log/named
-    state: directory
-    owner: root
-    group: root
-    mode: 777
 
 - name: Make named.conf.internal-zones
   become: True
   template:
-    src: named.conf.internal-zones.j2
+    src: bind-dns/named.conf.internal-zones.j2
     dest: /etc/bind/named.conf.internal-zones
   notify: restart bind
 
 - name: Make home.shiron.local.lan
   become: True
   template:
-    src: home.shiron.local.lan.j2
+    src: bind-dns/home.shiron.local.lan.j2
     dest: /etc/bind/home.shiron.local.lan
   notify: restart bind
 
 - name: Make 0.168.192.in-addr.arpa.rev
   become: True
   template:
-    src: 0.168.192.in-addr.arpa.rev.j2
+    src: bind-dns/0.168.192.in-addr.arpa.rev.j2
     dest: /etc/bind/0.168.192.in-addr.arpa.rev
   notify: restart bind
 
