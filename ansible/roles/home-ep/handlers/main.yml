@@ -1,2 +1,9 @@
 - name: restart bind
-  service: name=named state=restarted enabled=yes
+  service:
+    name: named
+    state: restarted
+
+- name: restart asterisk
+  service:
+    name: asterisk
+    state: restarted
