@@ -1,9 +1,13 @@
 - name: restart bind
+  become: True
   service:
     name: named
     state: restarted
+    enabled: yes
 
 - name: restart asterisk
+  become: True
   service:
     name: asterisk
     state: restarted
+    enabled: yes
