@@ -1,0 +1,11 @@
+[Unit]
+Description=Script for system startup and shutdown
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/var/init_task/startup.sh
+ExecStop=/var/init_task/shutdown.sh
+
+[Install]
+WantedBy=multi-user.target
