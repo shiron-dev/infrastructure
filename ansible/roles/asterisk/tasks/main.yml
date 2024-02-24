@@ -18,34 +18,34 @@
 - name: Make sip.conf
   become: True
   template:
-    src: asterisk/sip.conf.j2
+    src: sip.conf.j2
     dest: /etc/asterisk/sip.conf
   notify: restart asterisk
 
 - name: Make cdr.conf
   become: True
   template:
-    src: asterisk/cdr.conf.j2
+    src: cdr.conf.j2
     dest: /etc/asterisk/cdr.conf
   notify: restart asterisk
 
 - name: Make cel.conf
   become: True
   template:
-    src: asterisk/cel.conf.j2
+    src: cel.conf.j2
     dest: /etc/asterisk/cel.conf
   notify: restart asterisk
 
 - name: Make extensions.conf
   become: True
   template:
-    src: asterisk/extensions.conf.j2
+    src: extensions.conf.j2
     dest: /etc/asterisk/extensions.conf
   notify: restart asterisk
 
 - name: Make modules.conf
   become: True
   template:
-    src: asterisk/modules.conf.j2
+    src: modules.conf.j2
     dest: /etc/asterisk/modules.conf
   notify: restart asterisk

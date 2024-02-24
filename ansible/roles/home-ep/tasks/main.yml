@@ -1,5 +1,0 @@
----
-- import_tasks: raspberrypi.yml
-# - import_tasks: netbox.yml
-# - import_tasks: bind-dns.yml
-- import_tasks: asterisk.yml

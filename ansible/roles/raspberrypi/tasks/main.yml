@@ -1,6 +1,12 @@
-- name: Swap off
-  become: True
-  command: swapoff -a
+- name: get swap state
+  shell: sudo swapon -v
+  register: swap_state
+  check_mode: no
+  changed_when: no
+
+- name: swap off
+  shell: sudo swapoff -a
+  when: swap_state.stdout != ''
 
 - name: Remove swap package
   become: True
@@ -8,21 +14,10 @@
     name: dphys-swapfile
     state: absent
 
-- name: Template /etc/fstab
-  become: True
-  template:
-    src: raspberrypi/fstab.j2
-    dest: /etc/fstab
-    owner: root
-    group: root
-    mode: 0644
-    backup: yes
-  notify: reboot
-
 - name: Template init_task.service
   become: True
   template:
-    src: raspberrypi/init_task.service
+    src: init_task.service
     dest: /etc/systemd/system/init_task.service
     owner: root
     group: root
@@ -41,7 +36,7 @@
 - name: Template startup.sh
   become: True
   template:
-    src: raspberrypi/startup.sh
+    src: startup.sh
     dest: /var/init_task/startup.sh
     owner: root
     group: root
@@ -51,7 +46,7 @@
 - name: Template shutdown.sh
   become: True
   template:
-    src: raspberrypi/shutdown.sh
+    src: shutdown.sh
     dest: /var/init_task/shutdown.sh
     owner: root
     group: root
@@ -74,3 +69,21 @@
     enabled: yes
     state: started
     daemon_reload: yes
+
+- name: Template /etc/fstab
+  become: True
+  template:
+    src: fstab.j2
+    dest: /etc/fstab
+    owner: root
+    group: root
+    mode: 0644
+    backup: yes
+  notify: reboot
+  register: fstab
+
+- name: reboot
+  become: True
+  reboot:
+    reboot_timeout: 300
+  when: fstab.changed

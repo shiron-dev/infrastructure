@@ -1,4 +1,6 @@
 ---
 - hosts: home-ep
   roles:
-    - home-ep
+    - raspberrypi
+    # - bind-dns
+    - asterisk
