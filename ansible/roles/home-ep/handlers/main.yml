@@ -11,3 +11,15 @@
     name: asterisk
     state: restarted
     enabled: yes
+
+- name: restart homeassistant
+  become: True
+  service:
+    name: homeassistant
+    state: restarted
+    enabled: yes
+
+- name: reboot
+  become: True
+  reboot:
+    reboot_timeout: 300

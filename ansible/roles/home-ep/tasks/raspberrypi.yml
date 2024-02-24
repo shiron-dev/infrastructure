@@ -17,6 +17,7 @@
     group: root
     mode: 0644
     backup: yes
+  notify: reboot
 
 - name: Template init_task.service
   become: True
