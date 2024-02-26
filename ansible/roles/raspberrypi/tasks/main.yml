@@ -79,7 +79,6 @@
     group: root
     mode: 0644
     backup: yes
-  notify: reboot
   register: fstab
 
 - name: reboot
