@@ -1,0 +1,7 @@
+- name: restart homeassistant
+  become: True
+  service:
+    name: homeassistant@homeassistant
+    state: restarted
+    enabled: yes
+    daemon_reload: yes

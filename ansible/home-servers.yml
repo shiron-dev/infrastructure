@@ -4,3 +4,4 @@
     - raspberrypi
     # - bind-dns
     - asterisk
+    - home-assistant
