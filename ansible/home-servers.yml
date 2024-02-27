@@ -1,8 +1,8 @@
 ---
 - hosts: home-ep
   roles:
-    # - raspberrypi
-    # # - bind-dns
-    # - asterisk
-    # - home-assistant
+    - raspberrypi
     - docker
+    # - bind-dns
+    - asterisk
+    - home-assistant

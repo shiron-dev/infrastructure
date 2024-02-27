@@ -1,0 +1,35 @@
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+wake_on_lan:
+  - name: EVE
+    mac_address: a8:a1:59:12:b0:b7
+    host: 192.168.0.170
+
+  - name: PVE
+    mac_address: 30:9c:23:7f:c2:6c
+    host: 192.168.0.180
+
+  - name: HDL-NAS
+    mac_address: 34:76:c5:94:7a:45
+    host: 192.168.0.181
+
+switch:
+  - platform: wake_on_lan
+    mac: a8:a1:59:12:b0:b7
+    name: "EVE"
+  - platform: wake_on_lan
+    mac: 30:9c:23:7f:c2:6c
+    name: "PVE"
+  - platform: wake_on_lan
+    mac: 34:76:c5:94:7a:45
+    name: "HDL-NAS"

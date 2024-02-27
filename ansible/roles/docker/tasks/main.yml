@@ -58,3 +58,8 @@
     state: started
     enabled: yes
 
+- name: Docker SDK for Python
+  become: true
+  apt:
+    name: python3-docker
+    state: present
