@@ -6,3 +6,4 @@
     # - bind-dns
     - asterisk
     - home-assistant
+    - prometheus
