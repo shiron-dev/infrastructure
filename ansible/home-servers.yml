@@ -1,5 +1,5 @@
 ---
-- hosts: home-ep
+- hosts: home_ep
   roles:
     - raspberrypi
     - docker

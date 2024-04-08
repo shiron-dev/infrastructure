@@ -1,5 +1,0 @@
-[home-ep]
-home-ep.ladon-tiaki.ts.net ansible_user=ansible_user
-
-[home-servers:children]
-home-ep
