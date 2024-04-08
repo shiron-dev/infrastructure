@@ -1,0 +1,7 @@
+- name: enable init_task
+  become: True
+  systemd:
+    name: init_task
+    enabled: yes
+    state: started
+    daemon_reload: yes

@@ -10,11 +10,18 @@
     state: directory
     mode: '0755'
 
+- name: Check Docker GPG key
+  become: true
+  stat:
+    path: /etc/apt/keyrings/docker.asc
+  register: docker_gpg_key
+
 - name: Download the Docker GPG key
   become: true
   get_url:
     url: https://download.docker.com/linux/debian/gpg
     dest: /etc/apt/keyrings/docker.asc
+  when: docker_gpg_key.stat.exists == False
 
 - name: Set permissions for Docker's GPG key
   become: true

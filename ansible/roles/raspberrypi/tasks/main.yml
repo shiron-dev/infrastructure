@@ -23,6 +23,7 @@
     group: root
     mode: 0644
     backup: yes
+  notify: enable init_task
 
 - name: Make init_task dir
   become: True
@@ -32,6 +33,7 @@
     owner: root
     group: root
     mode: 0755
+  notify: enable init_task
 
 - name: Template startup.sh
   become: True
@@ -42,6 +44,7 @@
     group: root
     mode: 0755
     backup: yes
+  notify: enable init_task
 
 - name: Template shutdown.sh
   become: True
@@ -52,6 +55,7 @@
     group: root
     mode: 0755
     backup: yes
+  notify: enable init_task
 
 - name: Make log.old dir
   become: True
@@ -61,14 +65,7 @@
     owner: root
     group: root
     mode: 0755
-
-- name: Enable init_task service
-  become: True
-  systemd:
-    name: init_task
-    enabled: yes
-    state: started
-    daemon_reload: yes
+  notify: enable init_task
 
 - name: Template /etc/fstab
   become: True
