@@ -9,4 +9,4 @@
 
 # From private-infra repository
 
-group_vars/
+group_vars
