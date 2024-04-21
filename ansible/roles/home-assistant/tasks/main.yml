@@ -14,7 +14,7 @@
 
 - name: Make configuration.yaml
   template:
-    src: configuration.yaml
+    src: configuration.yaml.j2
     dest: /var/home-assistant/config/configuration.yaml
     mode: '0644'
 
