@@ -1,2 +1,2 @@
 ---
-- import_playbook: home-servers.yml
+- import_playbook: home_servers.yml

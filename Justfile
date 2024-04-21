@@ -6,7 +6,7 @@ default:
   @just --list
 
 setup:
-  if ! {{path_exists("ansible/group_vars")}}; then \
+  @if ! {{path_exists("ansible/group_vars")}}; then \
     cd ansible && ln -s ../private/ansible/group_vars group_vars; \
   fi
 

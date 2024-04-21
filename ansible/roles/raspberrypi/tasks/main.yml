@@ -1,11 +1,13 @@
 - name: get swap state
-  shell: sudo swapon -v
+  become: True
+  shell: swapon -v
   register: swap_state
   check_mode: no
   changed_when: no
 
 - name: swap off
-  shell: sudo swapoff -a
+  become: True
+  shell: swapoff -a
   when: swap_state.stdout != ''
 
 - name: Remove swap package
