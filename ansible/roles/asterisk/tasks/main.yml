@@ -3,49 +3,74 @@
   become: True
   apt:
 
-- name: Install asterisk
+- name: mkdir /var/asterisk
   become: True
-  apt: name='asterisk'
-  notify: restart asterisk
+  file:
+    path: /var/asterisk
+    state: directory
+    mode: '0777'
+  register: asterisk_dir
 
-- name: enable asterisk
+- name: download asterisk
+  get_url:
+    url: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-20.7.0.tar.gz
+    dest: /var/asterisk/asterisk.tar.gz
+  when: asterisk_dir.changed
+  register: asterisk_download
+
+- name: extract asterisk
+  unarchive:
+    src: /var/asterisk/asterisk.tar.gz
+    dest: /var/asterisk
+    remote_src: yes
+  when: asterisk_download.changed
+
+- name: install prereq
   become: True
-  service:
-    name: asterisk
-    enabled: yes
-    state: started
+  command: ./install_prereq install
+  args:
+    chdir: /var/asterisk/asterisk-20.7.0/contrib/scripts
+  when: asterisk_download.changed
+
+- name: configure
+  become: True
+  command: ./configure --with-pjproject-bundled
+  args:
+    chdir: /var/asterisk/asterisk-20.7.0
+  when: asterisk_download.changed
+
+- name: Make
+  become: True
+  make:
+    chdir: /var/asterisk/asterisk-20.7.0
+  when: asterisk_download.changed
+
+
+- name: Make install
+  become: True
+  make:
+    chdir: /var/asterisk/asterisk-20.7.0
+    target: install
+  when: asterisk_download.changed
+
+- name: Make samples
+  become: True
+  make:
+    chdir: /var/asterisk/asterisk-20.7.0
+    target: samples
+  when: asterisk_download.changed
+
+- name: Make config
+  become: True
+  make:
+    chdir: /var/asterisk/asterisk-20.7.0
+    target: config
+  when: asterisk_download.changed
+
+- name: Make install-logrotate
+  become: True
+  make:
+    chdir: /var/asterisk/asterisk-20.7.0
+    target: install-logrotate
+  when: asterisk_download.changed
   
-- name: Make sip.conf
-  become: True
-  template:
-    src: sip.conf.j2
-    dest: /etc/asterisk/sip.conf
-  notify: restart asterisk
-
-- name: Make cdr.conf
-  become: True
-  template:
-    src: cdr.conf.j2
-    dest: /etc/asterisk/cdr.conf
-  notify: restart asterisk
-
-- name: Make cel.conf
-  become: True
-  template:
-    src: cel.conf.j2
-    dest: /etc/asterisk/cel.conf
-  notify: restart asterisk
-
-- name: Make extensions.conf
-  become: True
-  template:
-    src: extensions.conf.j2
-    dest: /etc/asterisk/extensions.conf
-  notify: restart asterisk
-
-- name: Make modules.conf
-  become: True
-  template:
-    src: modules.conf.j2
-    dest: /etc/asterisk/modules.conf
-  notify: restart asterisk
