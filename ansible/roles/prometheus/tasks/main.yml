@@ -19,11 +19,13 @@
   template:
     src: compose.yml
     dest: /var/prometheus/compose.yml
+  register: compose
 
 - name: docker compose up
   shell:
     cmd: docker compose -f /var/prometheus/compose.yml up -d
     chdir: /var/prometheus
+  when: compose.changed
 
 - name: make prometheus.yml
   become: True
