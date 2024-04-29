@@ -1,7 +1,8 @@
 ---
 - hosts: oci_arm
   roles:
-    - docker
+    # - docker
     - asterisk
-    - prometheus
+    # - prometheus
+    - fail2ban
    

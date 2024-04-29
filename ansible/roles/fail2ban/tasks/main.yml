@@ -1,0 +1,21 @@
+---
+- name: apt-get update
+  become: True
+  apt:
+
+- name: Install fail2ban
+  become: True
+  apt: name='fail2ban'
+
+- name: Make jail.local
+  become: True
+  template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+  notify: restart fail2ban
+
+- name: Enable fail2ban
+  become: True
+  service:
+    name: fail2ban
+    enabled: yes
