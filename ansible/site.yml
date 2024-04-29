@@ -1,2 +1,3 @@
 ---
-- import_playbook: home_servers.yml
+# - import_playbook: home_servers.yml
+- import_playbook: oci_servers.yml

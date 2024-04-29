@@ -1,4 +1,7 @@
 ---
+- name: include vars
+  include_vars: "{{ ansible_facts['distribution'] }}.yml"
+
 - name: update apt
   become: true
   apt:
@@ -19,7 +22,7 @@
 - name: Download the Docker GPG key
   become: true
   get_url:
-    url: https://download.docker.com/linux/debian/gpg
+    url: "{{ docker_gpg_url }}"
     dest: /etc/apt/keyrings/docker.asc
   when: docker_gpg_key.stat.exists == False
 
@@ -29,16 +32,23 @@
     path: /etc/apt/keyrings/docker.asc
     mode: '0644'
 
+- name: Check if Docker repository is already added
+  stat:
+    path: /etc/apt/sources.list.d/docker.list
+  register: docker_repo
+
 - name: Add Docker repository to Apt sources
   become: true
-  command: >
-    echo "deb [arch={{ ansible_architecture }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+  shell: >
+    echo "deb [arch=all signed-by=/etc/apt/keyrings/docker.asc] {{ docker_download_url }} {{ ansible_distribution_release }} stable"
     | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  when: not docker_repo.stat.exists
 
 - name: Update apt
   become: true
   apt:
     update_cache: yes
+  when: not docker_repo.stat.exists
     
 - name: Install Docker
   become: true
@@ -58,11 +68,10 @@
     groups: docker
     append: yes
 
-- name: Start Docker
+- name: Enable Docker
   become: true
   service:
     name: docker
-    state: started
     enabled: yes
 
 - name: Docker SDK for Python

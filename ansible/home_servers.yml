@@ -4,6 +4,5 @@
     - raspberrypi
     - docker
     # - bind-dns
-    - asterisk
     - home-assistant
     - prometheus

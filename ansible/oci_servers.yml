@@ -1,0 +1,7 @@
+---
+- hosts: oci_arm
+  roles:
+    - docker
+    - asterisk
+    - prometheus
+   
