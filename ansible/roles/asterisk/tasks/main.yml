@@ -94,6 +94,13 @@
     src: pjsip.conf.j2
     dest: /etc/asterisk/pjsip.conf
   notify: restart asterisk
+  
+- name: Make pjsip_wizard.conf
+  become: True
+  template:
+    src: pjsip_wizard.conf.j2
+    dest: /etc/asterisk/pjsip_wizard.conf
+  notify: restart asterisk
 
 - name: Make extensions.conf
   become: True
