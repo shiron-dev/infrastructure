@@ -78,10 +78,5 @@
     group: root
     mode: 0644
     backup: yes
-  register: fstab
+  notify: reboot
 
-- name: reboot
-  become: True
-  reboot:
-    reboot_timeout: 300
-  when: fstab.changed
