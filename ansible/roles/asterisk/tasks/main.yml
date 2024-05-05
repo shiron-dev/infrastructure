@@ -130,6 +130,13 @@
     dest: /etc/asterisk/modules.conf
   notify: restart asterisk
 
+- name: Make logger.conf
+  become: True
+  template:
+    src: logger.conf.j2
+    dest: /etc/asterisk/logger.conf
+  notify: restart asterisk
+
 - name: Enable Asterisk
   become: True
   service:

@@ -12,6 +12,9 @@ setup:
   @if ! {{path_exists("ansible/roles/asterisk/templates")}}; then \
     cd ansible/roles/asterisk && ln -s ../../../private/ansible/roles/asterisk/templates templates; \
   fi
+  @if ! {{path_exists("ansible/roles/fail2ban/templates")}}; then \
+    cd ansible/roles/fail2ban && ln -s ../../../private/ansible/roles/fail2ban/templates templates; \
+  fi
 
 auth:
   ssh -T -F ansible/ssh_config ansible_user@arm-srv.shiron.dev
