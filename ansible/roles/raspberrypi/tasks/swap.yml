@@ -1,0 +1,18 @@
+---
+- name: get swap state
+  become: True
+  shell: swapon -v
+  register: swap_state
+  check_mode: no
+  changed_when: no
+
+- name: swap off
+  become: True
+  shell: swapoff -a
+  when: swap_state.stdout != ''
+
+- name: Remove swap package
+  become: True
+  apt:
+    name: dphys-swapfile
+    state: absent

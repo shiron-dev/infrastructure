@@ -1,0 +1,15 @@
+---
+- name: apt-get update
+  become: True
+  apt:
+   
+- name: Install rsyslog
+  become: True
+  apt: name='rsyslog'
+  notify: reboot
+
+- name: Enable rsyslog
+  become: True
+  service:
+    name: rsyslog
+    enabled: yes

@@ -1,0 +1,65 @@
+---
+- name: Template init_task.service
+  become: True
+  template:
+    src: init_task.service
+    dest: /etc/systemd/system/init_task.service
+    owner: root
+    group: root
+    mode: 0644
+    backup: yes
+  notify: enable init_task
+
+- name: Make init_task dir
+  become: True
+  file:
+    path: /var/init_task
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  notify: enable init_task
+
+- name: Template startup.sh
+  become: True
+  template:
+    src: startup.sh
+    dest: /var/init_task/startup.sh
+    owner: root
+    group: root
+    mode: 0755
+    backup: yes
+  notify: enable init_task
+
+- name: Template shutdown.sh
+  become: True
+  template:
+    src: shutdown.sh
+    dest: /var/init_task/shutdown.sh
+    owner: root
+    group: root
+    mode: 0755
+    backup: yes
+  notify: enable init_task
+
+- name: Make log.old dir
+  become: True
+  file:
+    path: /var/log.old
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  notify: enable init_task
+
+- name: Template /etc/fstab
+  become: True
+  template:
+    src: fstab.j2
+    dest: /etc/fstab
+    owner: root
+    group: root
+    mode: 0644
+    backup: yes
+  notify: reboot
+
