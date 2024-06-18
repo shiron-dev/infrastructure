@@ -6,8 +6,8 @@ default:
   @just --list
 
 setup:
-  @if ! {{path_exists("ansible/group_vars")}}; then \
-    cd ansible && ln -s ../private/ansible/group_vars group_vars; \
+  @if ! {{path_exists("ansible/hosts/group_vars")}}; then \
+    cd ansible/hosts && ln -s ../../private/ansible/group_vars group_vars; \
   fi
   @if ! {{path_exists("ansible/roles/asterisk/templates")}}; then \
     cd ansible/roles/asterisk && ln -s ../../../private/ansible/roles/asterisk/templates templates; \
@@ -15,6 +15,14 @@ setup:
   @if ! {{path_exists("ansible/roles/fail2ban/templates")}}; then \
     cd ansible/roles/fail2ban && ln -s ../../../private/ansible/roles/fail2ban/templates templates; \
   fi
+
+  cd ansible && ansible-galaxy install -r requirements.yml
+
+lint:
+  cd ansible && ansible-lint
+
+lint-fix:
+  cd ansible && ansible-lint --fix
 
 auth:
   ssh -T -F ansible/ssh_config ansible_user@arm-srv.shiron.dev

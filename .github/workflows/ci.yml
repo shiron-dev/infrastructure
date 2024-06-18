@@ -21,4 +21,6 @@ jobs:
           yamllint_flags: "-c .yamllint ."
 
       - name: Run ansible-lint
-        uses: ansible/ansible-lint-action@main
+        uses: ansible/ansible-lint@main
+        with:
+          working_directory: ./ansible
