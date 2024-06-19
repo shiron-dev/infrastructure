@@ -6,8 +6,8 @@ default:
   @just --list
 
 setup:
-  @if ! {{path_exists("ansible/hosts/group_vars")}}; then \
-    cd ansible/hosts && ln -s ../../private/ansible/group_vars group_vars; \
+  @if ! {{path_exists("ansible/group_vars")}}; then \
+    cd ansible && ln -s ../private/ansible/group_vars group_vars; \
   fi
   @if ! {{path_exists("ansible/roles/asterisk/templates")}}; then \
     cd ansible/roles/asterisk && ln -s ../../../private/ansible/roles/asterisk/templates templates; \
