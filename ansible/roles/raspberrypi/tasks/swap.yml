@@ -1,18 +1,19 @@
 ---
-- name: get swap state
-  become: True
-  shell: swapon -v
+- name: Get swap state
+  become: true
+  ansible.builtin.command: swapon -v
   register: swap_state
-  check_mode: no
-  changed_when: no
+  check_mode: false
+  changed_when: false
 
-- name: swap off
-  become: True
-  shell: swapoff -a
+- name: Swap off
+  become: true
+  ansible.builtin.command: swapoff -a
+  changed_when: true
   when: swap_state.stdout != ''
 
 - name: Remove swap package
-  become: True
-  apt:
+  become: true
+  ansible.builtin.apt:
     name: dphys-swapfile
     state: absent

@@ -1,3 +1,5 @@
 ---
-# - import_playbook: hosts/home_servers.yml
-- import_playbook: hosts/oci_servers.yml
+# - name: Home servers
+#   import_playbook: hosts/home_servers.yml
+- name: OCI Servers
+  import_playbook: hosts/oci_servers.yml

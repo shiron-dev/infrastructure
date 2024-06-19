@@ -1,35 +1,34 @@
 ---
-- name: apt-get update
-  become: True
-  apt:
-    
+- name: Apt-get update
+  become: true
+  ansible.builtin.apt:
+
 - name: Install prometheus
-  become: True
-  apt:
+  become: true
+  ansible.builtin.apt:
     name: prometheus
 
-- name: mkdir /var/prometheus
-  become: True
-  file:
+- name: Mkdir /var/prometheus
+  become: true
+  ansible.builtin.file:
     path: /var/prometheus
     state: directory
+    mode: "0755"
 
-- name: make compose.yml
-  become: True
-  template:
+- name: Make compose.yml
+  become: true
+  ansible.builtin.template:
     src: compose.yml
     dest: /var/prometheus/compose.yml
-  register: compose
+    mode: "0644"
+  notify: restart node-exporter
 
-- name: docker compose up
-  shell:
-    cmd: docker compose -f /var/prometheus/compose.yml up -d
-    chdir: /var/prometheus
-  when: compose.changed
-
-- name: make prometheus.yml
-  become: True
-  template:
+- name: Make prometheus.yml
+  become: true
+  ansible.builtin.template:
     src: prometheus.yml
     dest: /etc/prometheus/prometheus.yml
-  notify: restart prometheus
+    mode: "0644"
+  notify:
+    - restart prometheus
+    - restart node-exporter

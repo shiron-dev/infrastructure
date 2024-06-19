@@ -1,21 +1,23 @@
 ---
-- name: apt-get update
-  become: True
-  apt:
+- name: Apt-get update
+  become: true
+  ansible.builtin.apt:
 
 - name: Install fail2ban
-  become: True
-  apt: name='fail2ban'
+  become: true
+  ansible.builtin.apt:
+    name: "fail2ban"
 
 - name: Make jail.local
-  become: True
-  template:
+  become: true
+  ansible.builtin.template:
     src: jail.local.j2
     dest: /etc/fail2ban/jail.local
+    mode: "0644"
   notify: restart fail2ban
 
 - name: Enable fail2ban
-  become: True
-  service:
+  become: true
+  ansible.builtin.service:
     name: fail2ban
-    enabled: yes
+    enabled: true

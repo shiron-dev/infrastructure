@@ -1,7 +1,0 @@
-- name: restart bind
-  become: True
-  service:
-    name: named
-    state: restarted
-    enabled: yes
-    

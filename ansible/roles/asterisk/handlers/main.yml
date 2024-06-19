@@ -1,6 +1,7 @@
-- name: restart asterisk
-  become: True
-  service:
+---
+- name: Restart asterisk
+  become: true
+  ansible.builtin.service:
     name: asterisk
     state: restarted
-    enabled: yes
+    enabled: true

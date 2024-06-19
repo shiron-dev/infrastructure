@@ -1,144 +1,154 @@
 ---
-- name: apt-get update
-  become: True
-  apt:
+- name: Apt-get update
+  become: true
+  ansible.builtin.apt:
 
-- name: mkdir /var/asterisk
-  become: True
-  file:
+- name: Mkdir /var/asterisk
+  become: true
+  ansible.builtin.file:
     path: /var/asterisk
     state: directory
-    mode: '0777'
+    mode: "0777"
   register: asterisk_dir
 
-- name: download asterisk
-  get_url:
+- name: Download asterisk
+  ansible.builtin.get_url:
     url: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-20.7.0.tar.gz
     dest: /var/asterisk/asterisk.tar.gz
+    mode: "0644"
   when: asterisk_dir.changed
   register: asterisk_download
 
-- name: extract asterisk
-  unarchive:
+- name: Extract asterisk
+  ansible.builtin.unarchive:
     src: /var/asterisk/asterisk.tar.gz
     dest: /var/asterisk
-    remote_src: yes
+    mode: "0644"
+    remote_src: true
   when: asterisk_download.changed
 
-- name: install prereq
-  become: True
-  command: ./install_prereq install
+- name: Install prereq
+  become: true
+  ansible.builtin.command: ./install_prereq install
   args:
     chdir: /var/asterisk/asterisk-20.7.0/contrib/scripts
   when: asterisk_download.changed
 
-- name: configure
-  become: True
-  command: ./configure --with-pjproject-bundled
+- name: Configure
+  become: true
+  ansible.builtin.command: ./configure --with-pjproject-bundled
   args:
     chdir: /var/asterisk/asterisk-20.7.0
   when: asterisk_download.changed
 
 - name: Make
-  become: True
-  make:
+  become: true
+  community.general.make:
     chdir: /var/asterisk/asterisk-20.7.0
   when: asterisk_download.changed
 
-
 - name: Make install
-  become: True
-  make:
+  become: true
+  community.general.make:
     chdir: /var/asterisk/asterisk-20.7.0
     target: install
   when: asterisk_download.changed
 
 - name: Make samples
-  become: True
-  make:
+  become: true
+  community.general.make:
     chdir: /var/asterisk/asterisk-20.7.0
     target: samples
   when: asterisk_download.changed
 
 - name: Make config
-  become: True
-  make:
+  become: true
+  community.general.make:
     chdir: /var/asterisk/asterisk-20.7.0
     target: config
   when: asterisk_download.changed
 
 - name: Make install-logrotate
-  become: True
-  make:
+  become: true
+  community.general.make:
     chdir: /var/asterisk/asterisk-20.7.0
     target: install-logrotate
   when: asterisk_download.changed
 
 - name: Update service file
-  become: True
-  template:
+  become: true
+  ansible.builtin.template:
     src: asterisk.service.j2
     dest: /lib/systemd/system/asterisk.service
+    mode: "0644"
   notify: restart asterisk
   register: asterisk_service
 
 - name: Daemon reload
-  become: True
-  systemd:
-    daemon_reload: yes
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  changed_when:
   when: asterisk_service.changed
 
 - name: Make pjsip.conf
-  become: True
-  template:
+  become: true
+  ansible.builtin.template:
     src: pjsip.conf.j2
     dest: /etc/asterisk/pjsip.conf
+    mode: "0644"
   notify: restart asterisk
-  
+
 - name: Make pjsip_wizard.conf
-  become: True
-  template:
+  become: true
+  ansible.builtin.template:
     src: pjsip_wizard.conf.j2
     dest: /etc/asterisk/pjsip_wizard.conf
+    mode: "0644"
   notify: restart asterisk
 
 - name: Make extensions.conf
-  become: True
-  template:
+  become: true
+  ansible.builtin.template:
     src: extensions.conf.j2
     dest: /etc/asterisk/extensions.conf
+    mode: "0644"
   notify: restart asterisk
 
 - name: Make cdr.conf
-  become: True
-  template:
+  become: true
+  ansible.builtin.template:
     src: cdr.conf.j2
     dest: /etc/asterisk/cdr.conf
+    mode: "0644"
   notify: restart asterisk
 
 - name: Make cel.conf
-  become: True
-  template:
+  become: true
+  ansible.builtin.template:
     src: cel.conf.j2
     dest: /etc/asterisk/cel.conf
+    mode: "0644"
   notify: restart asterisk
 
 - name: Make modules.conf
-  become: True
-  template:
+  become: true
+  ansible.builtin.template:
     src: modules.conf.j2
     dest: /etc/asterisk/modules.conf
+    mode: "0644"
   notify: restart asterisk
 
 - name: Make logger.conf
-  become: True
-  template:
+  become: true
+  ansible.builtin.template:
     src: logger.conf.j2
     dest: /etc/asterisk/logger.conf
+    mode: "0644"
   notify: restart asterisk
 
 - name: Enable Asterisk
-  become: True
-  service:
+  become: true
+  ansible.builtin.service:
     name: asterisk
-    enabled: yes
+    enabled: true

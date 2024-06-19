@@ -1,15 +1,16 @@
 ---
-- name: apt-get update
-  become: True
-  apt:
-   
+- name: Apt-get update
+  become: true
+  ansible.builtin.apt:
+
 - name: Install rsyslog
-  become: True
-  apt: name='rsyslog'
+  become: true
+  ansible.builtin.apt:
+    name: "rsyslog"
   notify: reboot
 
 - name: Enable rsyslog
-  become: True
-  service:
+  become: true
+  ansible.builtin.service:
     name: rsyslog
-    enabled: yes
+    enabled: true

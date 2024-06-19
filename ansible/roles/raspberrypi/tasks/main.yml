@@ -1,4 +1,7 @@
 ---
-- import_tasks: swap.yml
-- import_tasks: tmpfs.yml
-- import_tasks: rsyslog.yml
+- name: Swap off
+  ansible.builtin.import_tasks: swap.yml
+- name: Use tmpfs
+  ansible.builtin.import_tasks: tmpfs.yml
+- name: Install rsyslog
+  ansible.builtin.import_tasks: rsyslog.yml

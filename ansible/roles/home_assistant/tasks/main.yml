@@ -1,24 +1,21 @@
 ---
-- name: mkdir /var/home-assistant/config
+- name: Mkdir /var/home-assistant/config
   become: true
-  file:
+  ansible.builtin.file:
     path: /var/home-assistant/config
     state: directory
-    mode: '0777'
+    mode: "0777"
 
 - name: Make compose.yml
-  template:
+  ansible.builtin.template:
     src: compose.yml
     dest: /var/home-assistant/compose.yml
-    mode: '0644'
+    mode: "0644"
+  notify: restart home-assistant
 
 - name: Make configuration.yaml
-  template:
+  ansible.builtin.template:
     src: configuration.yaml.j2
     dest: /var/home-assistant/config/configuration.yaml
-    mode: '0644'
-
-- name: docker compose up
-  shell:
-    cmd: "docker compose -f /var/home-assistant/compose.yml up -d"
-    chdir: /var/home-assistant
+    mode: "0644"
+  notify: restart home-assistant
