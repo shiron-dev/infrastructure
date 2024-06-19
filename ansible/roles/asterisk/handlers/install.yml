@@ -1,0 +1,76 @@
+---
+- name: Check prereq
+  listen: install_asterisk
+  become: true
+  ansible.builtin.command: ./install_prereq test | wc -l
+  register: check_prereq
+  changed_when: false
+
+- name: Install prereq
+  listen: install_asterisk
+  become: true
+  ansible.builtin.command: ./install_prereq install
+  args:
+    chdir: /var/asterisk/asterisk-20.7.0/contrib/scripts
+  changed_when: true
+  when: check_prereq.stdout != "4"
+  notify: configure
+
+- name: Configure
+  listen: configure
+  become: true
+  ansible.builtin.command: ./configure --with-pjproject-bundled
+  args:
+    chdir: /var/asterisk/asterisk-20.7.0
+  changed_when: true
+  notify: make
+
+- name: Make
+  listen: make
+  become: true
+  community.general.make:
+    chdir: /var/asterisk/asterisk-20.7.0
+  changed_when: true
+
+- name: Make install
+  listen: make
+  become: true
+  community.general.make:
+    chdir: /var/asterisk/asterisk-20.7.0
+    target: install
+  changed_when: true
+
+- name: Make samples
+  listen: make
+  become: true
+  community.general.make:
+    chdir: /var/asterisk/asterisk-20.7.0
+    target: samples
+  changed_when: true
+
+- name: Make config
+  listen: make
+  become: true
+  community.general.make:
+    chdir: /var/asterisk/asterisk-20.7.0
+    target: config
+  changed_when: true
+
+- name: Make install-logrotate
+  listen: make
+  become: true
+  community.general.make:
+    chdir: /var/asterisk/asterisk-20.7.0
+    target: install-logrotate
+  changed_when: true
+
+- name: Update service file
+  become: true
+  ansible.builtin.template:
+    src: asterisk.service.j2
+    dest: /lib/systemd/system/asterisk.service
+    mode: "0644"
+  notify:
+    - daemon_reload
+    - restart_asterisk
+    - config_asterisk

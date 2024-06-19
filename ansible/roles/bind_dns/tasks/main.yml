@@ -6,7 +6,7 @@
 - name: Install bind9
   become: true
   ansible.builtin.apt:
-    name: "bind9, bind9-utils"
+    name: bind9, bind9-utils
 
 - name: Make named.conf
   become: true

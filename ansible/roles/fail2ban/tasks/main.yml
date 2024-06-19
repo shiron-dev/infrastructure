@@ -6,7 +6,7 @@
 - name: Install fail2ban
   become: true
   ansible.builtin.apt:
-    name: "fail2ban"
+    name: fail2ban
 
 - name: Make jail.local
   become: true
