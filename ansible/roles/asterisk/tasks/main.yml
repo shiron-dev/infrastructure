@@ -137,6 +137,13 @@
     dest: /etc/asterisk/logger.conf
   notify: restart asterisk
 
+- name: Make rtp.conf
+  become: True
+  template:
+    src: rtp.conf.j2
+    dest: /etc/asterisk/rtp.conf
+  notify: restart asterisk
+
 - name: Enable Asterisk
   become: True
   service:
