@@ -16,5 +16,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           reporter: github-pr-review
           level: warning
+      - name: Setup ansible
+        run: pip install ansible
+      - name: Run ansible-galaxy
+        run: ansible-galaxy install -r ansible/requirements.yml
       - name: Run ansible-lint
         uses: ansible/ansible-lint@v24.6.1
