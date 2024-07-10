@@ -11,11 +11,11 @@
     src: compose.yml
     dest: /var/home-assistant/compose.yml
     mode: "0644"
-  notify: restart home-assistant
+  notify: Restart home-assistant
 
 - name: Make configuration.yaml
   ansible.builtin.template:
     src: configuration.yaml.j2
     dest: /var/home-assistant/config/configuration.yaml
     mode: "0644"
-  notify: restart home-assistant
+  notify: Restart home-assistant

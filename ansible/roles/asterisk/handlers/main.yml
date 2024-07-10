@@ -1,10 +1,10 @@
 ---
 - name: Restart asterisk
-  listen: restart_asterisk
+  listen: Restart_asterisk
   become: true
   ansible.builtin.service:
     name: asterisk
-    state: restarted
+    state: Restarted
     enabled: true
 
 - name: Daemon reload

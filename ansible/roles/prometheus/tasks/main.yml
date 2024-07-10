@@ -21,7 +21,7 @@
     src: compose.yml
     dest: /var/prometheus/compose.yml
     mode: "0644"
-  notify: restart node-exporter
+  notify: Restart node-exporter
 
 - name: Make prometheus.yml
   become: true
@@ -30,5 +30,5 @@
     dest: /etc/prometheus/prometheus.yml
     mode: "0644"
   notify:
-    - restart prometheus
-    - restart node-exporter
+    - Restart prometheus
+    - Restart node-exporter

@@ -3,7 +3,7 @@
   become: true
   ansible.builtin.service:
     name: prometheus
-    state: restarted
+    state: Restarted
     enabled: true
 
 - name: Restart node-exporter
