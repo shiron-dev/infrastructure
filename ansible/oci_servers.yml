@@ -1,0 +1,16 @@
+---
+- name: OCI ARM Instances
+  hosts: oci_arm
+  roles:
+    - role: docker
+      tags:
+        - docker
+    - role: prometheus
+      tags:
+        - prometheus
+    - role: asterisk
+      tags:
+        - asterisk
+    - role: fail2ban
+      tags:
+        - fail2ban

@@ -1,0 +1,55 @@
+---
+- name: Mkdir /var/asterisk
+  become: true
+  ansible.builtin.file:
+    path: /var/asterisk
+    state: directory
+    mode: "0777"
+
+- name: Create temporary build directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: asterisk
+  changed_when: false
+  register: tmpdir
+
+- name: Download checksum
+  ansible.builtin.get_url:
+    url: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-20.8.1.sha256
+    force: true
+    dest: "{{ tmpdir.path }}/asterisk.tar.gz.sha256"
+    mode: "0644"
+  changed_when: false
+
+- name: Get checksum
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      cat "{{ tmpdir.path }}/asterisk.tar.gz.sha256" | cut -d" " -f 1
+    executable: /bin/bash
+  changed_when: false
+  register: checksum
+
+- name: Get checksum
+  ansible.builtin.stat:
+    path: /var/asterisk/asterisk.tar.gz
+    checksum_algorithm: sha256
+  register: st
+
+- name: Download asterisk
+  ansible.builtin.get_url:
+    url: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-20.8.1.tar.gz
+    dest: /var/asterisk/asterisk.tar.gz
+    mode: "0755"
+    checksum: sha256:{{ checksum.stdout }}
+  when: not st.stat.exists or st.stat.checksum != checksum.stdout
+
+- name: Extract asterisk
+  ansible.builtin.unarchive:
+    src: /var/asterisk/asterisk.tar.gz
+    dest: /var/asterisk
+    mode: "0755"
+    remote_src: true
+  notify:
+    - install_asterisk
+    - configure

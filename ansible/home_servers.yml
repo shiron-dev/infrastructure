@@ -1,0 +1,9 @@
+---
+- name: Home endpoints
+  hosts: home_ep
+  roles:
+    - raspberrypi
+    - docker
+    # - bind_dns
+    - home_assistant
+    - prometheus

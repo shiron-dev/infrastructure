@@ -1,0 +1,62 @@
+---
+- name: Make pjsip.conf
+  become: true
+  ansible.builtin.template:
+    src: pjsip.conf.j2
+    dest: /etc/asterisk/pjsip.conf
+    mode: "0644"
+  notify: Restart asterisk
+
+- name: Make pjsip_wizard.conf
+  become: true
+  ansible.builtin.template:
+    src: pjsip_wizard.conf.j2
+    dest: /etc/asterisk/pjsip_wizard.conf
+    mode: "0644"
+  notify: Restart asterisk
+
+- name: Make extensions.conf
+  become: true
+  ansible.builtin.template:
+    src: extensions.conf.j2
+    dest: /etc/asterisk/extensions.conf
+    mode: "0644"
+  notify: Restart asterisk
+
+- name: Make cdr.conf
+  become: true
+  ansible.builtin.template:
+    src: cdr.conf.j2
+    dest: /etc/asterisk/cdr.conf
+    mode: "0644"
+  notify: Restart asterisk
+
+- name: Make cel.conf
+  become: true
+  ansible.builtin.template:
+    src: cel.conf.j2
+    dest: /etc/asterisk/cel.conf
+    mode: "0644"
+  notify: Restart asterisk
+
+- name: Make modules.conf
+  become: true
+  ansible.builtin.template:
+    src: modules.conf.j2
+    dest: /etc/asterisk/modules.conf
+    mode: "0644"
+  notify: Restart asterisk
+
+- name: Make logger.conf
+  become: true
+  ansible.builtin.template:
+    src: logger.conf.j2
+    dest: /etc/asterisk/logger.conf
+    mode: "0644"
+  notify: Restart asterisk
+
+- name: Enable Asterisk
+  become: true
+  ansible.builtin.service:
+    name: asterisk
+    enabled: true

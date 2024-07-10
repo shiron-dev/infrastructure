@@ -1,0 +1,5 @@
+---
+# - name: Home servers
+#   import_playbook: home_servers.yml
+- name: OCI Servers
+  import_playbook: oci_servers.yml

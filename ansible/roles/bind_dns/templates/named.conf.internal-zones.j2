@@ -1,0 +1,9 @@
+zone "home.shiron.local" IN {       
+        type    master;
+        file    "/etc/bind/home.shiron.local.lan";
+};      
+
+zone "0.168.192.in-addr.arpa" IN {
+        type    master;
+        file    "/etc/bind/0.168.192.in-addr.arpa.rev";
+};

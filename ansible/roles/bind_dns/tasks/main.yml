@@ -1,0 +1,57 @@
+---
+- name: Apt-get update
+  become: true
+  ansible.builtin.apt:
+
+- name: Install bind9
+  become: true
+  ansible.builtin.apt:
+    name: bind9, bind9-utils
+
+- name: Make named.conf
+  become: true
+  ansible.builtin.template:
+    src: named.conf.j2
+    dest: /etc/bind/named.conf
+    mode: "0644"
+  notify: Restart bind
+
+- name: Make named.conf.options
+  become: true
+  ansible.builtin.template:
+    src: named.conf.options.j2
+    dest: /etc/bind/named.conf.options
+    mode: "0644"
+  notify: Restart bind
+
+- name: Make named.conf.logging
+  become: true
+  ansible.builtin.template:
+    src: named.conf.logging.j2
+    dest: /etc/bind/named.conf.logging
+    mode: "0644"
+  notify: Restart bind
+
+- name: Make named.conf.internal-zones
+  become: true
+  ansible.builtin.template:
+    src: named.conf.internal-zones.j2
+    dest: /etc/bind/named.conf.internal-zones
+    mode: "0644"
+  notify: Restart bind
+
+- name: Make home.shiron.local.lan
+  become: true
+  ansible.builtin.template:
+    src: home.shiron.local.lan.j2
+    dest: /etc/bind/home.shiron.local.lan
+    mode: "0644"
+  notify: Restart bind
+
+- name: Make 0.168.192.in-addr.arpa.rev
+  become: true
+  ansible.builtin.template:
+    src: 0.168.192.in-addr.arpa.rev.j2
+    dest: /etc/bind/0.168.192.in-addr.arpa.rev
+    mode: "0644"
+  notify: Restart bind

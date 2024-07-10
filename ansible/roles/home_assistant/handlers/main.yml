@@ -1,0 +1,6 @@
+---
+- name: Restart home-assistant
+  ansible.builtin.command:
+    cmd: docker compose -f /var/home-assistant/compose.yml up -d
+    chdir: /var/home-assistant
+  changed_when: true

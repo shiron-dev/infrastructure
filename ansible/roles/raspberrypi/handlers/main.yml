@@ -1,0 +1,14 @@
+---
+- name: Enable init_task
+  become: true
+  ansible.builtin.systemd:
+    name: init_task
+    enabled: true
+    state: started
+    daemon_reload: true
+  notify: reboot
+
+- name: Reboot
+  become: true
+  ansible.builtin.reboot:
+    reboot_timeout: 300

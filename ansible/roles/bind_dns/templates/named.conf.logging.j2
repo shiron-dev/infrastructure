@@ -1,0 +1,14 @@
+logging {
+        channel "default_debug" {
+                file "/var/log/named.log";
+                severity debug;
+                print-time yes;
+                print-severity yes;
+                print-category yes;
+        };
+
+        category queries { "default_debug"; };
+        category resolver { "default_debug"; };
+
+        category lame-servers { null; }; 
+};

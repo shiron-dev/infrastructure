@@ -1,0 +1,29 @@
+version: "3"
+
+services:
+  node-exporter:
+    image: quay.io/prometheus/node-exporter
+    command:
+      - "-collector.procfs=/host/proc"
+      - "-collector.sysfs=/host/sys"
+      - "-collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($|/)"
+    volumes:
+      - "/proc:/host/proc:ro"
+      - "/sys:/host/sys:ro"
+      - "/:/rootfs:ro"
+    network_mode: "host"
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+
+  # cadvisor:
+  #   image: google/cadvisor:latest
+  #   volumes:
+  #     - "/:/rootfs:ro"
+  #     - "/var/run:/var/run:rw"
+  #     - "/sys:/sys:ro"
+  #     - "/var/lib/docker/:/var/lib/docker:ro"
+  #   ports:
+  #     - "8890:8080"
+  #   container_name: cadvisor
+  #   restart: unless-stopped
