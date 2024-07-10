@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Setup ansible
-        run: pip install ansible
+        run: pip install ansible ansible-lint
       - name: Run ansible-galaxy
         run: cd ansible && ansible-galaxy install -r requirements.yml
       - name: Run ansible-lint
