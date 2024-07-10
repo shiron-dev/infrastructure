@@ -12,3 +12,4 @@
 group_vars
 
 roles/asterisk/templates
+roles/fail2ban/templates
