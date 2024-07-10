@@ -10,15 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create PR comment of reviewdog
-        uses: reviewdog/action-yamllint@v1.16.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          reporter: github-pr-review
-          level: warning
       - name: Setup ansible
         run: pip install ansible
       - name: Run ansible-galaxy
-        run: ansible-galaxy install -r ansible/requirements.yml
+        run: cd ansible && ansible-galaxy install -r requirements.yml
       - name: Run ansible-lint
-        uses: ansible/ansible-lint@v24.6.1
+        run: cd ansible && ansible-lint
