@@ -27,5 +27,6 @@ jobs:
         run: |
           if [ -n "$(find . -type l)" ]; then
             echo "Error: Found symbolic links in the repository"
+            find . -type l
             exit 1
           fi
