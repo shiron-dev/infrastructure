@@ -1,0 +1,18 @@
+services:
+  grafana:
+    image: grafana/grafana-oss
+    container_name: grafana
+    restart: always
+    environment:
+      - GF_SERVER_ROOT_URL=https://info.shiron.dev/
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+    volumes:
+      - "./grafana_storage:/var/lib/grafana"
+      - "./datasources:/etc/grafana/provisioning/datasources"
+  tunnel:
+    image: cloudflare/cloudflared
+    container_name: tunnel
+    restart: always
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: "{{ CF_TUNNEL_TOKEN }}"
