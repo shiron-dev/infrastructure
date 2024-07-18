@@ -6,7 +6,6 @@
     cmd: |
       set -euo pipefail
       ./install_prereq test |& wc -l || :
-    executable: /bin/bash
   args:
     chdir: /var/asterisk/asterisk-20.8.1/contrib/scripts
   register: check_prereq
