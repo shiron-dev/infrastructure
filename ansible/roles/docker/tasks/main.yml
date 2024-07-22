@@ -32,53 +32,16 @@
     path: /etc/apt/keyrings/docker.asc
     mode: "0644"
 
-- name: Check if Docker repository is already added
-  ansible.builtin.stat:
-    path: /etc/apt/sources.list.d/docker.list
-  register: docker_repo
+- name: Check architecture
+  ansible.builtin.command:
+    cmd: dpkg --print-architecture
+  register: architecture
+  changed_when: false
 
 - name: Add Docker repository to Apt sources
   become: true
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      echo "deb [arch=all signed-by=/etc/apt/keyrings/docker.asc] {{ docker_download_url }} {{ ansible_distribution_release }} stable"
-      | tee /etc/apt/sources.list.d/docker.list > /dev/null
-  changed_when: true
-  when: not docker_repo.stat.exists
-
-- name: Update apt
-  become: true
-  ansible.builtin.apt:
-    update_cache: true
-  when: not docker_repo.stat.exists
-
-- name: Install Docker
-  become: true
-  ansible.builtin.apt:
-    name:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
-      - docker-buildx-plugin
-      - docker-compose-plugin
-    state: present
-
-- name: Add user to docker group
-  become: true
-  ansible.builtin.user:
-    name: "{{ ansible_user }}"
-    groups: docker
-    append: true
-
-- name: Enable Docker
-  become: true
-  ansible.builtin.service:
-    name: docker
-    enabled: true
-
-- name: Docker SDK for Python
-  become: true
-  ansible.builtin.apt:
-    name: python3-docker
-    state: present
+  ansible.builtin.template:
+    src: docker.list
+    dest: /etc/apt/sources.list.d/docker.list
+    mode: "0644"
+  notify: Install docker
