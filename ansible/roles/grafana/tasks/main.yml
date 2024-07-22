@@ -2,7 +2,7 @@
 - name: Make grafana directory
   become: true
   ansible.builtin.file:
-    path: /var/grafana
+    path: /var/grafana/grafana_conf/provisioning/datasources
     state: directory
     mode: "0777"
 
@@ -12,3 +12,25 @@
     dest: /var/grafana/compose.yml
     mode: "0644"
   notify: Restart grafana
+
+- name: Make datasource.yml
+  ansible.builtin.template:
+    src: datasource.yml
+    dest: /var/grafana/grafana_conf/provisioning/datasources/localhost_vmprom.yml
+    mode: "0644"
+  notify: Restart grafana
+
+- name: Make prometheus.yml
+  ansible.builtin.template:
+    src: prometheus.yml
+    dest: /var/grafana/prometheus.yml
+    mode: "0644"
+  notify: Restart grafana
+
+- name: Make conf
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: /var/grafana/grafana_conf/{{ item | basename }}
+    mode: "0644"
+  with_fileglob:
+    - "templates/conf/*"

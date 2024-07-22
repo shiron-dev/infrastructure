@@ -1,6 +1,7 @@
 services:
   grafana:
     image: grafana/grafana-oss
+    user: "0"
     container_name: grafana
     restart: always
     environment:
@@ -8,7 +9,7 @@ services:
       - GF_INSTALL_PLUGINS=grafana-clock-panel
     volumes:
       - "./grafana_storage:/var/lib/grafana"
-      - "./datasources:/etc/grafana/provisioning/datasources"
+      - "./grafana_conf:/etc/grafana/"
   tunnel:
     image: cloudflare/cloudflared
     container_name: tunnel
@@ -16,3 +17,46 @@ services:
     command: tunnel run
     environment:
       TUNNEL_TOKEN: "{{ CF_TUNNEL_TOKEN }}"
+  influxdb:
+    image: influxdb:2.7.1
+    container_name: influxdb
+    restart: always
+    volumes:
+      - ./influxdb_data:/var/lib/influxdb2
+      - ./influxdb_config:/etc/influxdb2
+    ports:
+      - 8086:8086
+
+  victoriametrics:
+    container_name: victoriametrics
+    image: victoriametrics/victoria-metrics:v1.102.0
+    ports:
+      - 8428:8428
+    volumes:
+      - ./vmdata:/storage
+    command:
+      - "--storageDataPath=/storage"
+      - "--httpListenAddr=:8428"
+    restart: always
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:v2.53.1
+    ports:
+      - 9090:9090
+    volumes:
+      - "./prometheus.yml:/etc/prometheus/prometheus.yml"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    container_name: node_exporter
+    command:
+      - "--path.rootfs=/host"
+    network_mode: host
+    pid: host
+    restart: always
+    volumes:
+      - "/:/host:ro,rslave"
+    ports:
+      - 9100:9100

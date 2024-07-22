@@ -11,9 +11,9 @@
     - role: fail2ban
       tags:
         - fail2ban
-    - role: grafana
-      tags:
-        - grafana
     - role: prometheus
       tags:
         - prometheus
+    - role: grafana
+      tags:
+        - grafana
