@@ -1,13 +1,7 @@
 ---
 - name: Restart prometheus
-  become: true
-  ansible.builtin.service:
-    name: prometheus
-    state: Restarted
-    enabled: true
-
-- name: Restart node-exporter
   ansible.builtin.command:
-    cmd: docker compose -f /var/prometheus/compose.yml up -d
+    cmd: docker compose -f /var/prometheus/compose.yml up -d --build
     chdir: /var/prometheus
+  notify: Setup grafana
   changed_when: true
