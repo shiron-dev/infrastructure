@@ -6,7 +6,7 @@ services:
     restart: always
     environment:
       - GF_SERVER_ROOT_URL=https://info.shiron.dev/
-      - GF_INSTALL_PLUGINS=grafana-clock-panel
+      - GF_INSTALL_PLUGINS=grafana-clock-panel, grafana-simple-json-datasource
     volumes:
       - "./grafana_storage:/var/lib/grafana"
       - "./grafana_conf:/etc/grafana/"
