@@ -1,7 +1,10 @@
 ---
 - name: Restart prometheus
-  ansible.builtin.command:
-    cmd: docker compose -f /var/prometheus/compose.yml up -d --build
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      docker compose -f /var/prometheus/compose.yml down || :
+      docker compose -f /var/prometheus/compose.yml up -d --build
     chdir: /var/prometheus
   notify: Setup grafana
   changed_when: true
