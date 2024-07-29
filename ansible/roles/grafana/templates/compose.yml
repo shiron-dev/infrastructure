@@ -29,7 +29,7 @@ services:
 
   victoriametrics:
     container_name: victoriametrics
-    image: victoriametrics/victoria-metrics:v1.102.0
+    image: victoriametrics/victoria-metrics
     ports:
       - 8428:8428
     volumes:
@@ -40,7 +40,7 @@ services:
     restart: always
   prometheus:
     container_name: prometheus
-    image: prom/prometheus:v2.53.1
+    image: prom/prometheus
     ports:
       - 9090:9090
     volumes:
