@@ -5,7 +5,7 @@
   ansible.builtin.apt:
     update_cache: true
 
-- name: apt get Docker
+- name: Apt get Docker
   listen: Install docker
   become: true
   ansible.builtin.apt:

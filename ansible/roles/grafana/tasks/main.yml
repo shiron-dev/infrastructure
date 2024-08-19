@@ -33,5 +33,5 @@
     dest: /var/grafana/grafana_conf/{{ item | basename }}
     mode: "0644"
   with_fileglob:
-    - "templates/conf/*"
+    - templates/conf/*
   notify: Restart grafana
