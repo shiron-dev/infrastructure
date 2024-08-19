@@ -26,7 +26,6 @@
     cmd: |
       set -euo pipefail
       cat "{{ tmpdir.path }}/asterisk.tar.gz.sha256" | cut -d" " -f 1
-    executable: /bin/bash
   changed_when: false
   register: checksum
 

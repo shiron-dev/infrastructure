@@ -5,12 +5,15 @@
     - role: docker
       tags:
         - docker
-    - role: prometheus
-      tags:
-        - prometheus
     - role: asterisk
       tags:
         - asterisk
     - role: fail2ban
       tags:
         - fail2ban
+    - role: prometheus
+      tags:
+        - prometheus
+    - role: grafana
+      tags:
+        - grafana
