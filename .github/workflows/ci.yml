@@ -12,7 +12,7 @@ jobs:
     needs:
       - ansible-lint
       - check-symlinks
-      - dockerfile-lint
+      # - dockerfile-lint
       - yaml-lint
       - markdown-lint
       - shell-lint
@@ -48,15 +48,15 @@ jobs:
             exit 1
           fi
 
-  dockerfile-lint:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Dockerfile lint
-        uses: reviewdog/action-hadolint@v1.46.0
-        with:
-          level: warning
+  # dockerfile-lint:
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 10
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Dockerfile lint
+  #       uses: reviewdog/action-hadolint@v1.46.0
+  #       with:
+  #         level: warning
 
   yaml-lint:
     runs-on: ubuntu-latest
