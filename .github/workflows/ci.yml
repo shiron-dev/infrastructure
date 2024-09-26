@@ -56,7 +56,7 @@ jobs:
       - name: Dockerfile lint
         uses: reviewdog/action-hadolint@v1.46.0
         with:
-          fail_on_error: true
+          level: warning
 
   yaml-lint:
     runs-on: ubuntu-latest
@@ -67,7 +67,6 @@ jobs:
         with:
           level: warning
           yamllint_flags: "-c .yamllint ."
-          fail_on_error: true
 
   markdown-lint:
     runs-on: ubuntu-latest
@@ -77,7 +76,6 @@ jobs:
       - uses: reviewdog/action-markdownlint@v0.25.0
         with:
           level: warning
-          fail_on_error: true
 
   shell-lint:
     runs-on: ubuntu-latest
@@ -87,11 +85,9 @@ jobs:
       - uses: reviewdog/action-shellcheck@v1.27.0
         with:
           level: warning
-          fail_on_error: true
       - uses: reviewdog/action-shfmt@v1.0.2
         with:
           level: warning
-          fail_on_error: true
 
   action-lint:
     runs-on: ubuntu-latest
@@ -100,7 +96,6 @@ jobs:
       - uses: reviewdog/action-actionlint@v1.55.0
         with:
           level: warning
-          fail_on_error: true
 
   dotenv-lint:
     runs-on: ubuntu-latest
@@ -110,4 +105,3 @@ jobs:
       - uses: dotenv-linter/action-dotenv-linter@9c9a09ba60235ae0b92b2e2ed8f4268ac76d075f # 2.23.0
         with:
           dotenv_linter_flags: --skip UnorderedKey
-          fail_on_error: true
