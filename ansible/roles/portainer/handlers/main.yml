@@ -1,0 +1,9 @@
+---
+- name: Restart portainer
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      docker compose -f /var/portainer/compose.yml down || :
+      docker compose -f /var/portainer/compose.yml up -d --build
+    chdir: /var/portainer
+  changed_when: true
