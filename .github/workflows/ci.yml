@@ -73,7 +73,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: reviewdog/action-markdownlint@v0.25.0
+      - uses: reviewdog/action-markdownlint@v0.26.0
         with:
           level: warning
 
