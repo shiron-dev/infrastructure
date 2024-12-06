@@ -82,7 +82,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: reviewdog/action-shellcheck@v1.27.0
+      - uses: reviewdog/action-shellcheck@v1.28.0
         with:
           level: warning
       - uses: reviewdog/action-shfmt@v1.0.2
