@@ -63,7 +63,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: reviewdog/action-yamllint@v1.20.0
+      - uses: reviewdog/action-yamllint@1dca3ad811867be18fbe293a9818d715a6c2cd46 # v1.20.0
         with:
           level: warning
           yamllint_flags: "-c .yamllint ."
@@ -73,7 +73,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: reviewdog/action-markdownlint@v0.26.0
+      - uses: reviewdog/action-markdownlint@f901468edf9a3634dd39b35ba26cad0aad1a0bfd # v0.26.0
         with:
           level: warning
 
@@ -82,10 +82,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: reviewdog/action-shellcheck@v1.28.0
+      - uses: reviewdog/action-shellcheck@22f96e34e9185b642c5567cc26d1df952f5c9d10 # v1.28.0
         with:
           level: warning
-      - uses: reviewdog/action-shfmt@v1.0.2
+      - uses: reviewdog/action-shfmt@f59386f08bd9a24ac1a746e69f026ddc2ed06710 # v1.0.2
         with:
           level: warning
 
@@ -93,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: reviewdog/action-actionlint@v1.62.0
+      - uses: reviewdog/action-actionlint@af17f9e3640ac863dbcc515d45f5f35d708d0faf # v1.62.0
         with:
           level: warning
 
