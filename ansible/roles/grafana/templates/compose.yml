@@ -1,6 +1,6 @@
 services:
   grafana:
-    image: grafana/grafana-oss
+    image: grafana/grafana-oss@sha256:d8ea37798ccc41061a62ab080f2676dda6bf7815558499f901bdb0f533a456fb
     user: "0"
     container_name: grafana
     restart: always
@@ -11,7 +11,7 @@ services:
       - "./grafana_storage:/var/lib/grafana"
       - "./grafana_conf:/etc/grafana/"
   tunnel:
-    image: cloudflare/cloudflared
+    image: cloudflare/cloudflared@sha256:3247f3ef49eda23244b8aa5583f82b7c3880b0d057e1172d0e818f5e678d9f27
     container_name: tunnel
     restart: always
     command: tunnel run
@@ -29,7 +29,7 @@ services:
 
   victoriametrics:
     container_name: victoriametrics
-    image: victoriametrics/victoria-metrics
+    image: victoriametrics/victoria-metrics@sha256:e62183521df3b146be0bc05070793210d24f25d5063bd80ea78d8d53fc384cff
     ports:
       - 8428:8428
     volumes:
@@ -40,7 +40,7 @@ services:
     restart: always
   prometheus:
     container_name: prometheus
-    image: prom/prometheus
+    image: prom/prometheus@sha256:6559acbd5d770b15bb3c954629ce190ac3cbbdb2b7f1c30f0385c4e05104e218
     ports:
       - 9090:9090
     volumes:
@@ -49,7 +49,7 @@ services:
       - "host.docker.internal:host-gateway"
     restart: always
   node_exporter:
-    image: quay.io/prometheus/node-exporter:latest
+    image: quay.io/prometheus/node-exporter:latest@sha256:4032c6d5bfd752342c3e631c2f1de93ba6b86c41db6b167b9a35372c139e7706
     container_name: node_exporter
     command:
       - "--path.rootfs=/host"
