@@ -102,6 +102,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: dotenv-linter/action-dotenv-linter@9c9a09ba60235ae0b92b2e2ed8f4268ac76d075f # v2.23.0
+      - uses: dotenv-linter/action-dotenv-linter@382525b7d91e7b71b52e064b8f1fa5908c4650d2 # v2.24.0
         with:
           dotenv_linter_flags: --skip UnorderedKey
