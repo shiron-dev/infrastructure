@@ -2,7 +2,7 @@ version: "3"
 services:
   homeassistant:
     container_name: homeassistant
-    image: "ghcr.io/home-assistant/home-assistant:stable@sha256:a81e875974c909957da5407a85d42409581a1f3c1ae202642519430389baf1ad"
+    image: "ghcr.io/home-assistant/home-assistant:2025.3.2@sha256:3f47bf832efd81e0973ba3c5873907b2d178dc7377cc2f717e0b19396e9ca420"
     volumes:
       - /var/home-assistant/config:/config
       - /etc/localtime:/etc/localtime:ro
