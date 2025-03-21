@@ -85,7 +85,7 @@ jobs:
       - uses: reviewdog/action-shellcheck@6e0e63d1750d02d761b3df0f2c5ba9f9ac4a9ed7 # v1.29.0
         with:
           level: warning
-      - uses: reviewdog/action-shfmt@f59386f08bd9a24ac1a746e69f026ddc2ed06710 # v1.0.2
+      - uses: reviewdog/action-shfmt@d8f080930b9be5847b4f97e9f4122b81a82aaeac # v1.0.4
         with:
           level: warning
 
