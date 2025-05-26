@@ -11,7 +11,7 @@ services:
       - "./grafana_storage:/var/lib/grafana"
       - "./grafana_conf:/etc/grafana/"
   tunnel:
-    image: cloudflare/cloudflared@sha256:3247f3ef49eda23244b8aa5583f82b7c3880b0d057e1172d0e818f5e678d9f27
+    image: cloudflare/cloudflared@sha256:f9d5c5b94cd7337c0c939a6dbf5537db34030828c243fca6b589fd85ab25d43b
     container_name: tunnel
     restart: always
     command: tunnel run
