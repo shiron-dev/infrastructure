@@ -18,7 +18,7 @@ services:
     environment:
       TUNNEL_TOKEN: "{{ CF_TUNNEL_TOKEN }}"
   influxdb:
-    image: influxdb:2.7.12@sha256:d4d96a93b3d238fa2577916e501304cc32a206efd9f1eb163f18e9d21b3983a5
+    image: influxdb:2.7.12@sha256:d842befa8acabf6058b2e4833e3881391758c3dc6f15f526c8bd8d0b9efa86a3
     container_name: influxdb
     restart: always
     volumes:
