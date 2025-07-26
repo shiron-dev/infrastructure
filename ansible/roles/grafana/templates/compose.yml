@@ -29,7 +29,7 @@ services:
 
   victoriametrics:
     container_name: victoriametrics
-    image: victoriametrics/victoria-metrics@sha256:e62183521df3b146be0bc05070793210d24f25d5063bd80ea78d8d53fc384cff
+    image: victoriametrics/victoria-metrics@sha256:0156d3e9c4be6a29dbb45b6b551a1a09d48fed3858143f1e3e0ad16d6e875cc9
     ports:
       - 8428:8428
     volumes:
