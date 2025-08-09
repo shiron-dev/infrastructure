@@ -1,6 +1,6 @@
 services:
   grafana:
-    image: grafana/grafana-oss:11.6.4@sha256:b4bfc89e61ab45f319eda0d4072588018b8dcce1a60e5faa0a53ec31ee76dac0
+    image: grafana/grafana-oss:12.1.0@sha256:6ac590e7cabc2fbe8d7b8fc1ce9c9f0582177b334e0df9c927ebd9670469440f
     user: "0"
     container_name: grafana
     restart: always
