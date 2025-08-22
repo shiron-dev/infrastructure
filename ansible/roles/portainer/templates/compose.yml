@@ -1,6 +1,6 @@
 services:
   portainer:
-    image: portainer/portainer-ce:2.27.0-rc2@sha256:00a51f306e154c0e1849d17d45bb4b2b947a2af28deb1e031db0adc076f97d26
+    image: portainer/portainer-ce:2.33.0-rc2@sha256:159b023999a3c01f486df54b58f281a8f652e216f67caab468d0cba4711a12cb
     ports:
       - "9000:9000"
     volumes:
