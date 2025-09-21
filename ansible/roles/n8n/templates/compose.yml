@@ -21,7 +21,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: n8n-spostgres
+    container_name: n8n-postgres
     restart: always
     environment:
       POSTGRES_DB: n8n
