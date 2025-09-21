@@ -1,19 +1,21 @@
----
 - name: OCI ARM Instances
   hosts: oci_arm
   roles:
-    - role: docker
-      tags:
-        - docker
+    # - role: docker
+    #   tags:
+    #     - docker
     # - role: asterisk
     #   tags:
     #     - asterisk
-    - role: fail2ban
+    # - role: fail2ban
+    #   tags:
+    #     - fail2ban
+    # - role: grafana
+    #   tags:
+    #     - grafana
+    # - role: portainer
+    #   tags:
+    #     - portainer
+    - role: n8n
       tags:
-        - fail2ban
-    - role: grafana
-      tags:
-        - grafana
-    - role: portainer
-      tags:
-        - portainer
+        - n8n

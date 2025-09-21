@@ -1,0 +1,39 @@
+services:
+  n8n:
+    image: n8nio/n8n:1.111.0
+    container_name: n8n
+    restart: always
+    environment:
+      N8N_HOST: "n8n.shiron.dev"
+      WEBHOOK_URL: "https://n8n.shiron.dev"
+      GENERIC_TIMEZONE: Asia/Tokyo
+    volumes:
+      - ./n8n_data:/home/node/.n8n
+      - ./local-files:/files
+      - ./rag:/mnt/rag
+
+  redis:
+    image: redis:8.2.1
+    container_name: redis
+    restart: always
+    volumes:
+      - ./redis_data:/data
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: n8n-spostgres
+    restart: always
+    environment:
+      POSTGRES_DB: n8n
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: n8n-pass
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+
+  tunnel-n8n:
+    image: cloudflare/cloudflared@sha256:3247f3ef49eda23244b8aa5583f82b7c3880b0d057e1172d0e818f5e678d9f27
+    container_name: tunnel-n8n
+    restart: always
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: "{{ CF_TUNNEL_TOKEN }}"
