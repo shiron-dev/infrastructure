@@ -4,9 +4,6 @@
     # - role: docker
     #   tags:
     #     - docker
-    # - role: asterisk
-    #   tags:
-    #     - asterisk
     # - role: fail2ban
     #   tags:
     #     - fail2ban
