@@ -1,6 +1,8 @@
 resource "google_kms_key_ring" "sops" {
   name     = "sops"
   location = "global"
+
+  depends_on = [google_project_service.cloudkms_api]
 }
 
 resource "google_kms_crypto_key" "sops_key" {
