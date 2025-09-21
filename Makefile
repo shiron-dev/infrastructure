@@ -63,6 +63,14 @@ terraform-plan: terraform-init
 terraform-apply: terraform-init
 	cd terraform && terraform apply
 
+.PHONY: terraform-lint
+terraform-lint: terraform-init
+	cd terraform && tflint
+
+.PHONY: terraform-fmt
+terraform-fmt:
+	cd terraform && terraform fmt -recursive
+
 # コスト比較前のベースライン作成
 .PHONY: infracost-base
 infracost-base: terraform-plan

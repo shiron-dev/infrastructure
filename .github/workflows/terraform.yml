@@ -13,6 +13,29 @@ on:
       - 'terraform/**'
 
 jobs:
+  terraform-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3.0.0
+        with:
+          terraform_version: ~1.0
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4.0.0
+        with:
+          tflint_version: latest
+      - name: Terraform Format Check
+        run: |
+          cd terraform
+          terraform fmt -check -recursive
+      - name: TFLint
+        run: |
+          cd terraform
+          tflint
+
   infracost:
     runs-on: ubuntu-latest
     timeout-minutes: 10
