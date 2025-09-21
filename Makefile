@@ -2,6 +2,8 @@ ANSIBLE_DEFAULT_OPT ?=
 ANSIBLE_DIR := ansible
 PROJECT_ID := shiron-dev
 
+CHECK_SECRETS_SCRIPT := scripts/check-secrets.sh
+
 .PHONY: help
 help:
 	@echo "Usage: make [target]"
@@ -95,7 +97,7 @@ terraform-ci: terraform-lint terraform-fmt
 sops-encrypt:
 	@echo "Encrypting *.secrets.* files with SOPS..."
 	@find . -name "*.secrets.*" -type f | while read file; do \
-		if [ -f "$$file" ] && ! grep -q "sops:" "$$file"; then \
+		if [ -f "$$file" ] && ! $(CHECK_SECRETS_SCRIPT) "$$file"; then \
 			echo "Encrypting $$file..."; \
 			sops --encrypt --in-place "$$file"; \
 		else \
@@ -107,13 +109,17 @@ sops-encrypt:
 sops-decrypt:
 	@echo "Decrypting *.secrets.* files with SOPS..."
 	@find . -name "*.secrets.*" -type f | while read file; do \
-		if [ -f "$$file" ] && grep -q "sops:" "$$file"; then \
+		if [ -f "$$file" ] && $(CHECK_SECRETS_SCRIPT) "$$file"; then \
 			echo "Decrypting $$file..."; \
 			sops --decrypt --in-place "$$file"; \
 		else \
 			echo "Skipping $$file (not encrypted or not found)"; \
 		fi; \
 	done
+
+.PHONY: sops-ci
+sops-ci:
+	bash $(CHECK_SECRETS_SCRIPT)
 
 .PHONY: ci
 ci:
@@ -125,5 +131,8 @@ ci:
 		echo "Running terraform-ci..."; \
 		$(MAKE) terraform-ci; \
 	fi
+
+	echo "Running sops-ci...";
+	$(MAKE) sops-ci;
 
 .DEFAULT_GOAL := help

@@ -19,6 +19,7 @@ jobs:
       - action-lint
       - dotenv-lint
       - kics
+      - sops-secrets-check
     if: ${{ always() }}
     steps:
       - uses: actions/checkout@v4
@@ -129,3 +130,12 @@ jobs:
       - uses: checkmarx/kics-github-action@cd1f3774406f7818e3f79b77b093fe2ebaaf5c1d # v2.1.12
         with:
           path: .
+
+  sops-secrets-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run sops secrets check script
+        run: ./scripts/check-secrets.sh
