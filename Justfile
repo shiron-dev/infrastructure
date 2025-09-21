@@ -15,6 +15,9 @@ setup:
   @if ! {{path_exists("ansible/roles/fail2ban/templates")}}; then \
     cd ansible/roles/fail2ban && ln -s ../../../private/ansible/roles/fail2ban/templates templates; \
   fi
+  @if ! {{path_exists("ansible/roles/n8n/vars")}}; then \
+    cd ansible/roles/n8n && ln -s ../../../private/ansible/roles/n8n/vars vars; \
+  fi
 
   cd ansible && ansible-galaxy install -r requirements.yml
 
