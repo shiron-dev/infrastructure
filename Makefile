@@ -19,14 +19,9 @@ init:
 ansible-init: init
 	cd $(ANSIBLE_DIR) && ansible-galaxy install -r requirements.yml
 
-.PHONY: lint
-lint: ansible-init
-	cd $(ANSIBLE_DIR) && ansible-lint
-
-.PHONY: lint-fix
-lint-fix: ansible-init
+.PHONY: ansible-lint
+ansible-lint: ansible-init
 	cd $(ANSIBLE_DIR) && ansible-lint --fix
-	gcloud config set project $(PROJECT_ID)
 
 define check_gcloud_auth
 	@if ! (gcloud config get-value project 2>/dev/null | grep -q "^$(PROJECT_ID)$$" && \
@@ -42,6 +37,9 @@ auth: init
 	$(call check_gcloud_auth)
 	gcloud config set project $(PROJECT_ID)
 	ssh -o BatchMode=yes -o ConnectTimeout=5 -F $(ANSIBLE_DIR)/ssh_config ansible_user@arm-srv.shiron.dev exit
+
+.PHONY: ansible-ci
+ansible-ci: ansible-lint
 
 .PHONY: ansible-check
 ansible-check: ansible-init
@@ -89,5 +87,19 @@ infracost-diff: terraform-plan
 .PHONY: infracost-breakdown
 infracost-breakdown: terraform-plan
 	cd terraform && infracost breakdown --path=.
+
+.PHONY: terraform-ci
+terraform-ci: terraform-lint terraform-fmt
+
+.PHONY: ci
+ci:
+	@if git diff --name-only origin/main...HEAD | grep -q "^ansible/"; then \
+		echo "Running ansible-ci..."; \
+		$(MAKE) ansible-ci; \
+	fi
+	@if git diff --name-only origin/main...HEAD | grep -q "^terraform/"; then \
+		echo "Running terraform-ci..."; \
+		$(MAKE) terraform-ci; \
+	fi
 
 .DEFAULT_GOAL := help
