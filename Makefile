@@ -91,6 +91,30 @@ infracost-breakdown: terraform-plan
 .PHONY: terraform-ci
 terraform-ci: terraform-lint terraform-fmt
 
+.PHONY: sops-encrypt
+sops-encrypt:
+	@echo "Encrypting *.secrets.* files with SOPS..."
+	@find . -name "*.secrets.*" -type f | while read file; do \
+		if [ -f "$$file" ] && ! grep -q "sops:" "$$file"; then \
+			echo "Encrypting $$file..."; \
+			sops --encrypt --in-place "$$file"; \
+		else \
+			echo "Skipping $$file (already encrypted or not found)"; \
+		fi; \
+	done
+
+.PHONY: sops-decrypt
+sops-decrypt:
+	@echo "Decrypting *.secrets.* files with SOPS..."
+	@find . -name "*.secrets.*" -type f | while read file; do \
+		if [ -f "$$file" ] && grep -q "sops:" "$$file"; then \
+			echo "Decrypting $$file..."; \
+			sops --decrypt --in-place "$$file"; \
+		else \
+			echo "Skipping $$file (not encrypted or not found)"; \
+		fi; \
+	done
+
 .PHONY: ci
 ci:
 	@if git diff --name-only origin/main...HEAD | grep -q "^ansible/"; then \
