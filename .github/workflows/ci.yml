@@ -18,9 +18,24 @@ jobs:
       - shell-lint
       - action-lint
       - dotenv-lint
+      - kics
+    if: ${{ always() }}
     steps:
-      - name: All status check
-        run: echo "All status check passed"
+      - uses: actions/checkout@v4
+      - name: Check all-status-check
+        run: |
+          diff \
+            <(yq ".jobs | del(.all-status-check) | keys.[]" .github/workflows/ci.yml) \
+            <(yq ".jobs.all-status-check.needs.[]" .github/workflows/ci.yml)
+      - name: Fail if any needed job failed
+        env:
+          JOBS: ${{ toJson(needs) }}
+        run: |
+          for result in $(jq -r '.[].result' <<<"$JOBS"); do
+            if [[ ! "$result" =~ ^(success|skipped)$ ]]; then
+              exit 1
+            fi
+          done
 
   ansible-lint:
     runs-on: ubuntu-latest
@@ -105,3 +120,12 @@ jobs:
       - uses: dotenv-linter/action-dotenv-linter@21287e2624aaf2dc8da5dd8ccfe8e49c63501116 # v2.25.0
         with:
           dotenv_linter_flags: --skip UnorderedKey
+
+  kics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: checkmarx/kics-github-action@cd1f3774406f7818e3f79b77b093fe2ebaaf5c1d # v2.1.12
+        with:
+          path: .
