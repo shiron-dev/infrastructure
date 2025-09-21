@@ -15,6 +15,6 @@ terraform {
 }
 
 provider "google" {
-  project     = "shiron-dev"
-  region      = "asia-northeast1"
+  project = "shiron-dev"
+  region  = "asia-northeast1"
 }

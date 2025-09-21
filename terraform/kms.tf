@@ -10,13 +10,13 @@ resource "google_kms_crypto_key" "sops_key" {
 }
 
 output "kms_keyring_name" {
-  value       = google_kms_key_ring.sops.name
+  value = google_kms_key_ring.sops.name
 }
 
 output "kms_key_name" {
-  value       = google_kms_crypto_key.sops_key.name
+  value = google_kms_crypto_key.sops_key.name
 }
 
 output "kms_key_id" {
-  value       = google_kms_crypto_key.sops_key.id
+  value = google_kms_crypto_key.sops_key.id
 }
