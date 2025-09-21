@@ -108,6 +108,12 @@ sops-encrypt:
 .PHONY: sops-decrypt
 sops-decrypt:
 	@echo "Decrypting *.secrets.* files with SOPS..."
+	@echo "This operation may incur costs for all encrypted files. Continue? [Y/n]"
+	@read -r response; \
+	if [ "$$response" = "n" ] || [ "$$response" = "N" ]; then \
+		echo "Operation cancelled."; \
+		exit 1; \
+	fi
 	@find . -name "*.secrets.*" -type f | while read file; do \
 		if [ -f "$$file" ] && $(CHECK_SECRETS_SCRIPT) "$$file"; then \
 			echo "Decrypting $$file..."; \
