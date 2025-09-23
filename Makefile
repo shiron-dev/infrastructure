@@ -147,7 +147,20 @@ sops-edit:
 
 .PHONY: sops-ci
 sops-ci:
-	bash $(CHECK_SECRETS_SCRIPT)
+	@echo "Checking for unencrypted secrets tracked by git..."; \
+	FILES="$$(find . -name '*.secrets.*' ! -name '*.secrets.*.sops' -type f)"; \
+	EXIT=0; \
+	for file in $$FILES; do \
+		if git ls-files --error-unmatch "$$file" >/dev/null 2>&1; then \
+			echo "Error: Unencrypted secrets file tracked by git: $$file" >&2; \
+			EXIT=1; \
+		fi; \
+	done; \
+	if [ $$EXIT -ne 0 ]; then \
+		echo "One or more unencrypted secrets files are tracked by git. Please remove them from version control." >&2; \
+		exit 1; \
+	fi
+
 
 .PHONY: ci
 ci:

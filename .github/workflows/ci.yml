@@ -137,5 +137,5 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Run sops secrets check script
-        run: ./scripts/check-secrets.sh
+      - name: Run sops secrets check
+        run: make sops-ci
