@@ -11,7 +11,7 @@
 - name: Make jail.local
   become: true
   ansible.builtin.template:
-    src: jail.local.j2
+    src: jail.local.secrets.j2
     dest: /etc/fail2ban/jail.local
     mode: "0644"
   notify: Restart fail2ban
