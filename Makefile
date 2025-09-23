@@ -95,27 +95,55 @@ terraform-ci: terraform-lint terraform-fmt
 
 .PHONY: sops-encrypt
 sops-encrypt:
-	@echo "Encrypting *.secrets.* files with SOPS..."
-	@find . -name "*.secrets.*" -type f ! -name "*.sops" | while read file; do \
+	@echo "Encrypting with SOPS..."; \
+	if [ -n "$(FILE)" ]; then \
+		if [ -f "$(FILE)" ] && [ "$${FILE##*.}" != "sops" ]; then FILES="$(FILE)"; \
+		elif [ -f "$(FILE)" ] && [ "$${FILE##*.}" = "sops" ]; then base="$${FILE%.sops}"; if [ -f "$$base" ]; then FILES="$$base"; else echo "Error: plaintext $$base not found for $(FILE)" >&2; exit 1; fi; \
+		elif [ -f "$(FILE).sops" ]; then base="$(FILE)"; if [ -f "$$base" ]; then FILES="$$base"; else echo "Error: plaintext $$base not found (got $(FILE).sops)" >&2; exit 1; fi; \
+		else echo "Error: $(FILE) not found" >&2; exit 1; fi; \
+	else \
+		FILES="$$(find . -name "*.secrets.*" -type f ! -name "*.sops")"; \
+	fi; \
+	for file in $$FILES; do \
 		echo "Encrypting $$file..."; \
 		sops --output-type json --encrypt "$$file" > "$$file.sops"; \
 	done
 
 .PHONY: sops-decrypt
 sops-decrypt:
-	@echo "Decrypting *.secrets.*.sops files with SOPS..."
-	@find . -name "*.secrets.*.sops" -type f | while read file; do \
+	@echo "Decrypting with SOPS..."; \
+	if [ -n "$(FILE)" ]; then \
+		if [ -f "$(FILE)" ]; then FILES="$(FILE)"; \
+		elif [ -f "$(FILE).sops" ]; then FILES="$(FILE).sops"; \
+		else echo "Error: $(FILE) or $(FILE).sops not found" >&2; exit 1; fi; \
+	else \
+		FILES="$$(find . -name "*.secrets.*.sops" -type f)"; \
+	fi; \
+	for file in $$FILES; do \
 		echo "Decrypting $$file..."; \
-        base="$${file%.sops}"; \
-        ext="$${base##*.}"; \
-        case "$$ext" in \
-          yaml|yml) output_type="yaml" ;; \
-          *) output_type="binary" ;; \
-        esac; \
-				chmod +w "$${file%.sops}"; \
-        sops --decrypt --output-type "$$output_type" "$$file" > "$$base"; \
-		chmod -w "$${file%.sops}"; \
+		base="$${file%.sops}"; \
+		ext="$${base##*.}"; \
+		case "$$ext" in \
+		  yaml|yml) output_type="yaml" ;; \
+		  *) output_type="binary" ;; \
+		esac; \
+		if [ -f "$$base" ]; then chmod +w "$$base"; fi; \
+		sops --decrypt --output-type "$$output_type" "$$file" > "$$base"; \
+		chmod -w "$$base"; \
 	done
+
+.PHONY: sops-edit
+sops-edit:
+	@if [ "${FILE##*.}" = "sops" ]; then \
+		base="$${FILE%.sops}"; \
+	else \
+		base="$(FILE)"; \
+	fi; \
+	$(MAKE) sops-decrypt FILE="$$base.sops"; \
+	chmod +w "$$base"; \
+	code --wait "$$base"; \
+	chmod -w "$$base"; \
+	$(MAKE) sops-encrypt FILE="$$base"; \
 
 .PHONY: sops-ci
 sops-ci:
