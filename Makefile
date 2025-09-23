@@ -96,31 +96,25 @@ terraform-ci: terraform-lint terraform-fmt
 .PHONY: sops-encrypt
 sops-encrypt:
 	@echo "Encrypting *.secrets.* files with SOPS..."
-	@find . -name "*.secrets.*" -type f | while read file; do \
-		if [ -f "$$file" ] && ! $(CHECK_SECRETS_SCRIPT) "$$file"; then \
-			echo "Encrypting $$file..."; \
-			sops --encrypt --in-place "$$file"; \
-		else \
-			echo "Skipping $$file (already encrypted or not found)"; \
-		fi; \
+	@find . -name "*.secrets.*" -type f ! -name "*.sops" | while read file; do \
+		echo "Encrypting $$file..."; \
+		sops --output-type json --encrypt "$$file" > "$$file.sops"; \
 	done
 
 .PHONY: sops-decrypt
 sops-decrypt:
-	@echo "Decrypting *.secrets.* files with SOPS..."
-	@echo "This operation may incur costs for all encrypted files. Continue? [Y/n]"
-	@read -r response; \
-	if [ "$$response" = "n" ] || [ "$$response" = "N" ]; then \
-		echo "Operation cancelled."; \
-		exit 1; \
-	fi
-	@find . -name "*.secrets.*" -type f | while read file; do \
-		if [ -f "$$file" ] && $(CHECK_SECRETS_SCRIPT) "$$file"; then \
-			echo "Decrypting $$file..."; \
-			sops --decrypt --in-place "$$file"; \
-		else \
-			echo "Skipping $$file (not encrypted or not found)"; \
-		fi; \
+	@echo "Decrypting *.secrets.*.sops files with SOPS..."
+	@find . -name "*.secrets.*.sops" -type f | while read file; do \
+		echo "Decrypting $$file..."; \
+        base="$${file%.sops}"; \
+        ext="$${base##*.}"; \
+        case "$$ext" in \
+          yaml|yml) output_type="yaml" ;; \
+          *) output_type="binary" ;; \
+        esac; \
+				chmod +w "$${file%.sops}"; \
+        sops --decrypt --output-type "$$output_type" "$$file" > "$$base"; \
+		chmod -w "$${file%.sops}"; \
 	done
 
 .PHONY: sops-ci

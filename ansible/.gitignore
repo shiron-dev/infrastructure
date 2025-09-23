@@ -8,3 +8,6 @@
 
 
 # From private-infra repository
+
+*.secrets.*
+!*.secrets.*.sops
