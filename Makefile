@@ -23,7 +23,7 @@ ansible-init: init
 
 .PHONY: ansible-lint
 ansible-lint: ansible-init
-	cd $(ANSIBLE_DIR) && ansible-lint --fix
+	cd $(ANSIBLE_DIR) && ansible-lint -c .ansible-lint --fix
 
 define check_gcloud_auth
 	@if ! (gcloud config get-value project 2>/dev/null | grep -q "^$(PROJECT_ID)$$" && \
@@ -161,6 +161,9 @@ sops-ci:
 		exit 1; \
 	fi
 
+.PHONY: kics
+kics:
+	docker run -t -v $(PWD):/path checkmarx/kics scan -p /path
 
 .PHONY: ci
 ci:
@@ -175,5 +178,8 @@ ci:
 
 	echo "Running sops-ci...";
 	$(MAKE) sops-ci;
+
+	echo "Running kics...";
+	$(MAKE) kics;
 
 .DEFAULT_GOAL := help
