@@ -34,7 +34,7 @@
 - name: Check architecture
   ansible.builtin.command:
     cmd: dpkg --print-architecture
-  register: architecture
+  register: docker_architecture
   changed_when: false
 
 - name: Add Docker repository to Apt sources
