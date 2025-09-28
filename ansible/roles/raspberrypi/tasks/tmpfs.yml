@@ -1,4 +1,3 @@
----
 - name: Template init_task.service
   become: true
   ansible.builtin.template:

@@ -1,4 +1,3 @@
----
 - name: Restart portainer
   ansible.builtin.shell:
     cmd: |

@@ -1,4 +1,3 @@
----
 - name: Restart prometheus
   ansible.builtin.shell:
     cmd: |

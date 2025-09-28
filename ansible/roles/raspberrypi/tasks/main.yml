@@ -1,4 +1,3 @@
----
 - name: Swap off
   ansible.builtin.import_tasks: swap.yml
 - name: Use tmpfs

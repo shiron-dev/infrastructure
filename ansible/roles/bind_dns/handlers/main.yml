@@ -1,4 +1,3 @@
----
 - name: Restart bind
   become: true
   ansible.builtin.service:

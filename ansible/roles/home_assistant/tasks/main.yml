@@ -1,4 +1,3 @@
----
 - name: Mkdir /var/home-assistant/config
   become: true
   ansible.builtin.file:
