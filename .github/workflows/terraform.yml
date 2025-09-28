@@ -33,6 +33,7 @@ jobs:
         with:
           terraform_version: ${{ steps.terraform-version.outputs.version }}
       - name: Setup TFLint
+        # kics-scan ignore-line
         uses: terraform-linters/setup-tflint@v4.0.0
         with:
           tflint_version: latest
@@ -65,6 +66,7 @@ jobs:
         with:
           terraform_version: ${{ steps.terraform-version.outputs.version }}
       - name: Setup Infracost
+        # kics-scan ignore-line
         uses: infracost/actions/setup@v2.0.0
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}

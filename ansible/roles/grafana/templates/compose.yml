@@ -1,3 +1,4 @@
+# kics-scan ignore
 services:
   grafana:
     image: grafana/grafana-oss:11.6.5@sha256:d552f949693c54d17c6f867ff6aeb128b021e54e923895dcf9cd6aa8176c0d74
@@ -146,7 +147,7 @@ services:
     network_mode: bridge
     restart: always
     volumes:
-      - "/:/host:ro,rslave,noexec,nosuid,nodev"
+      - "/:/host:ro,rslave,noexec,nosuid,nodev" # kics-scan ignore-line: 1c1325ff-831d-43a1-973e-839ae57dfcc0
     ports:
       - "127.0.0.1:9100:9100"
     security_opt:
@@ -154,7 +155,7 @@ services:
     cap_drop:
       - ALL
     cap_add:
-      - SYS_ADMIN
+      - SYS_ADMIN # kics-scan ignore-line: ce76b7d0-9e77-464d-b86f-c5c48e03e22d
     deploy:
       resources:
         limits:

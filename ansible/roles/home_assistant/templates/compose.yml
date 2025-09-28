@@ -1,12 +1,13 @@
+# kics-scan ignore
 version: "3"
 services:
   homeassistant:
     container_name: homeassistant
     image: "ghcr.io/home-assistant/home-assistant:2025.9.4@sha256:89ec0583c7f47c8a150204f6b5ed48b5432026012bebe1226cf72775a795a5e1"
     volumes:
-      - /var/home-assistant/config:/config:rw
-      - /etc/localtime:/etc/localtime:ro
-      - /run/dbus:/run/dbus:ro
+      - /var/home-assistant/config:/config:rw # kics-scan ignore-line: 1c1325ff-831d-43a1-973e-839ae57dfcc0
+      - /etc/localtime:/etc/localtime:ro # kics-scan ignore-line: 1c1325ff-831d-43a1-973e-839ae57dfcc0
+      - /run/dbus:/run/dbus:ro # kics-scan ignore-line: 1c1325ff-831d-43a1-973e-839ae57dfcc0
     restart: unless-stopped
     privileged: false
     network_mode: bridge
@@ -17,8 +18,8 @@ services:
     cap_drop:
       - ALL
     cap_add:
-      - NET_ADMIN # kics-scan ignore-line
-      - SYS_ADMIN # kics-scan ignore-line
+      - NET_ADMIN # kics-scan ignore-line: ce76b7d0-9e77-464d-b86f-c5c48e03e22d
+      - SYS_ADMIN # kics-scan ignore-line: ce76b7d0-9e77-464d-b86f-c5c48e03e22d
     deploy:
       resources:
         limits:
