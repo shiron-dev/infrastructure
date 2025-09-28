@@ -1,4 +1,3 @@
----
 - name: Start grafana
   listen: Restart grafana
   ansible.builtin.shell:

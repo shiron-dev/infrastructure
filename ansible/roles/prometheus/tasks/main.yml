@@ -1,4 +1,3 @@
----
 - name: Mkdir /var/prometheus
   become: true
   ansible.builtin.file:

@@ -1,4 +1,3 @@
----
 - name: Get swap state
   become: true
   ansible.builtin.command: swapon -v
