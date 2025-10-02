@@ -33,7 +33,7 @@ jobs:
         with:
           terraform_version: ${{ steps.terraform-version.outputs.version }}
       - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v4.0.0
+        uses: terraform-linters/setup-tflint@19a52fbac37dacb22a09518e4ef6ee234f2d4987 # v4.0.0
         with:
           tflint_version: latest
       - name: Terraform Format Check
@@ -65,7 +65,7 @@ jobs:
         with:
           terraform_version: ${{ steps.terraform-version.outputs.version }}
       - name: Setup Infracost
-        uses: infracost/actions/setup@v2.0.0
+        uses: infracost/actions/setup@6bdd3cb01a306596e8a614e62af7a9c0a133bc5c # v2.0.0
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
       - name: Generate Infracost cost estimate baseline
