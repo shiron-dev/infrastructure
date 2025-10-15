@@ -13,14 +13,14 @@ services:
       - ./rag:/mnt/rag
 
   redis:
-    image: redis:8.2.1
+    image: redis:8.2.1@sha256:5fa2edb1e408fa8235e6db8fab01d1afaaae96c9403ba67b70feceb8661e8621
     container_name: redis
     restart: always
     volumes:
       - ./redis_data:/data
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:7898d413578ff5fa67ce49233cc9743e282010eb2ec6ebf7834a63f4a60b05f0
     container_name: n8n-postgres
     restart: always
     environment:
