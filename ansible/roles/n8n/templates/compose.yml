@@ -85,7 +85,7 @@ services:
       start_period: 40s
 
   tunnel-n8n:
-    image: cloudflare/cloudflared@sha256:3247f3ef49eda23244b8aa5583f82b7c3880b0d057e1172d0e818f5e678d9f27
+    image: cloudflare/cloudflared:2025.10.0
     container_name: tunnel-n8n
     restart: always
     command: tunnel run
