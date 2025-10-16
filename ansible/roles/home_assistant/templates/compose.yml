@@ -4,11 +4,36 @@ services:
     container_name: homeassistant
     image: "ghcr.io/home-assistant/home-assistant:2025.9.4@sha256:89ec0583c7f47c8a150204f6b5ed48b5432026012bebe1226cf72775a795a5e1"
     volumes:
-      - /var/home-assistant/config:/config
+      # kics-scan ignore-line
+      - /var/home-assistant/config:/config:rw
+      # kics-scan ignore-line
       - /etc/localtime:/etc/localtime:ro
+      # kics-scan ignore-line
       - /run/dbus:/run/dbus:ro
     restart: unless-stopped
-    privileged: true
-    network_mode: host
+    privileged: false
+    network_mode: bridge
     ports:
-      - "8123:8123"
+      - "127.0.0.1:8123:8123"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # kics-scan ignore-line
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8123"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

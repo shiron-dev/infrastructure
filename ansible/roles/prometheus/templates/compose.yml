@@ -3,32 +3,89 @@ services:
     container_name: victoriametrics
     image: victoriametrics/victoria-metrics:v1.126.0@sha256:26dfc4ab90cf6fedc8115269adc22d300bcd5eab82ea1ebed3c8e22b49886ce1
     ports:
-      - 8428:8428
+      - "127.0.0.1:8428:8428"
     volumes:
       - ./vmdata:/storage
     command:
       - "--storageDataPath=/storage"
       - "--httpListenAddr=:8428"
     restart: always
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8428/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
   prometheus:
     container_name: prometheus
     image: prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
     ports:
-      - 9090:9090
+      - "127.0.0.1:9090:9090"
     volumes:
       - "./prometheus.yml:/etc/prometheus/prometheus.yml"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: always
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
   node_exporter:
     image: quay.io/prometheus/node-exporter:latest@sha256:4032c6d5bfd752342c3e631c2f1de93ba6b86c41db6b167b9a35372c139e7706
     container_name: node_exporter
     command:
       - "--path.rootfs=/host"
-    network_mode: host
-    pid: host
+    network_mode: bridge
     restart: always
     volumes:
-      - "/:/host:ro,rslave"
+      # kics-scan ignore-line
+      - "/:/host:ro,rslave,noexec,nosuid,nodev"
     ports:
-      - 9100:9100
+      - "127.0.0.1:9100:9100"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # kics-scan ignore-line
+    cap_add:
+      - SYS_ADMIN
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

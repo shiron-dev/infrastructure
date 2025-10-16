@@ -1,4 +1,3 @@
----
 - name: Enable init_task
   become: true
   ansible.builtin.systemd:

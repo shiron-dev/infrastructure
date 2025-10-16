@@ -1,8 +1,7 @@
----
 - name: Get swap state
   become: true
   ansible.builtin.command: swapon -v
-  register: swap_state
+  register: raspberrypi_swap_state
   check_mode: false
   changed_when: false
 
@@ -10,7 +9,7 @@
   become: true
   ansible.builtin.command: swapoff -a
   changed_when: true
-  when: swap_state.stdout != ''
+  when: raspberrypi_swap_state.stdout != ''
 
 - name: Remove swap package
   become: true

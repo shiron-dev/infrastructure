@@ -1,4 +1,3 @@
----
 - name: Include vars
   ansible.builtin.include_vars: "{{ ansible_facts['distribution'] }}.yml"
 - name: Update apt
@@ -35,7 +34,7 @@
 - name: Check architecture
   ansible.builtin.command:
     cmd: dpkg --print-architecture
-  register: architecture
+  register: docker_architecture
   changed_when: false
 
 - name: Add Docker repository to Apt sources
