@@ -7,12 +7,12 @@
     # - role: fail2ban
     #   tags:
     #     - fail2ban
-    # - role: grafana
-    #   tags:
-    #     - grafana
-    # - role: portainer
-    #   tags:
-    #     - portainer
+    - role: grafana
+      tags:
+        - grafana
+    - role: portainer
+      tags:
+        - portainer
     - role: n8n
       tags:
         - n8n

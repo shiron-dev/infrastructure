@@ -1,6 +1,7 @@
 services:
   grafana:
-    image: grafana/grafana-oss:11.6.5@sha256:d552f949693c54d17c6f867ff6aeb128b021e54e923895dcf9cd6aa8176c0d74
+    image: grafana/grafana-oss:11.5.8
+    platform: linux/arm64
     user: "472"
     container_name: grafana
     restart: always
@@ -112,7 +113,7 @@ services:
       start_period: 40s
   prometheus:
     container_name: prometheus
-    image: prom/prometheus:v3.2.1@sha256:6927e0919a144aa7616fd0137d4816816d42f6b816de3af269ab065250859a62$0
+    image: prom/prometheus:v3.7.0@sha256:29c1e0b48ad816750245dea3d65ac3ce57dda30547e67b1e9a5176e2953cc4dc
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
