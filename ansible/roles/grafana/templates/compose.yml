@@ -1,6 +1,6 @@
 services:
   grafana:
-    image: grafana/grafana-oss:11.5.8@sha256:b8121de93047fd77c77de806bae9706e7d60de21c3bd5381a5db0167f94c6a48
+    image: grafana/grafana-oss:11.6.5@sha256:d552f949693c54d17c6f867ff6aeb128b021e54e923895dcf9cd6aa8176c0d74
     platform: linux/arm64
     user: "472"
     container_name: grafana
