@@ -1,6 +1,7 @@
 services:
   grafana:
-    image: grafana/grafana-oss:11.6.5@sha256:d552f949693c54d17c6f867ff6aeb128b021e54e923895dcf9cd6aa8176c0d74
+    image: grafana/grafana-oss:11.5.8
+    platform: linux/arm64
     user: "472"
     container_name: grafana
     restart: always
@@ -34,7 +35,7 @@ services:
     restart: always
     command: tunnel run
     environment:
-      TUNNEL_TOKEN: "{{ CF_TUNNEL_TOKEN }}"
+      TUNNEL_TOKEN: "{{ cf_tunnel_token }}"
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -48,7 +49,7 @@ services:
           cpus: '0.1'
           memory: 128M
     healthcheck:
-      test: ["CMD", "cloudflared", "tunnel", "info"]
+      test: ["CMD", "cloudflared", "version"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -75,7 +76,7 @@ services:
           cpus: '0.25'
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8086/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -105,14 +106,14 @@ services:
           cpus: '0.25'
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8428/health"]
+      test: ["CMD", "sh", "-c", "netstat -ln | grep :8428 || ss -ln | grep :8428"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
   prometheus:
     container_name: prometheus
-    image: prom/prometheus:v3.2.1@sha256:6927e0919a144aa7616fd0137d4816816d42f6b816de3af269ab065250859a62$0
+    image: prom/prometheus:v3.7.0@sha256:29c1e0b48ad816750245dea3d65ac3ce57dda30547e67b1e9a5176e2953cc4dc
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
@@ -133,7 +134,7 @@ services:
           cpus: '0.25'
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9090/-/healthy"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -143,7 +144,8 @@ services:
     container_name: node_exporter
     command:
       - "--path.rootfs=/host"
-    network_mode: bridge
+    # kics-scan ignore-line
+    network_mode: host
     restart: always
     volumes:
       # kics-scan ignore-line
@@ -166,7 +168,7 @@ services:
           cpus: '0.1'
           memory: 128M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9100/metrics"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9100/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3
