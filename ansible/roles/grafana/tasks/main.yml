@@ -8,11 +8,11 @@
     mode: "{{ item.mode | default('0755') }}"
     recurse: "{{ item.recurse | default(false) }}"
   loop:
-    - {path: "/var/grafana/grafana_conf/provisioning/datasources", owner: "root", group: "root", mode: "0755"}
-    - {path: "/var/grafana/grafana_storage", owner: "472", group: "0", mode: "0755", recurse: true}
-    - {path: "/var/grafana/influxdb_data", owner: "1000", group: "1000", mode: "0755"}
-    - {path: "/var/grafana/influxdb_config", owner: "1000", group: "1000", mode: "0755"}
-    - {path: "/var/grafana/vmdata", owner: "1000", group: "1000", mode: "0755"}
+    - { path: "/var/grafana/grafana_conf/provisioning/datasources", owner: "root", group: "root", mode: "0755" }
+    - { path: "/var/grafana/grafana_storage", owner: "472", group: "0", mode: "0755", recurse: true }
+    - { path: "/var/grafana/influxdb_data", owner: "1000", group: "1000", mode: "0755" }
+    - { path: "/var/grafana/influxdb_config", owner: "1000", group: "1000", mode: "0755" }
+    - { path: "/var/grafana/vmdata", owner: "1000", group: "1000", mode: "0755" }
   notify: Restart grafana
 
 - name: Make compose.yml
@@ -44,4 +44,3 @@
   with_fileglob:
     - templates/conf/*
   notify: Restart grafana
-
