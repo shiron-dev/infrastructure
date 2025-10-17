@@ -1,6 +1,6 @@
 services:
   grafana:
-    image: grafana/grafana-oss:11.5.8
+    image: grafana/grafana-oss:11.5.8@sha256:b8121de93047fd77c77de806bae9706e7d60de21c3bd5381a5db0167f94c6a48
     platform: linux/arm64
     user: "472"
     container_name: grafana
@@ -84,7 +84,7 @@ services:
 
   victoriametrics:
     container_name: victoriametrics
-    image: victoriametrics/victoria-metrics:v1.127.0
+    image: victoriametrics/victoria-metrics:v1.127.0@sha256:de28e23b0255f0500e96730125a7e5c930c5442aec315063fc7696862ba9c2c1
     ports:
       - "127.0.0.1:8428:8428"
     volumes:
