@@ -1,0 +1,20 @@
+version: "3.8"
+services:
+  homer:
+    image: b4bz/homer:latest
+    container_name: homer
+    volumes:
+      - /var/homer/assets:/www/assets
+    environment:
+      - INIT_ASSETS=1
+      - PORT=8080
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-homer
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN={{ cf_homer_tunnel_token }}
+    network_mode: host
+    restart: unless-stopped

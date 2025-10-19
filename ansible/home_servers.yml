@@ -6,3 +6,6 @@
     # - bind_dns
     - home_assistant
     - prometheus
+    - role: homer
+      tags:
+        - homer

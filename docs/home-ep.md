@@ -36,3 +36,25 @@ adduser ansible_user
 usermod -aG sudo ansible_user
 echo "ansible_user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/ansible_user
 ```
+
+## Homer + Cloudflare Tunnel
+
+Homer はシンプルな静的ダッシュボードです（参考: https://github.com/bastienwirtz/homer）。`home_ep` では Docker Compose で `homer` と `cloudflared` を起動します。
+
+### シークレット設定
+
+`ansible/group_vars/home_ep/homer.secrets.yml` に Cloudflare Tunnel のトークンを設定し、SOPS で暗号化してください。
+
+```yaml
+cf_tunnel_token: "<your-tunnel-token>"
+```
+
+### デプロイ
+
+タグを使って `homer` のみ実行可能です。
+
+```sh
+make ansible-run ANSIBLE_DEFAULT_OPT="--tags homer"
+```
+
+デフォルトでは Homer はホストのポート `8080` で起動し、Cloudflare Tunnel 経由で外部公開されます。

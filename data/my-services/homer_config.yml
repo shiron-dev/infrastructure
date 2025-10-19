@@ -1,0 +1,22 @@
+title: My Services
+subtitle: オンプレミスサービス一覧
+theme: default
+message: ''
+links: []
+services:
+- name: Services
+  icon: fas fa-th
+  items:
+  - name: GitLab
+    url: https://gitlab.example.com
+    subtitle: ソースコード管理とCI/CDパイプラインのためのプラットフォーム
+    logo: https://about.gitlab.com/images/press/logo/png/gitlab-logo-500.png
+    _target: self
+  - name: Prometheus
+    url: http://prometheus.example.com:9090
+    subtitle: オープンソースのモニタリングおよびアラートシステム
+    _target: self
+  - name: Grafana
+    url: http://grafana.example.com:3000
+    subtitle: メトリクス、ログ、トレースのための可視化ツール
+    _target: self

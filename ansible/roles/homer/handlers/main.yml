@@ -1,0 +1,10 @@
+- name: Start homer
+  listen: Restart homer
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      docker compose -f /var/homer/compose.yml down || :
+      docker compose -f /var/homer/compose.yml up -d --build
+    chdir: /var/homer
+  changed_when: true
+
