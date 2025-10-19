@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=../../scripts/my-services/services.schema.json
+services:
+  - name: GitLab
+    description: "ソースコード管理とCI/CDパイプラインのためのプラットフォーム"
+    host: "gitserver.internal.example.com"
+    url: "https://gitlab.example.com"
+    healthcheck: true
+    image: "https://about.gitlab.com/images/press/logo/png/gitlab-logo-500.png"
+    label:
+      - dev-tools
+      - ci-cd
+    category: "開発ツール"
+    alias-name:
+      - git
+      - ギットラボ
+
+  - name: Prometheus
+    description: "オープンソースのモニタリングおよびアラートシステム"
+    host: "mon-server01.internal.example.com"
+    url: "http://prometheus.example.com:9090"
+    healthcheck: true
+    label:
+      - monitoring
+      - infra
+    category: "監視"
+    alias-name:
+      - prom
+      - プロメテウス
+
+  - name: Grafana
+    description: "メトリクス、ログ、トレースのための可視化ツール"
+    host: "mon-server01.internal.example.com"
+    url: "http://grafana.example.com:3000"
+    healthcheck: true
+    label:
+      - monitoring
+      - visualization
+    category: "監視"
+    alias-name:
+      - グラファナ

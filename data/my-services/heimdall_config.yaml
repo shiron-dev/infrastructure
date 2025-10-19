@@ -1,0 +1,49 @@
+version: '1.0'
+name: My Services Dashboard
+description: オンプレミスサービス一覧
+services:
+- name: GitLab
+  description: ソースコード管理とCI/CDパイプラインのためのプラットフォーム
+  url: https://gitlab.example.com
+  host: gitserver.internal.example.com
+  category: 開発ツール
+  labels:
+  - dev-tools
+  - ci-cd
+  aliases:
+  - git
+  - ギットラボ
+  external: false
+  healthcheck:
+    enabled: true
+    url: https://gitlab.example.com/health
+  icon: https://about.gitlab.com/images/press/logo/png/gitlab-logo-500.png
+- name: Prometheus
+  description: オープンソースのモニタリングおよびアラートシステム
+  url: http://prometheus.example.com:9090
+  host: mon-server01.internal.example.com
+  category: 監視
+  labels:
+  - monitoring
+  - infra
+  aliases:
+  - prom
+  - プロメテウス
+  external: false
+  healthcheck:
+    enabled: true
+    url: http://prometheus.example.com:9090/health
+- name: Grafana
+  description: メトリクス、ログ、トレースのための可視化ツール
+  url: http://grafana.example.com:3000
+  host: mon-server01.internal.example.com
+  category: 監視
+  labels:
+  - monitoring
+  - visualization
+  aliases:
+  - グラファナ
+  external: false
+  healthcheck:
+    enabled: true
+    url: http://grafana.example.com:3000/health
