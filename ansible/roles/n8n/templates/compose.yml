@@ -90,7 +90,7 @@ services:
     restart: always
     command: tunnel run
     environment:
-      TUNNEL_TOKEN: "{{ cf_tunnel_token }}"
+      TUNNEL_TOKEN: "{{ cf_n8n_tunnel_token }}"
     security_opt:
       - no-new-privileges:true
     cap_drop:
