@@ -76,8 +76,13 @@ terraform-fmt:
 terraform-validate: terraform-init
 	cd terraform && terraform validate
 
+# https://github.com/aquasecurity/trivy - IaC misconfig and vulnerability scanning
+.PHONY: terraform-trivy
+terraform-trivy:
+	trivy config terraform/
+
 .PHONY: terraform-ci
-terraform-ci: terraform-lint terraform-fmt terraform-validate
+terraform-ci: terraform-lint terraform-fmt terraform-validate terraform-trivy
 
 # コスト比較前のベースライン作成
 .PHONY: infracost-base

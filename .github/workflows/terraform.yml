@@ -13,6 +13,31 @@ on:
       - 'terraform/**'
 
 jobs:
+  terraform-status-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - terraform-lint
+      - terraform-trivy
+      - infracost
+    if: ${{ always() }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - name: Check terraform-status-check
+        run: |
+          diff \
+            <(yq ".jobs | del(.terraform-status-check) | keys.[]" .github/workflows/terraform.yml) \
+            <(yq ".jobs.terraform-status-check.needs.[]" .github/workflows/terraform.yml)
+      - name: Fail if any needed job failed
+        env:
+          JOBS: ${{ toJson(needs) }}
+        run: |
+          for result in $(jq -r '.[].result' <<<"$JOBS"); do
+            if [[ ! "$result" =~ ^(success|skipped)$ ]]; then
+              exit 1
+            fi
+          done
+
   terraform-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -52,6 +77,18 @@ jobs:
         run: |
           cd terraform
           tflint
+
+  terraform-trivy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - name: Run Trivy config scan
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: 'config'
+          scan-ref: 'terraform/'
 
   infracost:
     runs-on: ubuntu-latest
