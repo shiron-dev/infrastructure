@@ -1,2 +1,5 @@
+exclude_paths:
+  - "**/*.secrets.*.sops"
+
 skip_list:
   - yaml[document-start]

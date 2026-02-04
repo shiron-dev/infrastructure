@@ -43,12 +43,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
-      - name: Setup ansible
-        run: pip install ansible ansible-lint
+      - uses: astral-sh/setup-uv@803947b9bd8e9f986429fa0c5a41c367cd732b41 #v7.2.1
+      - name: Install ansible and ansible-lint
+        run: uv sync --project tools/ansible
       - name: Run ansible-galaxy
-        run: cd ansible && ansible-galaxy install -r requirements.yml
+        run: uv run --project tools/ansible -- bash -c "cd ansible && ansible-galaxy install -r requirements.yml"
       - name: Run ansible-lint
-        run: cd ansible && ansible-lint
+        run: uv run --project tools/ansible -- bash -c "cd ansible && ansible-lint"
 
   check-symlinks:
     runs-on: ubuntu-latest
