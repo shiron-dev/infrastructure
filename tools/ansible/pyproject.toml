@@ -8,7 +8,3 @@ dependencies = [
     "ansible>=13",
     "ansible-lint>=26,<27",
 ]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
