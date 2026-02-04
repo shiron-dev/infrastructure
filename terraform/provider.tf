@@ -6,7 +6,7 @@ terraform {
     }
   }
 
-  required_version = ">= 1.14.0"
+  required_version = ">= 1.14.4"
 
   backend "gcs" {
     bucket = "shiron-dev-terraform"
