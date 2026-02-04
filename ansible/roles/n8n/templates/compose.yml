@@ -56,7 +56,7 @@ services:
       start_period: 40s
 
   postgres:
-    image: postgres:16-alpine@sha256:7898d413578ff5fa67ce49233cc9743e282010eb2ec6ebf7834a63f4a60b05f0
+    image: postgres:16-alpine@sha256:4327b9fd295502f326f44153a1045a7170ddbfffed1c3829798328556cfd09e2
     container_name: n8n-postgres
     restart: always
     environment:
