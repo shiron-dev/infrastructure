@@ -117,6 +117,7 @@ sops-encrypt:
 	for file in $$FILES; do \
 		echo "Encrypting $$file..."; \
 		sops --output-type json --encrypt "$$file" > "$$file.sops"; \
+		chmod -w "$$file" "$$file.sops"; \
 	done
 
 .PHONY: sops-decrypt
@@ -139,21 +140,27 @@ sops-decrypt:
 		esac; \
 		if [ -f "$$base" ]; then chmod +w "$$base"; fi; \
 		sops --decrypt --output-type "$$output_type" "$$file" > "$$base"; \
-		chmod -w "$$base"; \
+		chmod -w "$$base" "$$file"; \
 	done
 
 .PHONY: sops-edit
 sops-edit:
-	@if [ "${FILE##*.}" = "sops" ]; then \
-		base="$${FILE%.sops}"; \
-	else \
+	@$(MAKE) sops-decrypt $(if $(FILE),FILE="$(FILE)",); \
+	if [ -n "$(FILE)" ]; then \
 		base="$(FILE)"; \
-	fi; \
-	$(MAKE) sops-decrypt FILE="$$base.sops"; \
-	chmod +w "$$base"; \
-	code --wait "$$base"; \
-	chmod -w "$$base"; \
-	$(MAKE) sops-encrypt FILE="$$base"; \
+		[ "$${base%.sops}" != "$$base" ] && base="$${base%.sops}"; \
+		chmod +w "$$base" "$$base.sops"; \
+		echo "Edit the decrypted file(s). Press Enter when done to re-encrypt."; \
+		code --wait "$$base"; \
+		$(MAKE) sops-encrypt FILE="$$base"; \
+	else \
+		for f in $$(find . -name "*.secrets.*.sops" -type f); do \
+			chmod +w "$${f%.sops}" "$$f"; \
+		done; \
+		echo "Edit the decrypted file(s). Press Enter when done to re-encrypt."; \
+		read -r _; \
+		$(MAKE) sops-encrypt; \
+	fi
 
 .PHONY: sops-ci
 sops-ci:
@@ -173,7 +180,10 @@ sops-ci:
 
 .PHONY: kics
 kics:
-	docker run -t -v $(PWD):/path checkmarx/kics scan -p /path
+	@dir=$$(mktemp -d) && \
+	rsync -a --exclude='tools/ansible/.venv' $(PWD)/ $$dir/ && \
+	docker run -t -v $$dir:/path checkmarx/kics scan -p /path; \
+	status=$$?; rm -rf $$dir; exit $$status
 
 .PHONY: ci
 ci:
