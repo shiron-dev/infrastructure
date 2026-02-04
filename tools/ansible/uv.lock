@@ -89,7 +89,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "ansible", specifier = ">=13" },
+    { name = "ansible", specifier = ">=13.3.0" },
     { name = "ansible-lint", specifier = ">=26,<27" },
 ]
 
