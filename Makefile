@@ -72,6 +72,13 @@ terraform-lint: terraform-init
 terraform-fmt:
 	cd terraform && terraform fmt -recursive
 
+.PHONY: terraform-validate
+terraform-validate: terraform-init
+	cd terraform && terraform validate
+
+.PHONY: terraform-ci
+terraform-ci: terraform-lint terraform-fmt terraform-validate
+
 # コスト比較前のベースライン作成
 .PHONY: infracost-base
 infracost-base: terraform-plan
@@ -90,9 +97,6 @@ infracost-diff: terraform-plan
 .PHONY: infracost-breakdown
 infracost-breakdown: terraform-plan
 	cd terraform && infracost breakdown --path=.
-
-.PHONY: terraform-ci
-terraform-ci: terraform-lint terraform-fmt
 
 .PHONY: sops-encrypt
 sops-encrypt:
