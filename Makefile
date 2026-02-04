@@ -1,5 +1,6 @@
 ANSIBLE_DEFAULT_OPT ?=
 ANSIBLE_DIR := ansible
+UV_ANSIBLE := uv run --project tools/ansible --
 PROJECT_ID := shiron-dev
 
 CHECK_SECRETS_SCRIPT := scripts/check-secrets.sh
@@ -19,11 +20,11 @@ init:
 
 .PHONY: ansible-init
 ansible-init: init
-	cd $(ANSIBLE_DIR) && ansible-galaxy install -r requirements.yml
+	$(UV_ANSIBLE) bash -c "cd $(ANSIBLE_DIR) && ansible-galaxy install -r requirements.yml"
 
 .PHONY: ansible-lint
 ansible-lint: ansible-init
-	cd $(ANSIBLE_DIR) && ansible-lint -c .ansible-lint --fix
+	$(UV_ANSIBLE) bash -c "cd $(ANSIBLE_DIR) && ansible-lint -c .ansible-lint --fix"
 
 define check_gcloud_auth
 	@if ! (gcloud config get-value project 2>/dev/null | grep -q "^$(PROJECT_ID)$$" && \
@@ -45,11 +46,11 @@ ansible-ci: ansible-lint
 
 .PHONY: ansible-check
 ansible-check: ansible-init
-	cd $(ANSIBLE_DIR) && ansible-playbook -i hosts.yml site.yml -C $(ANSIBLE_DEFAULT_OPT)
+	$(UV_ANSIBLE) bash -c "cd $(ANSIBLE_DIR) && ansible-playbook -i hosts.yml site.yml -C $(ANSIBLE_DEFAULT_OPT)"
 
 .PHONY: ansible-run
 ansible-run: ansible-init
-	cd $(ANSIBLE_DIR) && ansible-playbook -i hosts.yml site.yml $(ANSIBLE_DEFAULT_OPT)
+	$(UV_ANSIBLE) bash -c "cd $(ANSIBLE_DIR) && ansible-playbook -i hosts.yml site.yml $(ANSIBLE_DEFAULT_OPT)"
 
 .PHONY: terraform-init
 terraform-init: init
