@@ -5,6 +5,6 @@ description = "Ansible and ansible-lint for CI and local use"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "ansible>=13",
+    "ansible>=13.3.0",
     "ansible-lint>=26,<27",
 ]
