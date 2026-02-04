@@ -1,1 +1,6 @@
 * @shiron-dev
+
+# Ignore CODEOWNERS for renovate
+
+compose.yml
+compose.yaml
