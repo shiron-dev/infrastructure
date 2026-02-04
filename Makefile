@@ -171,7 +171,10 @@ sops-ci:
 
 .PHONY: kics
 kics:
-	docker run -t -v $(PWD):/path checkmarx/kics scan -p /path
+	@dir=$$(mktemp -d) && \
+	rsync -a --exclude='tools/ansible/.venv' $(PWD)/ $$dir/ && \
+	docker run -t -v $$dir:/path checkmarx/kics scan -p /path; \
+	status=$$?; rm -rf $$dir; exit $$status
 
 .PHONY: ci
 ci:
