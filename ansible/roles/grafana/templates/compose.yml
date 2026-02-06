@@ -55,7 +55,7 @@ services:
       retries: 3
       start_period: 40s
   influxdb:
-    image: influxdb:2.7.12@sha256:4633b386dcceff5db21cc4c0683609f1d6675c9ba6c28a2db96bd9e9d5223c69
+    image: influxdb:2.8.0@sha256:8e911da5f7b482230e61fe4bad9af0697d97a75e087f19f5f0ddfee62c2bd686
     container_name: influxdb
     restart: always
     volumes:
