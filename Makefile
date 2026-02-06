@@ -172,8 +172,8 @@ sops-ci:
 .PHONY: kics
 kics:
 	@dir=$$(mktemp -d) && \
-	rsync -a --exclude='tools/ansible/.venv' $(PWD)/ $$dir/ && \
-	docker run -t -v $$dir:/path checkmarx/kics scan -p /path --config /path/kics.config; \
+	rsync -a --exclude='tools/ansible/.venv' --exclude='*.secrets.*' --exclude='terraform/terraform.tfvars' $(PWD)/ $$dir/ && \
+	docker run -t -v $$dir:/path checkmarx/kics scan -p /path; \
 	status=$$?; rm -rf $$dir; exit $$status
 
 .PHONY: ci
