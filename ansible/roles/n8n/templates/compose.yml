@@ -59,6 +59,7 @@ services:
     image: postgres:16-alpine@sha256:4327b9fd295502f326f44153a1045a7170ddbfffed1c3829798328556cfd09e2
     container_name: n8n-postgres
     restart: always
+    user: "70:70"
     environment:
       POSTGRES_DB: n8n
       POSTGRES_USER: n8n
