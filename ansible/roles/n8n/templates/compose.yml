@@ -1,6 +1,6 @@
 services:
   n8n:
-    image: n8nio/n8n:2.6.2@sha256:ff6fe9eca746b7455c9e6e4fbc6f5753c3204e82279e015fa62f1bfe309e6343
+    image: n8nio/n8n:2.7.1@sha256:3ed9f3bc9b77bc79e6e847edf63317381d4f2dc631f8300a0af96385fd944a13
     container_name: n8n
     restart: always
     environment:
@@ -32,7 +32,7 @@ services:
 
   redis:
     image: redis:8.4.0@sha256:c22af04bb576503bf16b3e34a1fd2fd82de0f765afd866d2e380145e0af30d78
-    container_name: redis
+    container_name: n8n-redis
     restart: always
     volumes:
       - ./redis_data:/data
@@ -56,9 +56,10 @@ services:
       start_period: 40s
 
   postgres:
-    image: postgres:18-alpine@sha256:aa6eb304ddb6dd26df23d05db4e5cb05af8951cda3e0dc57731b771e0ef4ab29
+    image: postgres:16-alpine@sha256:4327b9fd295502f326f44153a1045a7170ddbfffed1c3829798328556cfd09e2
     container_name: n8n-postgres
     restart: always
+    user: "70:70"
     environment:
       POSTGRES_DB: n8n
       POSTGRES_USER: n8n
@@ -86,7 +87,7 @@ services:
 
   tunnel-n8n:
     image: cloudflare/cloudflared:2026.1.2@sha256:e9bcb2ef08d25632ff74344e73a025f4f4bf12718335b196fa0e670cacace8c5
-    container_name: tunnel-n8n
+    container_name: n8n-tunnel
     restart: always
     command: tunnel run
     environment:
