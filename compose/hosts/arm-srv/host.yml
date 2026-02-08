@@ -1,0 +1,4 @@
+projects:
+  grafana:
+    remotePath: /var
+    postSyncCommand: docker compose up -d
