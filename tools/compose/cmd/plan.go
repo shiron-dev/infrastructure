@@ -12,6 +12,7 @@ import (
 var (
 	planHostFilter    []string
 	planProjectFilter []string
+	planDeps          syncer.PlanDependencies
 )
 
 var planCmd = &cobra.Command{
@@ -23,12 +24,13 @@ var planCmd = &cobra.Command{
 			return err
 		}
 
-		plan, err := syncer.BuildPlan(cfg, planHostFilter, planProjectFilter)
+		plan, err := syncer.BuildPlanWithDeps(cfg, planHostFilter, planProjectFilter, planDeps)
 		if err != nil {
 			return err
 		}
 
 		plan.Print(os.Stdout)
+
 		return nil
 	},
 }

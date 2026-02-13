@@ -11,6 +11,8 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestParseEnvFile(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	p := filepath.Join(dir, ".env")
 	os.WriteFile(p, []byte(`# comment
@@ -41,8 +43,10 @@ EMPTY=
 		got, ok := vars[k]
 		if !ok {
 			t.Errorf("missing key %q", k)
+
 			continue
 		}
+
 		if got != want {
 			t.Errorf("key %q = %q, want %q", k, got, want)
 		}
@@ -50,10 +54,13 @@ EMPTY=
 }
 
 func TestParseEnvFile_NotExist(t *testing.T) {
+	t.Parallel()
+
 	vars, err := parseEnvFile("/nonexistent/.env")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(vars) != 0 {
 		t.Errorf("expected empty map, got %v", vars)
 	}
@@ -64,6 +71,8 @@ func TestParseEnvFile_NotExist(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestParseSecretsYAML(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	p := filepath.Join(dir, "env.secrets.yml")
 	os.WriteFile(p, []byte(`github_client_id: abc123
@@ -79,6 +88,7 @@ smtp_port: 587
 	if vars["github_client_id"] != "abc123" {
 		t.Errorf("github_client_id = %v", vars["github_client_id"])
 	}
+
 	if vars["github_client_secret"] != "secret456" {
 		t.Errorf("github_client_secret = %v", vars["github_client_secret"])
 	}
@@ -89,16 +99,21 @@ smtp_port: 587
 }
 
 func TestParseSecretsYAML_NotExist(t *testing.T) {
+	t.Parallel()
+
 	vars, err := parseSecretsYAML("/nonexistent/env.secrets.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(vars) != 0 {
 		t.Errorf("expected empty map, got %v", vars)
 	}
 }
 
 func TestParseSecretsYAML_InvalidYAML(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	p := filepath.Join(dir, "env.secrets.yml")
 	os.WriteFile(p, []byte(`{invalid: yaml: [}`), 0644)
@@ -114,6 +129,8 @@ func TestParseSecretsYAML_InvalidYAML(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadTemplateVars_SecretsOverrideEnv(t *testing.T) {
+	t.Parallel()
+
 	base := t.TempDir()
 	hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
 	os.MkdirAll(hostProjectDir, 0755)
@@ -136,6 +153,7 @@ SHARED: secrets_value
 	if vars["KEY1"] != "from_env" {
 		t.Errorf("KEY1 = %v", vars["KEY1"])
 	}
+
 	if vars["KEY2"] != "from_secrets" {
 		t.Errorf("KEY2 = %v", vars["KEY2"])
 	}
@@ -146,6 +164,8 @@ SHARED: secrets_value
 }
 
 func TestLoadTemplateVars_NoFiles(t *testing.T) {
+	t.Parallel()
+
 	base := t.TempDir()
 	os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0755)
 
@@ -153,12 +173,15 @@ func TestLoadTemplateVars_NoFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(vars) != 0 {
 		t.Errorf("expected empty vars, got %v", vars)
 	}
 }
 
 func TestLoadTemplateVars_OnlySecrets(t *testing.T) {
+	t.Parallel()
+
 	base := t.TempDir()
 	hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
 	os.MkdirAll(hostProjectDir, 0755)
@@ -170,6 +193,7 @@ func TestLoadTemplateVars_OnlySecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if vars["secret_key"] != "s3cret" {
 		t.Errorf("secret_key = %v", vars["secret_key"])
 	}
@@ -180,10 +204,12 @@ func TestLoadTemplateVars_OnlySecrets(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRenderTemplate(t *testing.T) {
+	t.Parallel()
+
 	data := []byte(`host = {{ .smtp_host }}
 password = {{ .smtp_password }}`)
 
-	vars := map[string]interface{}{
+	vars := map[string]any{
 		"smtp_host":     "mail.example.com:587",
 		"smtp_password": "s3cret",
 	}
@@ -201,43 +227,56 @@ password = s3cret`
 }
 
 func TestRenderTemplate_NoVars(t *testing.T) {
+	t.Parallel()
+
 	data := []byte("plain text with no {{ templates }}")
+
 	result, err := RenderTemplate(data, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if string(result) != string(data) {
 		t.Errorf("expected unchanged data, got %q", string(result))
 	}
 }
 
 func TestRenderTemplate_EmptyVars(t *testing.T) {
+	t.Parallel()
+
 	data := []byte("plain text")
-	result, err := RenderTemplate(data, map[string]interface{}{})
+
+	result, err := RenderTemplate(data, map[string]any{})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if string(result) != string(data) {
 		t.Errorf("expected unchanged data, got %q", string(result))
 	}
 }
 
 func TestRenderTemplate_BinarySkipped(t *testing.T) {
+	t.Parallel()
+
 	data := []byte("binary\x00content")
-	vars := map[string]interface{}{"key": "val"}
+	vars := map[string]any{"key": "val"}
 
 	result, err := RenderTemplate(data, vars)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if string(result) != string(data) {
 		t.Error("binary data should be returned unchanged")
 	}
 }
 
 func TestRenderTemplate_MissingKeyError(t *testing.T) {
+	t.Parallel()
+
 	data := []byte("value = {{ .missing_key }}")
-	vars := map[string]interface{}{"other_key": "val"}
+	vars := map[string]any{"other_key": "val"}
 
 	_, err := RenderTemplate(data, vars)
 	if err == nil {
@@ -246,8 +285,10 @@ func TestRenderTemplate_MissingKeyError(t *testing.T) {
 }
 
 func TestRenderTemplate_InvalidTemplate(t *testing.T) {
+	t.Parallel()
+
 	data := []byte("bad {{ .unterminated")
-	vars := map[string]interface{}{"key": "val"}
+	vars := map[string]any{"key": "val"}
 
 	_, err := RenderTemplate(data, vars)
 	if err == nil {
@@ -256,6 +297,8 @@ func TestRenderTemplate_InvalidTemplate(t *testing.T) {
 }
 
 func TestRenderTemplate_ComplexTemplate(t *testing.T) {
+	t.Parallel()
+
 	data := []byte(`services:
   app:
     environment:
@@ -263,7 +306,7 @@ func TestRenderTemplate_ComplexTemplate(t *testing.T) {
       - DB_PORT={{ .db_port }}
       - DB_NAME={{ .db_name }}`)
 
-	vars := map[string]interface{}{
+	vars := map[string]any{
 		"db_host": "postgres.local",
 		"db_port": 5432,
 		"db_name": "myapp",

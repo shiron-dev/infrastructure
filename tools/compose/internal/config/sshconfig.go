@@ -1,5 +1,7 @@
 package config
 
+//go:generate go run go.uber.org/mock/mockgen@v0.6.0 -destination=mock_ssh_interfaces.go -package=config cmt/internal/config SSHConfigRunner,SSHConfigResolver
+
 import (
 	"bufio"
 	"fmt"
@@ -10,36 +12,80 @@ import (
 	"strings"
 )
 
+// SSHConfigRunner runs external commands for SSH config resolution.
+type SSHConfigRunner interface {
+	Output(name string, args ...string) ([]byte, error)
+}
+
+// ExecSSHConfigRunner resolves SSH config via os/exec.
+type ExecSSHConfigRunner struct{}
+
+// Output executes a command and returns stdout.
+func (ExecSSHConfigRunner) Output(name string, args ...string) ([]byte, error) {
+	return exec.Command(name, args...).Output()
+}
+
+// SSHConfigResolver resolves and applies SSH config to a host entry.
+type SSHConfigResolver interface {
+	Resolve(entry *HostEntry, sshConfigPath, hostDir string) error
+}
+
+// DefaultSSHConfigResolver resolves using ssh -G with an injected runner.
+type DefaultSSHConfigResolver struct {
+	Runner SSHConfigRunner
+}
+
+// Resolve resolves SSH config for entry.
+func (r DefaultSSHConfigResolver) Resolve(entry *HostEntry, sshConfigPath, hostDir string) error {
+	runner := r.Runner
+	if runner == nil {
+		runner = ExecSSHConfigRunner{}
+	}
+
+	return ResolveSSHConfigWithRunner(entry, sshConfigPath, hostDir, runner)
+}
+
 // ResolveSSHConfig runs `ssh -G` to resolve SSH configuration for the given
 // host entry and overrides its fields with the resolved values.
 // sshConfigPath is passed via -F when non-empty; relative paths are resolved
 // against hostDir.
 func ResolveSSHConfig(entry *HostEntry, sshConfigPath, hostDir string) error {
+	return ResolveSSHConfigWithRunner(entry, sshConfigPath, hostDir, ExecSSHConfigRunner{})
+}
+
+// ResolveSSHConfigWithRunner is ResolveSSHConfig with an injected command runner.
+func ResolveSSHConfigWithRunner(entry *HostEntry, sshConfigPath, hostDir string, runner SSHConfigRunner) error {
 	originalHost := entry.Host
 
 	args := []string{"-G"}
+
 	if sshConfigPath != "" {
 		if !filepath.IsAbs(sshConfigPath) {
 			sshConfigPath = filepath.Join(hostDir, sshConfigPath)
 		}
+
 		args = append(args, "-F", sshConfigPath)
 	}
+
 	if entry.User != "" {
 		args = append(args, "-l", entry.User)
 	}
+
 	if entry.Port != 0 {
 		args = append(args, "-p", strconv.Itoa(entry.Port))
 	}
+
 	args = append(args, entry.Host)
 
 	slog.Debug("running ssh -G", "command", "ssh "+strings.Join(args, " "), "host", entry.Name)
 
-	cmd := exec.Command("ssh", args...)
-	out, err := cmd.Output()
+	out, err := runner.Output("ssh", args...)
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		exitErr := &exec.ExitError{}
+		if errors.As(err, &exitErr) {
 			return fmt.Errorf("ssh -G %s: %w\nstderr: %s", entry.Host, err, exitErr.Stderr)
 		}
+
 		return fmt.Errorf("ssh -G %s: %w", entry.Host, err)
 	}
 
@@ -56,6 +102,7 @@ func ResolveSSHConfig(entry *HostEntry, sshConfigPath, hostDir string) error {
 			entry.User = v
 		}
 	}
+
 	if entry.Port == 0 {
 		if v, ok := single["port"]; ok {
 			if port, err := strconv.Atoi(v); err == nil && port > 0 {
@@ -84,6 +131,7 @@ func ResolveSSHConfig(entry *HostEntry, sshConfigPath, hostDir string) error {
 				f, entry.Host, entry.Port, entry.User, originalHost,
 			)
 		}
+
 		entry.IdentityFiles = expanded
 	}
 
@@ -110,16 +158,19 @@ func ResolveSSHConfig(entry *HostEntry, sshConfigPath, hostDir string) error {
 func parseSSHGOutput(output string) (single map[string]string, multi map[string][]string) {
 	single = make(map[string]string)
 	multi = make(map[string][]string)
+
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		key, value, ok := strings.Cut(scanner.Text(), " ")
 		if !ok {
 			continue
 		}
+
 		key = strings.ToLower(key)
 		single[key] = value
 		multi[key] = append(multi[key], value)
 	}
+
 	return
 }
 
@@ -137,5 +188,6 @@ func expandProxyPlaceholders(cmd, hostname string, port int, user, originalHost 
 	cmd = strings.ReplaceAll(cmd, "%r", user)
 	cmd = strings.ReplaceAll(cmd, "%n", originalHost)
 	cmd = strings.ReplaceAll(cmd, "\x00", "%")
+
 	return cmd
 }

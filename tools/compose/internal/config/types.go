@@ -6,30 +6,30 @@ package config
 
 // CmtConfig is the top-level configuration for the Compose Manage Tool.
 type CmtConfig struct {
-	BasePath string        `yaml:"basePath" json:"basePath" jsonschema:"required,description=Path to the compose root directory"`
-	Defaults *SyncDefaults `yaml:"defaults,omitempty" json:"defaults,omitempty" jsonschema:"description=Default settings applied when host.yml does not specify them"`
-	Hosts    []HostEntry   `yaml:"hosts" json:"hosts" jsonschema:"required,minItems=1,description=List of target hosts"`
+	BasePath string        `json:"basePath"           jsonschema:"required,description=Path to the compose root directory"                  yaml:"basePath"`
+	Defaults *SyncDefaults `json:"defaults,omitempty" jsonschema:"description=Default settings applied when host.yml does not specify them" yaml:"defaults,omitempty"`
+	Hosts    []HostEntry   `json:"hosts"              jsonschema:"required,minItems=1,description=List of target hosts"                     yaml:"hosts"`
 }
 
 // SyncDefaults holds the lowest-priority defaults for sync settings.
 type SyncDefaults struct {
-	RemotePath      string `yaml:"remotePath,omitempty" json:"remotePath,omitempty" jsonschema:"description=Base remote directory for project files"`
-	PostSyncCommand string `yaml:"postSyncCommand,omitempty" json:"postSyncCommand,omitempty" jsonschema:"description=Command executed in the project directory after sync"`
+	RemotePath      string `json:"remotePath,omitempty"      jsonschema:"description=Base remote directory for project files"              yaml:"remotePath,omitempty"`
+	PostSyncCommand string `json:"postSyncCommand,omitempty" jsonschema:"description=Command executed in the project directory after sync" yaml:"postSyncCommand,omitempty"`
 }
 
 // HostEntry defines SSH connection parameters for a target host.
 type HostEntry struct {
-	Name       string `yaml:"name" json:"name" jsonschema:"required,description=Host identifier (must match directory name under hosts/)"`
-	Host       string `yaml:"host" json:"host" jsonschema:"required,description=SSH hostname or IP address"`
-	Port       int    `yaml:"port,omitempty" json:"port,omitempty" jsonschema:"description=SSH port (default 22)"`
-	User       string `yaml:"user" json:"user" jsonschema:"required,description=SSH username"`
-	SSHKeyPath string `yaml:"sshKeyPath,omitempty" json:"sshKeyPath,omitempty" jsonschema:"description=Path to SSH private key (or public key for agent identification)"`
-	SSHAgent   bool   `yaml:"sshAgent,omitempty" json:"sshAgent,omitempty" jsonschema:"description=Use SSH agent for authentication"`
+	Name       string `json:"name"                 jsonschema:"required,description=Host identifier (must match directory name under hosts/)" yaml:"name"`
+	Host       string `json:"host"                 jsonschema:"required,description=SSH hostname or IP address"                               yaml:"host"`
+	Port       int    `json:"port,omitempty"       jsonschema:"description=SSH port (default 22)"                                             yaml:"port,omitempty"`
+	User       string `json:"user"                 jsonschema:"required,description=SSH username"                                             yaml:"user"`
+	SSHKeyPath string `json:"sshKeyPath,omitempty" jsonschema:"description=Path to SSH private key (or public key for agent identification)"  yaml:"sshKeyPath,omitempty"`
+	SSHAgent   bool   `json:"sshAgent,omitempty"   jsonschema:"description=Use SSH agent for authentication"                                  yaml:"sshAgent,omitempty"`
 
 	// Fields populated by SSH config resolution via ssh -G (not from YAML).
-	ProxyCommand  string   `yaml:"-" json:"-"`
-	IdentityFiles []string `yaml:"-" json:"-"`
-	IdentityAgent string   `yaml:"-" json:"-"`
+	ProxyCommand  string   `json:"-" yaml:"-"`
+	IdentityFiles []string `json:"-" yaml:"-"`
+	IdentityAgent string   `json:"-" yaml:"-"`
 }
 
 // ---------------------------------------------------------------------------
@@ -38,17 +38,17 @@ type HostEntry struct {
 
 // HostConfig is stored per-host in host.yml under hosts/<hostname>/.
 type HostConfig struct {
-	SSHConfig       string                    `yaml:"sshConfig,omitempty" json:"sshConfig,omitempty" jsonschema:"description=Path to SSH config file for ssh -G resolution. Relative paths are resolved against the host directory."`
-	RemotePath      string                    `yaml:"remotePath,omitempty" json:"remotePath,omitempty" jsonschema:"description=Default remote base path for this host"`
-	PostSyncCommand string                    `yaml:"postSyncCommand,omitempty" json:"postSyncCommand,omitempty" jsonschema:"description=Default post-sync command for this host"`
-	Projects        map[string]*ProjectConfig `yaml:"projects,omitempty" json:"projects,omitempty" jsonschema:"description=Per-project overrides for this host"`
+	SSHConfig       string                    `json:"sshConfig,omitempty"       jsonschema:"description=Path to SSH config file for ssh -G resolution. Relative paths are resolved against the host directory." yaml:"sshConfig,omitempty"`
+	RemotePath      string                    `json:"remotePath,omitempty"      jsonschema:"description=Default remote base path for this host"                                                                 yaml:"remotePath,omitempty"`
+	PostSyncCommand string                    `json:"postSyncCommand,omitempty" jsonschema:"description=Default post-sync command for this host"                                                                yaml:"postSyncCommand,omitempty"`
+	Projects        map[string]*ProjectConfig `json:"projects,omitempty"        jsonschema:"description=Per-project overrides for this host"                                                                    yaml:"projects,omitempty"`
 }
 
 // ProjectConfig provides project-specific overrides within a host config.
 type ProjectConfig struct {
-	RemotePath      string   `yaml:"remotePath,omitempty" json:"remotePath,omitempty" jsonschema:"description=Remote base path override for this project"`
-	PostSyncCommand string   `yaml:"postSyncCommand,omitempty" json:"postSyncCommand,omitempty" jsonschema:"description=Post-sync command override for this project"`
-	Dirs            []string `yaml:"dirs,omitempty" json:"dirs,omitempty" jsonschema:"description=Directories to pre-create in the remote project directory (e.g. for Docker volume mounts)"`
+	RemotePath      string   `json:"remotePath,omitempty"      jsonschema:"description=Remote base path override for this project"                                                yaml:"remotePath,omitempty"`
+	PostSyncCommand string   `json:"postSyncCommand,omitempty" jsonschema:"description=Post-sync command override for this project"                                               yaml:"postSyncCommand,omitempty"`
+	Dirs            []string `json:"dirs,omitempty"            jsonschema:"description=Directories to pre-create in the remote project directory (e.g. for Docker volume mounts)" yaml:"dirs,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +82,7 @@ func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projec
 	if hostCfg.RemotePath != "" {
 		r.RemotePath = hostCfg.RemotePath
 	}
+
 	if hostCfg.PostSyncCommand != "" {
 		r.PostSyncCommand = hostCfg.PostSyncCommand
 	}
@@ -91,9 +92,11 @@ func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projec
 		if pc.RemotePath != "" {
 			r.RemotePath = pc.RemotePath
 		}
+
 		if pc.PostSyncCommand != "" {
 			r.PostSyncCommand = pc.PostSyncCommand
 		}
+
 		if len(pc.Dirs) > 0 {
 			r.Dirs = pc.Dirs
 		}

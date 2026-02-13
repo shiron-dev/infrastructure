@@ -1,5 +1,7 @@
 package remote
 
+//go:generate go run go.uber.org/mock/mockgen@v0.6.0 -destination=mock_remote_interfaces.go -package=remote cmt/internal/remote RemoteClient,ClientFactory,CommandRunner
+
 import (
 	"fmt"
 	"io/fs"
@@ -14,26 +16,81 @@ import (
 	"cmt/internal/config"
 )
 
+// CommandRunner runs external commands.
+type CommandRunner interface {
+	CombinedOutput(name string, args ...string) ([]byte, error)
+}
+
+// ExecCommandRunner runs commands via os/exec.
+type ExecCommandRunner struct{}
+
+// CombinedOutput executes a command and returns combined stdout/stderr.
+func (ExecCommandRunner) CombinedOutput(name string, args ...string) ([]byte, error) {
+	return exec.Command(name, args...).CombinedOutput()
+}
+
+// RemoteClient is the interface used by sync logic.
+type RemoteClient interface {
+	ReadFile(remotePath string) ([]byte, error)
+	WriteFile(remotePath string, data []byte) error
+	MkdirAll(dir string) error
+	Remove(remotePath string) error
+	Stat(remotePath string) (fs.FileInfo, error)
+	ListFilesRecursive(dir string) ([]string, error)
+	RunCommand(workdir, command string) (string, error)
+	Close() error
+}
+
+// ClientFactory creates RemoteClient instances.
+type ClientFactory interface {
+	NewClient(entry config.HostEntry) (RemoteClient, error)
+}
+
+// DefaultClientFactory creates real SSH-backed clients.
+type DefaultClientFactory struct {
+	Runner CommandRunner
+}
+
+// NewClient creates a default client with real command execution.
+func (f DefaultClientFactory) NewClient(entry config.HostEntry) (RemoteClient, error) {
+	runner := f.Runner
+	if runner == nil {
+		runner = ExecCommandRunner{}
+	}
+
+	return NewClientWithRunner(entry, runner)
+}
+
+var _ RemoteClient = (*Client)(nil)
+
 // Client executes remote operations via external ssh / scp commands.
 type Client struct {
 	host    config.HostEntry
 	sshArgs []string // common args for ssh (without destination)
 	scpArgs []string // common args for scp (without source/dest)
+	runner  CommandRunner
 }
 
 // NewClient builds the common ssh/scp argument lists from the resolved
 // HostEntry. No network connection is established at this point.
 func NewClient(entry config.HostEntry) (*Client, error) {
+	return NewClientWithRunner(entry, ExecCommandRunner{})
+}
+
+// NewClientWithRunner builds a client with an injected command runner.
+func NewClientWithRunner(entry config.HostEntry, runner CommandRunner) (*Client, error) {
 	sshArgs, scpArgs := buildArgs(entry)
 	slog.Debug("client created",
 		"host", entry.Name,
 		"sshArgs", strings.Join(sshArgs, " "),
 		"scpArgs", strings.Join(scpArgs, " "),
 	)
+
 	return &Client{
 		host:    entry,
 		sshArgs: sshArgs,
 		scpArgs: scpArgs,
+		runner:  runner,
 	}, nil
 }
 
@@ -50,6 +107,7 @@ func (c *Client) ReadFile(remotePath string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", remotePath, err)
 	}
+
 	return out, nil
 }
 
@@ -65,30 +123,36 @@ func (c *Client) WriteFile(remotePath string, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
+
 	tmpPath := tmp.Name()
 	defer os.Remove(tmpPath)
 
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
+
 		return fmt.Errorf("write temp file: %w", err)
 	}
+
 	tmp.Close()
 
 	if err := c.runSCP(tmpPath, remotePath); err != nil {
 		return fmt.Errorf("scp to %s: %w", remotePath, err)
 	}
+
 	return nil
 }
 
 // MkdirAll creates remote directories recursively.
 func (c *Client) MkdirAll(dir string) error {
 	_, err := c.runSSH("mkdir -p " + shellQuote(dir))
+
 	return err
 }
 
 // Remove deletes a remote file.
 func (c *Client) Remove(remotePath string) error {
 	_, err := c.runSSH("rm -f " + shellQuote(remotePath))
+
 	return err
 }
 
@@ -100,6 +164,7 @@ func (c *Client) Stat(remotePath string) (fs.FileInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("stat %s: path does not exist", remotePath)
 	}
+
 	return minimalFileInfo{name: path.Base(remotePath)}, nil
 }
 
@@ -111,16 +176,20 @@ func (c *Client) ListFilesRecursive(dir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var files []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		if line == "" {
 			continue
 		}
+
 		rel := strings.TrimPrefix(line, dir+"/")
 		if rel != line {
 			files = append(files, rel)
 		}
 	}
+
 	return files, nil
 }
 
@@ -131,7 +200,9 @@ func (c *Client) RunCommand(workdir, command string) (string, error) {
 	if workdir != "" {
 		cmd = fmt.Sprintf("cd %s && %s", shellQuote(workdir), command)
 	}
+
 	out, err := c.runSSH(cmd)
+
 	return string(out), err
 }
 
@@ -147,11 +218,12 @@ func (c *Client) runSSH(remoteCmd string) ([]byte, error) {
 	args = append(args, c.host.Host, "--", remoteCmd)
 
 	slog.Debug("running ssh", "command", "ssh "+strings.Join(args, " "))
-	cmd := exec.Command("ssh", args...)
-	out, err := cmd.CombinedOutput()
+
+	out, err := c.runner.CombinedOutput("ssh", args...)
 	if err != nil {
 		return out, fmt.Errorf("ssh %s: %w\n%s", c.host.Name, err, out)
 	}
+
 	return out, nil
 }
 
@@ -164,11 +236,12 @@ func (c *Client) runSCP(localPath, remotePath string) error {
 	args = append(args, localPath, dest)
 
 	slog.Debug("running scp", "command", "scp "+strings.Join(args, " "))
-	cmd := exec.Command("scp", args...)
-	out, err := cmd.CombinedOutput()
+
+	out, err := c.runner.CombinedOutput("scp", args...)
 	if err != nil {
 		return fmt.Errorf("scp to %s: %w\n%s", dest, err, out)
 	}
+
 	return nil
 }
 
@@ -188,6 +261,7 @@ func buildArgs(entry config.HostEntry) (sshArgs, scpArgs []string) {
 	if entry.ProxyCommand != "" {
 		commonOpts = append(commonOpts, "-o", "ProxyCommand="+entry.ProxyCommand)
 	}
+
 	if entry.IdentityAgent != "" && entry.IdentityAgent != "none" {
 		commonOpts = append(commonOpts, "-o", "IdentityAgent="+entry.IdentityAgent)
 	}
@@ -205,6 +279,7 @@ func buildArgs(entry config.HostEntry) (sshArgs, scpArgs []string) {
 	if entry.Port != 0 && entry.Port != 22 {
 		sshArgs = append(sshArgs, "-p", strconv.Itoa(entry.Port))
 	}
+
 	if entry.User != "" {
 		sshArgs = append(sshArgs, "-l", entry.User)
 	}
@@ -215,7 +290,7 @@ func buildArgs(entry config.HostEntry) (sshArgs, scpArgs []string) {
 		scpArgs = append(scpArgs, "-P", strconv.Itoa(entry.Port))
 	}
 
-	return
+	return sshArgs, scpArgs
 }
 
 // ---------------------------------------------------------------------------
@@ -229,9 +304,9 @@ func shellQuote(s string) string {
 // minimalFileInfo satisfies fs.FileInfo for callers that only check the error.
 type minimalFileInfo struct{ name string }
 
-func (m minimalFileInfo) Name() string      { return m.name }
-func (m minimalFileInfo) Size() int64       { return 0 }
-func (m minimalFileInfo) Mode() fs.FileMode { return 0 }
+func (m minimalFileInfo) Name() string       { return m.name }
+func (m minimalFileInfo) Size() int64        { return 0 }
+func (m minimalFileInfo) Mode() fs.FileMode  { return 0 }
 func (m minimalFileInfo) ModTime() time.Time { return time.Time{} }
-func (m minimalFileInfo) IsDir() bool       { return false }
-func (m minimalFileInfo) Sys() interface{}  { return nil }
+func (m minimalFileInfo) IsDir() bool        { return false }
+func (m minimalFileInfo) Sys() any           { return nil }

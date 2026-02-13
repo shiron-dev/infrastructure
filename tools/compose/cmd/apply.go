@@ -13,6 +13,7 @@ var (
 	applyHostFilter    []string
 	applyProjectFilter []string
 	autoApprove        bool
+	applyDeps          syncer.ApplyDependencies
 )
 
 var applyCmd = &cobra.Command{
@@ -24,12 +25,14 @@ var applyCmd = &cobra.Command{
 			return err
 		}
 
-		plan, err := syncer.BuildPlan(cfg, applyHostFilter, applyProjectFilter)
+		plan, err := syncer.BuildPlanWithDeps(cfg, applyHostFilter, applyProjectFilter, syncer.PlanDependencies{
+			ClientFactory: applyDeps.ClientFactory,
+		})
 		if err != nil {
 			return err
 		}
 
-		return syncer.Apply(cfg, plan, autoApprove, os.Stdout)
+		return syncer.ApplyWithDeps(cfg, plan, autoApprove, os.Stdout, applyDeps)
 	},
 }
 

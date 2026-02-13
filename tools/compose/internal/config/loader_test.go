@@ -7,6 +7,8 @@ import (
 )
 
 func TestLoadCmtConfig(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 
 	cfgContent := `
@@ -25,7 +27,9 @@ defaults:
   remotePath: /opt/compose
   postSyncCommand: docker compose up -d
 `
+
 	cfgPath := filepath.Join(dir, "config.yml")
+
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -48,9 +52,11 @@ defaults:
 	if len(cfg.Hosts) != 2 {
 		t.Fatalf("expected 2 hosts, got %d", len(cfg.Hosts))
 	}
-	if cfg.Hosts[0].Port != 22 {
-		t.Errorf("default port should be 22, got %d", cfg.Hosts[0].Port)
+	// Port defaults to 0 at config level; 22 is applied later by ResolveSSHConfig.
+	if cfg.Hosts[0].Port != 0 {
+		t.Errorf("default port should be 0 (unset), got %d", cfg.Hosts[0].Port)
 	}
+
 	if cfg.Hosts[1].Port != 2222 {
 		t.Errorf("server2 port should be 2222, got %d", cfg.Hosts[1].Port)
 	}
@@ -58,30 +64,45 @@ defaults:
 	if cfg.Defaults == nil {
 		t.Fatal("defaults should not be nil")
 	}
+
 	if cfg.Defaults.RemotePath != "/opt/compose" {
 		t.Errorf("remotePath = %q", cfg.Defaults.RemotePath)
 	}
 }
 
 func TestLoadCmtConfig_Errors(t *testing.T) {
-	// Missing basePath.
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "bad.yml")
-	os.WriteFile(cfgPath, []byte("hosts:\n  - name: x\n    host: x\n    user: x\n"), 0644)
-	_, err := LoadCmtConfig(cfgPath)
-	if err == nil {
-		t.Error("expected error for missing basePath")
-	}
+	t.Parallel()
 
-	// No hosts.
-	os.WriteFile(cfgPath, []byte("basePath: .\nhosts: []\n"), 0644)
-	_, err = LoadCmtConfig(cfgPath)
-	if err == nil {
-		t.Error("expected error for empty hosts")
-	}
+	t.Run("missing basePath", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "bad.yml")
+		os.WriteFile(cfgPath, []byte("hosts:\n  - name: x\n    host: x\n    user: x\n"), 0644)
+
+		_, err := LoadCmtConfig(cfgPath)
+		if err == nil {
+			t.Error("expected error for missing basePath")
+		}
+	})
+
+	t.Run("no hosts", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "bad.yml")
+		os.WriteFile(cfgPath, []byte("basePath: .\nhosts: []\n"), 0644)
+
+		_, err := LoadCmtConfig(cfgPath)
+		if err == nil {
+			t.Error("expected error for empty hosts")
+		}
+	})
 }
 
 func TestDiscoverProjects(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	projDir := filepath.Join(dir, "projects")
 	os.MkdirAll(filepath.Join(projDir, "grafana"), 0755)
@@ -93,12 +114,15 @@ func TestDiscoverProjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(projects) != 2 {
 		t.Fatalf("expected 2 projects, got %d: %v", len(projects), projects)
 	}
 }
 
 func TestFilterHosts(t *testing.T) {
+	t.Parallel()
+
 	hosts := []HostEntry{
 		{Name: "a"}, {Name: "b"}, {Name: "c"},
 	}
@@ -113,12 +137,15 @@ func TestFilterHosts(t *testing.T) {
 	if len(got) != 2 {
 		t.Errorf("expected 2, got %d", len(got))
 	}
+
 	if got[0].Name != "a" || got[1].Name != "c" {
 		t.Errorf("unexpected hosts: %v", got)
 	}
 }
 
 func TestFilterProjects(t *testing.T) {
+	t.Parallel()
+
 	projects := []string{"grafana", "prometheus", "loki"}
 
 	if got := FilterProjects(projects, nil); len(got) != 3 {
@@ -132,6 +159,8 @@ func TestFilterProjects(t *testing.T) {
 }
 
 func TestResolveProjectConfig(t *testing.T) {
+	t.Parallel()
+
 	cmtDefaults := &SyncDefaults{
 		RemotePath:      "/opt/default",
 		PostSyncCommand: "echo default",
@@ -157,6 +186,7 @@ func TestResolveProjectConfig(t *testing.T) {
 	if r.RemotePath != "/opt/host" {
 		t.Errorf("expected /opt/host, got %q", r.RemotePath)
 	}
+
 	if r.PostSyncCommand != "echo default" {
 		t.Errorf("expected echo default, got %q", r.PostSyncCommand)
 	}
@@ -166,12 +196,15 @@ func TestResolveProjectConfig(t *testing.T) {
 	if r.RemotePath != "/opt/host" {
 		t.Errorf("expected /opt/host, got %q", r.RemotePath)
 	}
+
 	if r.PostSyncCommand != "docker compose up -d" {
 		t.Errorf("expected docker compose up -d, got %q", r.PostSyncCommand)
 	}
 }
 
 func TestLoadHostConfig(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 
 	// No host.yml → nil, nil.
@@ -179,6 +212,7 @@ func TestLoadHostConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if hc != nil {
 		t.Error("expected nil for missing host.yml")
 	}
@@ -186,6 +220,7 @@ func TestLoadHostConfig(t *testing.T) {
 	// Valid host.yml.
 	hostDir := filepath.Join(dir, "hosts", "server1")
 	os.MkdirAll(hostDir, 0755)
+
 	content := `
 remotePath: /srv/compose
 postSyncCommand: docker compose up -d
@@ -199,9 +234,11 @@ projects:
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if hc.RemotePath != "/srv/compose" {
 		t.Errorf("remotePath = %q", hc.RemotePath)
 	}
+
 	if hc.Projects["grafana"] == nil {
 		t.Fatal("grafana project config missing")
 	}

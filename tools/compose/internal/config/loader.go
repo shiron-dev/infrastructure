@@ -24,6 +24,7 @@ func LoadCmtConfig(configPath string) (*CmtConfig, error) {
 	if cfg.BasePath == "" {
 		return nil, fmt.Errorf("basePath is required in %s", configPath)
 	}
+
 	if len(cfg.Hosts) == 0 {
 		return nil, fmt.Errorf("at least one host is required in %s", configPath)
 	}
@@ -31,10 +32,12 @@ func LoadCmtConfig(configPath string) (*CmtConfig, error) {
 	// Resolve relative basePath against the config file's directory.
 	if !filepath.IsAbs(cfg.BasePath) {
 		configDir := filepath.Dir(configPath)
+
 		abs, err := filepath.Abs(filepath.Join(configDir, cfg.BasePath))
 		if err != nil {
 			return nil, fmt.Errorf("resolving basePath: %w", err)
 		}
+
 		cfg.BasePath = abs
 	}
 
@@ -51,6 +54,7 @@ func LoadHostConfig(basePath, hostName string) (*HostConfig, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
+
 		return nil, fmt.Errorf("reading %s: %w", p, err)
 	}
 
@@ -58,23 +62,28 @@ func LoadHostConfig(basePath, hostName string) (*HostConfig, error) {
 	if err := yaml.Unmarshal(data, &hc); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", p, err)
 	}
+
 	return &hc, nil
 }
 
 // DiscoverProjects lists project names found under basePath/projects/.
 func DiscoverProjects(basePath string) ([]string, error) {
 	dir := filepath.Join(basePath, "projects")
+
 	entries, err := os.ReadDir(dir)
+
 	if err != nil {
 		return nil, fmt.Errorf("reading projects directory %s: %w", dir, err)
 	}
 
 	var projects []string
+
 	for _, e := range entries {
 		if e.IsDir() {
 			projects = append(projects, e.Name())
 		}
 	}
+
 	return projects, nil
 }
 
@@ -84,16 +93,20 @@ func FilterHosts(hosts []HostEntry, filter []string) []HostEntry {
 	if len(filter) == 0 {
 		return hosts
 	}
+
 	set := make(map[string]bool, len(filter))
 	for _, f := range filter {
 		set[f] = true
 	}
+
 	var out []HostEntry
+
 	for _, h := range hosts {
 		if set[h.Name] {
 			out = append(out, h)
 		}
 	}
+
 	return out
 }
 
@@ -103,15 +116,19 @@ func FilterProjects(projects []string, filter []string) []string {
 	if len(filter) == 0 {
 		return projects
 	}
+
 	set := make(map[string]bool, len(filter))
 	for _, f := range filter {
 		set[f] = true
 	}
+
 	var out []string
+
 	for _, p := range projects {
 		if set[p] {
 			out = append(out, p)
 		}
 	}
+
 	return out
 }

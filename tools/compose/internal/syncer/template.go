@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,29 +20,31 @@ import (
 // LoadTemplateVars loads template variables from the host project directory.
 // It reads .env (KEY=VALUE format) and env.secrets.yml (flat YAML key-value),
 // merging them with env.secrets.yml values taking priority.
-func LoadTemplateVars(basePath, hostName, projectName string) (map[string]interface{}, error) {
+func LoadTemplateVars(basePath, hostName, projectName string) (map[string]any, error) {
 	hostProjectDir := filepath.Join(basePath, "hosts", hostName, projectName)
-	vars := make(map[string]interface{})
+	vars := make(map[string]any)
 
 	// Layer 1: .env (lower priority)
 	envPath := filepath.Join(hostProjectDir, ".env")
+
 	envVars, err := parseEnvFile(envPath)
+
 	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", envPath, err)
 	}
-	for k, v := range envVars {
-		vars[k] = v
-	}
+
+	maps.Copy(vars, envVars)
 
 	// Layer 2: env.secrets.yml (higher priority, overrides .env)
 	secretsPath := filepath.Join(hostProjectDir, "env.secrets.yml")
+
 	secretVars, err := parseSecretsYAML(secretsPath)
+
 	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", secretsPath, err)
 	}
-	for k, v := range secretVars {
-		vars[k] = v
-	}
+
+	maps.Copy(vars, secretVars)
 
 	return vars, nil
 }
@@ -49,14 +52,15 @@ func LoadTemplateVars(basePath, hostName, projectName string) (map[string]interf
 // parseEnvFile reads a file in KEY=VALUE format (one per line).
 // Lines starting with # and empty lines are ignored.
 // Returns an empty map (not an error) if the file does not exist.
-func parseEnvFile(path string) (map[string]interface{}, error) {
-	vars := make(map[string]interface{})
+func parseEnvFile(path string) (map[string]any, error) {
+	vars := make(map[string]any)
 
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return vars, nil
 		}
+
 		return nil, err
 	}
 	defer f.Close()
@@ -74,6 +78,7 @@ func parseEnvFile(path string) (map[string]interface{}, error) {
 		if !ok {
 			continue
 		}
+
 		key = strings.TrimSpace(key)
 		value = strings.TrimSpace(value)
 
@@ -87,6 +92,7 @@ func parseEnvFile(path string) (map[string]interface{}, error) {
 
 		vars[key] = value
 	}
+
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
@@ -96,25 +102,24 @@ func parseEnvFile(path string) (map[string]interface{}, error) {
 
 // parseSecretsYAML reads a flat YAML key-value file.
 // Returns an empty map (not an error) if the file does not exist.
-func parseSecretsYAML(path string) (map[string]interface{}, error) {
-	vars := make(map[string]interface{})
+func parseSecretsYAML(path string) (map[string]any, error) {
+	vars := make(map[string]any)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return vars, nil
 		}
+
 		return nil, err
 	}
 
-	raw := make(map[string]interface{})
+	raw := make(map[string]any)
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("invalid YAML: %w", err)
 	}
 
-	for k, v := range raw {
-		vars[k] = v
-	}
+	maps.Copy(vars, raw)
 
 	return vars, nil
 }
@@ -125,7 +130,7 @@ func parseSecretsYAML(path string) (map[string]interface{}, error) {
 
 // RenderTemplate processes data as a Go text/template with the given variables.
 // Binary data (containing null bytes) is returned as-is without processing.
-func RenderTemplate(data []byte, vars map[string]interface{}) ([]byte, error) {
+func RenderTemplate(data []byte, vars map[string]any) ([]byte, error) {
 	// Skip binary files.
 	if isBinary(data) {
 		return data, nil
