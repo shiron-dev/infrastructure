@@ -3,6 +3,7 @@ package remote
 //go:generate go run go.uber.org/mock/mockgen@v0.6.0 -destination=mock_remote_interfaces.go -package=remote cmt/internal/remote RemoteClient,ClientFactory,CommandRunner
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -26,7 +27,7 @@ type ExecCommandRunner struct{}
 
 // CombinedOutput executes a command and returns combined stdout/stderr.
 func (ExecCommandRunner) CombinedOutput(name string, args ...string) ([]byte, error) {
-	return exec.Command(name, args...).CombinedOutput()
+	return exec.CommandContext(context.Background(), name, args...).CombinedOutput()
 }
 
 // RemoteClient is the interface used by sync logic.
@@ -114,7 +115,9 @@ func (c *Client) ReadFile(remotePath string) ([]byte, error) {
 // WriteFile writes data to a remote file, creating parent directories.
 func (c *Client) WriteFile(remotePath string, data []byte) error {
 	dir := path.Dir(remotePath)
-	if err := c.MkdirAll(dir); err != nil {
+
+	err := c.MkdirAll(dir)
+	if err != nil {
 		return fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 
@@ -125,17 +128,25 @@ func (c *Client) WriteFile(remotePath string, data []byte) error {
 	}
 
 	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
 
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
+
+	_, err = tmp.Write(data)
+	if err != nil {
+		_ = tmp.Close()
 
 		return fmt.Errorf("write temp file: %w", err)
 	}
 
-	tmp.Close()
+	closeErr := tmp.Close()
+	if closeErr != nil {
+		return fmt.Errorf("close temp file: %w", closeErr)
+	}
 
-	if err := c.runSCP(tmpPath, remotePath); err != nil {
+	err = c.runSCP(tmpPath, remotePath)
+	if err != nil {
 		return fmt.Errorf("scp to %s: %w", remotePath, err)
 	}
 
@@ -213,7 +224,9 @@ func (c *Client) RunCommand(workdir, command string) (string, error) {
 // runSSH executes `ssh <common-args> <host> -- <remoteCmd>` and returns
 // combined stdout+stderr output.
 func (c *Client) runSSH(remoteCmd string) ([]byte, error) {
-	args := make([]string, 0, len(c.sshArgs)+3)
+	const sshArgsPadding = 3
+
+	args := make([]string, 0, len(c.sshArgs)+sshArgsPadding)
 	args = append(args, c.sshArgs...)
 	args = append(args, c.host.Host, "--", remoteCmd)
 
@@ -231,7 +244,9 @@ func (c *Client) runSSH(remoteCmd string) ([]byte, error) {
 func (c *Client) runSCP(localPath, remotePath string) error {
 	dest := fmt.Sprintf("%s@%s:%s", c.host.User, c.host.Host, remotePath)
 
-	args := make([]string, 0, len(c.scpArgs)+2)
+	const scpArgsPadding = 2
+
+	args := make([]string, 0, len(c.scpArgs)+scpArgsPadding)
 	args = append(args, c.scpArgs...)
 	args = append(args, localPath, dest)
 
@@ -251,28 +266,13 @@ func (c *Client) runSCP(localPath, remotePath string) error {
 
 // buildArgs constructs the shared argument slices for ssh and scp from the
 // resolved HostEntry.
-func buildArgs(entry config.HostEntry) (sshArgs, scpArgs []string) {
-	// Common options for both ssh and scp.
-	commonOpts := []string{
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "BatchMode=yes",
-	}
+func buildArgs(entry config.HostEntry) ([]string, []string) {
+	var (
+		sshArgs []string
+		scpArgs []string
+	)
 
-	if entry.ProxyCommand != "" {
-		commonOpts = append(commonOpts, "-o", "ProxyCommand="+entry.ProxyCommand)
-	}
-
-	if entry.IdentityAgent != "" && entry.IdentityAgent != "none" {
-		commonOpts = append(commonOpts, "-o", "IdentityAgent="+entry.IdentityAgent)
-	}
-
-	for _, keyPath := range entry.IdentityFiles {
-		commonOpts = append(commonOpts, "-i", keyPath)
-	}
-	// Legacy key path fallback.
-	if entry.SSHKeyPath != "" && len(entry.IdentityFiles) == 0 {
-		commonOpts = append(commonOpts, "-i", entry.SSHKeyPath)
-	}
+	commonOpts := buildCommonOptions(entry)
 
 	// ssh uses -p for port, -l for user.
 	sshArgs = append(sshArgs, commonOpts...)
@@ -291,6 +291,31 @@ func buildArgs(entry config.HostEntry) (sshArgs, scpArgs []string) {
 	}
 
 	return sshArgs, scpArgs
+}
+
+func buildCommonOptions(entry config.HostEntry) []string {
+	commonOpts := []string{
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "BatchMode=yes",
+	}
+
+	if entry.ProxyCommand != "" {
+		commonOpts = append(commonOpts, "-o", "ProxyCommand="+entry.ProxyCommand)
+	}
+
+	if entry.IdentityAgent != "" && entry.IdentityAgent != "none" {
+		commonOpts = append(commonOpts, "-o", "IdentityAgent="+entry.IdentityAgent)
+	}
+
+	for _, keyPath := range entry.IdentityFiles {
+		commonOpts = append(commonOpts, "-i", keyPath)
+	}
+
+	if entry.SSHKeyPath != "" && len(entry.IdentityFiles) == 0 {
+		commonOpts = append(commonOpts, "-i", entry.SSHKeyPath)
+	}
+
+	return commonOpts
 }
 
 // ---------------------------------------------------------------------------

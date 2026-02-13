@@ -7,41 +7,45 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	cfgFile string
-	debug   bool
-)
-
-var rootCmd = &cobra.Command{
-	Use:           "cmt",
-	Short:         "Compose Manage Tool — push-based sync for Docker Compose projects",
-	SilenceUsage:  true,
-	SilenceErrors: true,
-	Long: `cmt is a source-of-truth, push-based tool that syncs Docker Compose
+func newRootCmd() *cobra.Command {
+	rootCommand := new(cobra.Command)
+	rootCommand.Use = "cmt"
+	rootCommand.Short = "Compose Manage Tool — push-based sync for Docker Compose projects"
+	rootCommand.SilenceUsage = true
+	rootCommand.SilenceErrors = true
+	rootCommand.Long = `cmt is a source-of-truth, push-based tool that syncs Docker Compose
 project files from a local repository to remote hosts via SSH.
 
 It follows a plan/apply workflow similar to Terraform:
   cmt plan   — show what would change
-  cmt apply  — apply changes (with confirmation)`,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if debug {
-			slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-				Level: slog.LevelDebug,
-			})))
-		} else {
-			slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-				Level: slog.LevelWarn,
-			})))
-		}
-	},
-}
+  cmt apply  — apply changes (with confirmation)`
 
-func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "config.yml", "path to cmt config file")
-	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging")
+	var configPath string
+
+	var debugEnabled bool
+
+	rootCommand.PersistentFlags().StringVar(&configPath, "config", "config.yml", "path to cmt config file")
+	rootCommand.PersistentFlags().BoolVar(&debugEnabled, "debug", false, "enable debug logging")
+
+	rootCommand.PersistentPreRun = func(_ *cobra.Command, _ []string) {
+		handlerOptions := new(slog.HandlerOptions)
+		if debugEnabled {
+			handlerOptions.Level = slog.LevelDebug
+		} else {
+			handlerOptions.Level = slog.LevelWarn
+		}
+
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, handlerOptions)))
+	}
+
+	rootCommand.AddCommand(newPlanCmd(&configPath))
+	rootCommand.AddCommand(newApplyCmd(&configPath))
+	rootCommand.AddCommand(newSchemaCmd())
+
+	return rootCommand
 }
 
 // Execute runs the root command.
 func Execute() error {
-	return rootCmd.Execute()
+	return newRootCmd().Execute()
 }

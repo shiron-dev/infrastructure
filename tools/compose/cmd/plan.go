@@ -9,22 +9,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	planHostFilter    []string
-	planProjectFilter []string
-	planDeps          syncer.PlanDependencies
-)
+func newPlanCmd(configPath *string) *cobra.Command {
+	var hostFilter []string
 
-var planCmd = &cobra.Command{
-	Use:   "plan",
-	Short: "Show what would be synced without making changes",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.LoadCmtConfig(cfgFile)
+	var projectFilter []string
+
+	var dependencies syncer.PlanDependencies
+
+	planCommand := new(cobra.Command)
+	planCommand.Use = "plan"
+	planCommand.Short = "Show what would be synced without making changes"
+	planCommand.RunE = func(_ *cobra.Command, _ []string) error {
+		cfg, err := config.LoadCmtConfig(*configPath)
 		if err != nil {
 			return err
 		}
 
-		plan, err := syncer.BuildPlanWithDeps(cfg, planHostFilter, planProjectFilter, planDeps)
+		plan, err := syncer.BuildPlanWithDeps(cfg, hostFilter, projectFilter, dependencies)
 		if err != nil {
 			return err
 		}
@@ -32,11 +33,10 @@ var planCmd = &cobra.Command{
 		plan.Print(os.Stdout)
 
 		return nil
-	},
-}
+	}
 
-func init() {
-	planCmd.Flags().StringSliceVar(&planHostFilter, "host", nil, "filter by host name (repeatable)")
-	planCmd.Flags().StringSliceVar(&planProjectFilter, "project", nil, "filter by project name (repeatable)")
-	rootCmd.AddCommand(planCmd)
+	planCommand.Flags().StringSliceVar(&hostFilter, "host", nil, "filter by host name (repeatable)")
+	planCommand.Flags().StringSliceVar(&projectFilter, "project", nil, "filter by project name (repeatable)")
+
+	return planCommand
 }

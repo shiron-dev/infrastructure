@@ -11,20 +11,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var schemaCmd = &cobra.Command{
-	Use:       "schema [cmt|host]",
-	Short:     "Generate JSON Schema for cmt config or host.yml",
-	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{"cmt", "host"},
-	RunE: func(cmd *cobra.Command, args []string) error {
+func newSchemaCmd() *cobra.Command {
+	schemaCommand := new(cobra.Command)
+	schemaCommand.Use = "schema [cmt|host]"
+	schemaCommand.Short = "Generate JSON Schema for cmt config or host.yml"
+	schemaCommand.Args = cobra.ExactArgs(1)
+	schemaCommand.ValidArgs = []string{"cmt", "host"}
+	schemaCommand.RunE = func(_ *cobra.Command, args []string) error {
 		data, err := generateSchemaJSON(args[0])
 		if err != nil {
 			return err
 		}
+
 		_, err = os.Stdout.Write(append(data, '\n'))
 
 		return err
-	},
+	}
+
+	return schemaCommand
 }
 
 // generateSchemaJSON returns the JSON Schema bytes for the given schema type.
@@ -33,9 +37,18 @@ func generateSchemaJSON(kind string) ([]byte, error) {
 
 	switch kind {
 	case "cmt":
-		target = &config.CmtConfig{}
+		targetConfig := new(config.CmtConfig)
+		targetConfig.BasePath = ""
+		targetConfig.Defaults = nil
+		targetConfig.Hosts = nil
+		target = targetConfig
 	case "host":
-		target = &config.HostConfig{}
+		targetHostConfig := new(config.HostConfig)
+		targetHostConfig.SSHConfig = ""
+		targetHostConfig.RemotePath = ""
+		targetHostConfig.PostSyncCommand = ""
+		targetHostConfig.Projects = nil
+		target = targetHostConfig
 	default:
 		return nil, fmt.Errorf("unknown schema type %q (use \"cmt\" or \"host\")", kind)
 	}
@@ -49,8 +62,4 @@ func generateSchemaJSON(kind string) ([]byte, error) {
 	}
 
 	return data, nil
-}
-
-func init() {
-	rootCmd.AddCommand(schemaCmd)
 }

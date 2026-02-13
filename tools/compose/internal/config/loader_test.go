@@ -30,12 +30,14 @@ defaults:
 
 	cfgPath := filepath.Join(dir, "config.yml")
 
-	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+	err := os.WriteFile(cfgPath, []byte(cfgContent), 0600)
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create the compose directory so basePath resolves.
-	if err := os.MkdirAll(filepath.Join(dir, "compose"), 0755); err != nil {
+	err = os.MkdirAll(filepath.Join(dir, "compose"), 0750)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,10 +79,15 @@ func TestLoadCmtConfig_Errors(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
-		cfgPath := filepath.Join(dir, "bad.yml")
-		os.WriteFile(cfgPath, []byte("hosts:\n  - name: x\n    host: x\n    user: x\n"), 0644)
 
-		_, err := LoadCmtConfig(cfgPath)
+		cfgPath := filepath.Join(dir, "bad.yml")
+
+		err := os.WriteFile(cfgPath, []byte("hosts:\n  - name: x\n    host: x\n    user: x\n"), 0600)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = LoadCmtConfig(cfgPath)
 		if err == nil {
 			t.Error("expected error for missing basePath")
 		}
@@ -90,10 +97,15 @@ func TestLoadCmtConfig_Errors(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
-		cfgPath := filepath.Join(dir, "bad.yml")
-		os.WriteFile(cfgPath, []byte("basePath: .\nhosts: []\n"), 0644)
 
-		_, err := LoadCmtConfig(cfgPath)
+		cfgPath := filepath.Join(dir, "bad.yml")
+
+		err := os.WriteFile(cfgPath, []byte("basePath: .\nhosts: []\n"), 0600)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = LoadCmtConfig(cfgPath)
 		if err == nil {
 			t.Error("expected error for empty hosts")
 		}
@@ -104,11 +116,23 @@ func TestDiscoverProjects(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
+
 	projDir := filepath.Join(dir, "projects")
-	os.MkdirAll(filepath.Join(projDir, "grafana"), 0755)
-	os.MkdirAll(filepath.Join(projDir, "prometheus"), 0755)
+
+	err := os.MkdirAll(filepath.Join(projDir, "grafana"), 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.MkdirAll(filepath.Join(projDir, "prometheus"), 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// A regular file should be ignored.
-	os.WriteFile(filepath.Join(projDir, "README.md"), []byte("hi"), 0644)
+	err = os.WriteFile(filepath.Join(projDir, "README.md"), []byte("hi"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	projects, err := DiscoverProjects(dir)
 	if err != nil {
@@ -176,29 +200,29 @@ func TestResolveProjectConfig(t *testing.T) {
 	}
 
 	// Layer 1 only.
-	r := ResolveProjectConfig(cmtDefaults, nil, "grafana")
-	if r.RemotePath != "/opt/default" {
-		t.Errorf("expected /opt/default, got %q", r.RemotePath)
+	resolved := ResolveProjectConfig(cmtDefaults, nil, "grafana")
+	if resolved.RemotePath != "/opt/default" {
+		t.Errorf("expected /opt/default, got %q", resolved.RemotePath)
 	}
 
 	// Layer 2 overrides path, layer 1 provides command.
-	r = ResolveProjectConfig(cmtDefaults, hostCfg, "prometheus")
-	if r.RemotePath != "/opt/host" {
-		t.Errorf("expected /opt/host, got %q", r.RemotePath)
+	resolved = ResolveProjectConfig(cmtDefaults, hostCfg, "prometheus")
+	if resolved.RemotePath != "/opt/host" {
+		t.Errorf("expected /opt/host, got %q", resolved.RemotePath)
 	}
 
-	if r.PostSyncCommand != "echo default" {
-		t.Errorf("expected echo default, got %q", r.PostSyncCommand)
+	if resolved.PostSyncCommand != "echo default" {
+		t.Errorf("expected echo default, got %q", resolved.PostSyncCommand)
 	}
 
 	// Layer 3 overrides command.
-	r = ResolveProjectConfig(cmtDefaults, hostCfg, "grafana")
-	if r.RemotePath != "/opt/host" {
-		t.Errorf("expected /opt/host, got %q", r.RemotePath)
+	resolved = ResolveProjectConfig(cmtDefaults, hostCfg, "grafana")
+	if resolved.RemotePath != "/opt/host" {
+		t.Errorf("expected /opt/host, got %q", resolved.RemotePath)
 	}
 
-	if r.PostSyncCommand != "docker compose up -d" {
-		t.Errorf("expected docker compose up -d, got %q", r.PostSyncCommand)
+	if resolved.PostSyncCommand != "docker compose up -d" {
+		t.Errorf("expected docker compose up -d, got %q", resolved.PostSyncCommand)
 	}
 }
 
@@ -208,18 +232,22 @@ func TestLoadHostConfig(t *testing.T) {
 	dir := t.TempDir()
 
 	// No host.yml → nil, nil.
-	hc, err := LoadHostConfig(dir, "nonexistent")
-	if err != nil {
-		t.Fatal(err)
+	hostConfig, err := LoadHostConfig(dir, "nonexistent")
+	if err == nil {
+		t.Fatal("expected not-found error for missing host.yml")
 	}
 
-	if hc != nil {
+	if hostConfig != nil {
 		t.Error("expected nil for missing host.yml")
 	}
 
 	// Valid host.yml.
 	hostDir := filepath.Join(dir, "hosts", "server1")
-	os.MkdirAll(hostDir, 0755)
+
+	err = os.MkdirAll(hostDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	content := `
 remotePath: /srv/compose
@@ -228,18 +256,22 @@ projects:
   grafana:
     postSyncCommand: docker compose -f compose.yml -f compose.override.yml up -d
 `
-	os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0644)
 
-	hc, err = LoadHostConfig(dir, "server1")
+	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if hc.RemotePath != "/srv/compose" {
-		t.Errorf("remotePath = %q", hc.RemotePath)
+	hostConfig, err = LoadHostConfig(dir, "server1")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	if hc.Projects["grafana"] == nil {
+	if hostConfig.RemotePath != "/srv/compose" {
+		t.Errorf("remotePath = %q", hostConfig.RemotePath)
+	}
+
+	if hostConfig.Projects["grafana"] == nil {
 		t.Fatal("grafana project config missing")
 	}
 }

@@ -21,18 +21,51 @@ func TestCollectLocalFiles(t *testing.T) {
 
 	// Create project files.
 	projDir := filepath.Join(base, "projects", "grafana")
-	os.MkdirAll(filepath.Join(projDir, "files", "provisioning"), 0755)
-	os.WriteFile(filepath.Join(projDir, "compose.yml"), []byte("services: {}"), 0644)
-	os.WriteFile(filepath.Join(projDir, "files", "grafana.ini"), []byte("[server]"), 0644)
-	os.WriteFile(filepath.Join(projDir, "files", "provisioning", "ds.yml"), []byte("ds: 1"), 0644)
+
+	err := os.MkdirAll(filepath.Join(projDir, "files", "provisioning"), 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(projDir, "compose.yml"), []byte("services: {}"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(projDir, "files", "grafana.ini"), []byte("[server]"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(projDir, "files", "provisioning", "ds.yml"), []byte("ds: 1"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create host project files.
 	hostDir := filepath.Join(base, "hosts", "server1", "grafana")
-	os.MkdirAll(filepath.Join(hostDir, "files"), 0755)
-	os.WriteFile(filepath.Join(hostDir, "compose.override.yml"), []byte("override: true"), 0644)
-	os.WriteFile(filepath.Join(hostDir, ".env"), []byte("GF_ADMIN=admin"), 0644)
+
+	err = os.MkdirAll(filepath.Join(hostDir, "files"), 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(hostDir, "compose.override.yml"), []byte("override: true"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(hostDir, ".env"), []byte("GF_ADMIN=admin"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// This should override the project-level grafana.ini.
-	os.WriteFile(filepath.Join(hostDir, "files", "grafana.ini"), []byte("[server]\nhost_override=true"), 0644)
+	grafanaContent := []byte("[server]\nhost_override=true")
+
+	err = os.WriteFile(filepath.Join(hostDir, "files", "grafana.ini"), grafanaContent, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	files, err := CollectLocalFiles(base, "server1", "grafana")
 	if err != nil {
@@ -68,7 +101,11 @@ func TestCollectLocalFiles_MissingProject(t *testing.T) {
 	t.Parallel()
 
 	base := t.TempDir()
-	os.MkdirAll(filepath.Join(base, "projects"), 0755)
+
+	err := os.MkdirAll(filepath.Join(base, "projects"), 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	files, err := CollectLocalFiles(base, "server1", "nonexistent")
 	if err != nil {
@@ -89,13 +126,13 @@ func TestBuildManifest(t *testing.T) {
 		"config.ini":  "/a/config.ini",
 	}
 
-	m := BuildManifest(files)
-	if len(m.ManagedFiles) != 3 {
-		t.Errorf("expected 3 managed files, got %d", len(m.ManagedFiles))
+	manifest := BuildManifest(files)
+	if len(manifest.ManagedFiles) != 3 {
+		t.Errorf("expected 3 managed files, got %d", len(manifest.ManagedFiles))
 	}
 	// Should be sorted.
-	if m.ManagedFiles[0] != ".env" {
-		t.Errorf("expected first file .env, got %q", m.ManagedFiles[0])
+	if manifest.ManagedFiles[0] != ".env" {
+		t.Errorf("expected first file .env, got %q", manifest.ManagedFiles[0])
 	}
 }
 
@@ -124,13 +161,13 @@ func TestHumanSize(t *testing.T) {
 		{1536, "1.5 KB"},
 		{1048576, "1.0 MB"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.want, func(t *testing.T) {
 			t.Parallel()
 
-			got := humanSize(tt.n)
-			if got != tt.want {
-				t.Errorf("humanSize(%d) = %q, want %q", tt.n, got, tt.want)
+			got := humanSize(testCase.n)
+			if got != testCase.want {
+				t.Errorf("humanSize(%d) = %q, want %q", testCase.n, got, testCase.want)
 			}
 		})
 	}
@@ -207,12 +244,12 @@ func TestActionType_String(t *testing.T) {
 		{ActionModify, "modify"},
 		{ActionDelete, "delete"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.want, func(t *testing.T) {
 			t.Parallel()
 
-			if got := tt.action.String(); got != tt.want {
-				t.Errorf("String() = %q, want %q", got, tt.want)
+			if got := testCase.action.String(); got != testCase.want {
+				t.Errorf("String() = %q, want %q", got, testCase.want)
 			}
 		})
 	}
@@ -230,12 +267,12 @@ func TestActionType_Symbol(t *testing.T) {
 		{ActionModify, "~"},
 		{ActionDelete, "-"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.want, func(t *testing.T) {
 			t.Parallel()
 
-			if got := tt.action.Symbol(); got != tt.want {
-				t.Errorf("Symbol() = %q, want %q", got, tt.want)
+			if got := testCase.action.Symbol(); got != testCase.want {
+				t.Errorf("Symbol() = %q, want %q", got, testCase.want)
 			}
 		})
 	}
@@ -492,15 +529,19 @@ func TestBuildPlanWithDeps_UsesInjectedDependencies(t *testing.T) {
 	base := t.TempDir()
 
 	projectDir := filepath.Join(base, "projects", "grafana")
-	if err := os.MkdirAll(projectDir, 0755); err != nil {
+
+	err := os.MkdirAll(projectDir, 0750)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(projectDir, "compose.yml"), []byte("services: {}"), 0644); err != nil {
+	err = os.WriteFile(filepath.Join(projectDir, "compose.yml"), []byte("services: {}"), 0600)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0755); err != nil {
+	err = os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0750)
+	if err != nil {
 		t.Fatal(err)
 	}
 

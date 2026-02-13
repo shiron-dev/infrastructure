@@ -28,7 +28,6 @@ func LoadTemplateVars(basePath, hostName, projectName string) (map[string]any, e
 	envPath := filepath.Join(hostProjectDir, ".env")
 
 	envVars, err := parseEnvFile(envPath)
-
 	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", envPath, err)
 	}
@@ -39,7 +38,6 @@ func LoadTemplateVars(basePath, hostName, projectName string) (map[string]any, e
 	secretsPath := filepath.Join(hostProjectDir, "env.secrets.yml")
 
 	secretVars, err := parseSecretsYAML(secretsPath)
-
 	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", secretsPath, err)
 	}
@@ -54,8 +52,9 @@ func LoadTemplateVars(basePath, hostName, projectName string) (map[string]any, e
 // Returns an empty map (not an error) if the file does not exist.
 func parseEnvFile(path string) (map[string]any, error) {
 	vars := make(map[string]any)
+	cleanPath := filepath.Clean(path)
 
-	f, err := os.Open(path)
+	file, err := os.Open(cleanPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return vars, nil
@@ -63,9 +62,12 @@ func parseEnvFile(path string) (map[string]any, error) {
 
 		return nil, err
 	}
-	defer f.Close()
 
-	scanner := bufio.NewScanner(f)
+	defer func() {
+		_ = file.Close()
+	}()
+
+	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
@@ -82,30 +84,42 @@ func parseEnvFile(path string) (map[string]any, error) {
 		key = strings.TrimSpace(key)
 		value = strings.TrimSpace(value)
 
-		// Strip surrounding quotes from the value.
-		if len(value) >= 2 {
-			if (value[0] == '"' && value[len(value)-1] == '"') ||
-				(value[0] == '\'' && value[len(value)-1] == '\'') {
-				value = value[1 : len(value)-1]
-			}
-		}
+		value = trimSurroundingQuotes(value)
 
 		vars[key] = value
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, err
+	scanErr := scanner.Err()
+	if scanErr != nil {
+		return nil, scanErr
 	}
 
 	return vars, nil
+}
+
+func trimSurroundingQuotes(value string) string {
+	const minQuotedLength = 2
+	if len(value) < minQuotedLength {
+		return value
+	}
+
+	firstChar := value[0]
+	lastChar := value[len(value)-1]
+
+	if (firstChar == '"' && lastChar == '"') || (firstChar == '\'' && lastChar == '\'') {
+		return value[1 : len(value)-1]
+	}
+
+	return value
 }
 
 // parseSecretsYAML reads a flat YAML key-value file.
 // Returns an empty map (not an error) if the file does not exist.
 func parseSecretsYAML(path string) (map[string]any, error) {
 	vars := make(map[string]any)
+	cleanPath := filepath.Clean(path)
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return vars, nil
@@ -115,8 +129,10 @@ func parseSecretsYAML(path string) (map[string]any, error) {
 	}
 
 	raw := make(map[string]any)
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("invalid YAML: %w", err)
+
+	unmarshalErr := yaml.Unmarshal(data, &raw)
+	if unmarshalErr != nil {
+		return nil, fmt.Errorf("invalid YAML: %w", unmarshalErr)
 	}
 
 	maps.Copy(vars, raw)
@@ -147,8 +163,10 @@ func RenderTemplate(data []byte, vars map[string]any) ([]byte, error) {
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, vars); err != nil {
-		return nil, fmt.Errorf("template render error: %w", err)
+
+	executeErr := tmpl.Execute(&buf, vars)
+	if executeErr != nil {
+		return nil, fmt.Errorf("template render error: %w", executeErr)
 	}
 
 	return buf.Bytes(), nil

@@ -4,6 +4,8 @@ package config
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -22,7 +24,7 @@ type ExecSSHConfigRunner struct{}
 
 // Output executes a command and returns stdout.
 func (ExecSSHConfigRunner) Output(name string, args ...string) ([]byte, error) {
-	return exec.Command(name, args...).Output()
+	return exec.CommandContext(context.Background(), name, args...).Output()
 }
 
 // SSHConfigResolver resolves and applies SSH config to a host entry.
@@ -56,32 +58,13 @@ func ResolveSSHConfig(entry *HostEntry, sshConfigPath, hostDir string) error {
 // ResolveSSHConfigWithRunner is ResolveSSHConfig with an injected command runner.
 func ResolveSSHConfigWithRunner(entry *HostEntry, sshConfigPath, hostDir string, runner SSHConfigRunner) error {
 	originalHost := entry.Host
-
-	args := []string{"-G"}
-
-	if sshConfigPath != "" {
-		if !filepath.IsAbs(sshConfigPath) {
-			sshConfigPath = filepath.Join(hostDir, sshConfigPath)
-		}
-
-		args = append(args, "-F", sshConfigPath)
-	}
-
-	if entry.User != "" {
-		args = append(args, "-l", entry.User)
-	}
-
-	if entry.Port != 0 {
-		args = append(args, "-p", strconv.Itoa(entry.Port))
-	}
-
-	args = append(args, entry.Host)
+	args := buildSSHGArgs(entry, sshConfigPath, hostDir)
 
 	slog.Debug("running ssh -G", "command", "ssh "+strings.Join(args, " "), "host", entry.Name)
 
 	out, err := runner.Output("ssh", args...)
 	if err != nil {
-		exitErr := &exec.ExitError{}
+		exitErr := new(exec.ExitError)
 		if errors.As(err, &exitErr) {
 			return fmt.Errorf("ssh -G %s: %w\nstderr: %s", entry.Host, err, exitErr.Stderr)
 		}
@@ -89,56 +72,9 @@ func ResolveSSHConfigWithRunner(entry *HostEntry, sshConfigPath, hostDir string,
 		return fmt.Errorf("ssh -G %s: %w", entry.Host, err)
 	}
 
-	single, multi := parseSSHGOutput(string(out))
-
-	// Hostname is always taken from ssh -G (resolves aliases).
-	if v, ok := single["hostname"]; ok {
-		entry.Host = v
-	}
-	// User and port from YAML take precedence; ssh -G fills them only
-	// when the YAML value is at its zero value (empty / 0).
-	if entry.User == "" {
-		if v, ok := single["user"]; ok {
-			entry.User = v
-		}
-	}
-
-	if entry.Port == 0 {
-		if v, ok := single["port"]; ok {
-			if port, err := strconv.Atoi(v); err == nil && port > 0 {
-				entry.Port = port
-			}
-		}
-	}
-	// Final default if still unset.
-	if entry.Port == 0 {
-		entry.Port = 22
-	}
-
-	// ProxyCommand — expand placeholders eagerly.
-	if v, ok := single["proxycommand"]; ok && v != "none" {
-		entry.ProxyCommand = expandProxyPlaceholders(
-			v, entry.Host, entry.Port, entry.User, originalHost,
-		)
-	}
-
-	// Identity files (may appear multiple times in ssh -G output).
-	// Expand SSH placeholders that ssh -G may leave unexpanded.
-	if files, ok := multi["identityfile"]; ok {
-		expanded := make([]string, len(files))
-		for i, f := range files {
-			expanded[i] = expandProxyPlaceholders(
-				f, entry.Host, entry.Port, entry.User, originalHost,
-			)
-		}
-
-		entry.IdentityFiles = expanded
-	}
-
-	// Identity agent socket.
-	if v, ok := single["identityagent"]; ok {
-		entry.IdentityAgent = v
-	}
+	singleValues, multiValues := parseSSHGOutput(string(out))
+	applyResolvedConnectionFields(entry, singleValues)
+	applyResolvedProxyAndIdentity(entry, singleValues, multiValues, originalHost)
 
 	slog.Debug("ssh -G resolved",
 		"host", entry.Name,
@@ -153,11 +89,88 @@ func ResolveSSHConfigWithRunner(entry *HostEntry, sshConfigPath, hostDir string,
 	return nil
 }
 
+func buildSSHGArgs(entry *HostEntry, sshConfigPath, hostDir string) []string {
+	arguments := []string{"-G"}
+
+	if sshConfigPath != "" {
+		if !filepath.IsAbs(sshConfigPath) {
+			sshConfigPath = filepath.Join(hostDir, sshConfigPath)
+		}
+
+		arguments = append(arguments, "-F", sshConfigPath)
+	}
+
+	if entry.User != "" {
+		arguments = append(arguments, "-l", entry.User)
+	}
+
+	if entry.Port != 0 {
+		arguments = append(arguments, "-p", strconv.Itoa(entry.Port))
+	}
+
+	arguments = append(arguments, entry.Host)
+
+	return arguments
+}
+
+func applyResolvedConnectionFields(entry *HostEntry, singleValues map[string]string) {
+	if hostname, ok := singleValues["hostname"]; ok {
+		entry.Host = hostname
+	}
+
+	if entry.User == "" {
+		if resolvedUser, ok := singleValues["user"]; ok {
+			entry.User = resolvedUser
+		}
+	}
+
+	if entry.Port == 0 {
+		if portValue, ok := singleValues["port"]; ok {
+			parsedPort, err := strconv.Atoi(portValue)
+			if err == nil && parsedPort > 0 {
+				entry.Port = parsedPort
+			}
+		}
+	}
+
+	if entry.Port == 0 {
+		entry.Port = 22
+	}
+}
+
+func applyResolvedProxyAndIdentity(
+	entry *HostEntry,
+	singleValues map[string]string,
+	multiValues map[string][]string,
+	originalHost string,
+) {
+	if proxyCommand, ok := singleValues["proxycommand"]; ok && proxyCommand != "none" {
+		entry.ProxyCommand = expandProxyPlaceholders(
+			proxyCommand, entry.Host, entry.Port, entry.User, originalHost,
+		)
+	}
+
+	if identityFiles, ok := multiValues["identityfile"]; ok {
+		expandedIdentityFiles := make([]string, len(identityFiles))
+		for index, identityFile := range identityFiles {
+			expandedIdentityFiles[index] = expandProxyPlaceholders(
+				identityFile, entry.Host, entry.Port, entry.User, originalHost,
+			)
+		}
+
+		entry.IdentityFiles = expandedIdentityFiles
+	}
+
+	if identityAgent, ok := singleValues["identityagent"]; ok {
+		entry.IdentityAgent = identityAgent
+	}
+}
+
 // parseSSHGOutput parses `ssh -G` key-value output into single-valued and
 // multi-valued maps. Keys are lowercased.
-func parseSSHGOutput(output string) (single map[string]string, multi map[string][]string) {
-	single = make(map[string]string)
-	multi = make(map[string][]string)
+func parseSSHGOutput(output string) (map[string]string, map[string][]string) {
+	singleValues := make(map[string]string)
+	multiValues := make(map[string][]string)
 
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
@@ -167,11 +180,11 @@ func parseSSHGOutput(output string) (single map[string]string, multi map[string]
 		}
 
 		key = strings.ToLower(key)
-		single[key] = value
-		multi[key] = append(multi[key], value)
+		singleValues[key] = value
+		multiValues[key] = append(multiValues[key], value)
 	}
 
-	return
+	return singleValues, multiValues
 }
 
 // expandProxyPlaceholders expands SSH proxy command tokens:

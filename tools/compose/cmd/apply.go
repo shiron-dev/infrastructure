@@ -9,36 +9,39 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	applyHostFilter    []string
-	applyProjectFilter []string
-	autoApprove        bool
-	applyDeps          syncer.ApplyDependencies
-)
+func newApplyCmd(configPath *string) *cobra.Command {
+	var hostFilter []string
 
-var applyCmd = &cobra.Command{
-	Use:   "apply",
-	Short: "Sync files to remote hosts (with confirmation unless --auto-approve)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.LoadCmtConfig(cfgFile)
+	var projectFilter []string
+
+	var autoApprove bool
+
+	var applyDependencies syncer.ApplyDependencies
+
+	applyCommand := new(cobra.Command)
+	applyCommand.Use = "apply"
+	applyCommand.Short = "Sync files to remote hosts (with confirmation unless --auto-approve)"
+	applyCommand.RunE = func(_ *cobra.Command, _ []string) error {
+		cfg, err := config.LoadCmtConfig(*configPath)
 		if err != nil {
 			return err
 		}
 
-		plan, err := syncer.BuildPlanWithDeps(cfg, applyHostFilter, applyProjectFilter, syncer.PlanDependencies{
-			ClientFactory: applyDeps.ClientFactory,
-		})
+		planDependencies := new(syncer.PlanDependencies)
+		planDependencies.ClientFactory = applyDependencies.ClientFactory
+		planDependencies.SSHResolver = nil
+
+		plan, err := syncer.BuildPlanWithDeps(cfg, hostFilter, projectFilter, *planDependencies)
 		if err != nil {
 			return err
 		}
 
-		return syncer.ApplyWithDeps(cfg, plan, autoApprove, os.Stdout, applyDeps)
-	},
-}
+		return syncer.ApplyWithDeps(cfg, plan, autoApprove, os.Stdout, applyDependencies)
+	}
 
-func init() {
-	applyCmd.Flags().StringSliceVar(&applyHostFilter, "host", nil, "filter by host name (repeatable)")
-	applyCmd.Flags().StringSliceVar(&applyProjectFilter, "project", nil, "filter by project name (repeatable)")
-	applyCmd.Flags().BoolVar(&autoApprove, "auto-approve", false, "skip confirmation prompt")
-	rootCmd.AddCommand(applyCmd)
+	applyCommand.Flags().StringSliceVar(&hostFilter, "host", nil, "filter by host name (repeatable)")
+	applyCommand.Flags().StringSliceVar(&projectFilter, "project", nil, "filter by project name (repeatable)")
+	applyCommand.Flags().BoolVar(&autoApprove, "auto-approve", false, "skip confirmation prompt")
+
+	return applyCommand
 }

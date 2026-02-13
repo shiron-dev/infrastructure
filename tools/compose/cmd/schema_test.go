@@ -16,7 +16,9 @@ func TestGenerateSchemaJSON_Cmt(t *testing.T) {
 
 	// Must be valid JSON.
 	var obj map[string]any
-	if err := json.Unmarshal(data, &obj); err != nil {
+
+	err = json.Unmarshal(data, &obj)
+	if err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
 
@@ -50,7 +52,9 @@ func TestGenerateSchemaJSON_Host(t *testing.T) {
 
 	// Must be valid JSON.
 	var obj map[string]any
-	if err := json.Unmarshal(data, &obj); err != nil {
+
+	err = json.Unmarshal(data, &obj)
+	if err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
 

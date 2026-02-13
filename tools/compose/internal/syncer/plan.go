@@ -3,6 +3,7 @@ package syncer
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -40,6 +41,8 @@ const (
 
 func (a ActionType) String() string {
 	switch a {
+	case ActionUnchanged:
+		return "unchanged"
 	case ActionAdd:
 		return "add"
 	case ActionModify:
@@ -47,12 +50,14 @@ func (a ActionType) String() string {
 	case ActionDelete:
 		return "delete"
 	default:
-		return "unchanged"
+		return "unknown"
 	}
 }
 
 func (a ActionType) Symbol() string {
 	switch a {
+	case ActionUnchanged:
+		return "="
 	case ActionAdd:
 		return "+"
 	case ActionModify:
@@ -60,7 +65,7 @@ func (a ActionType) Symbol() string {
 	case ActionDelete:
 		return "-"
 	default:
-		return "="
+		return "?"
 	}
 }
 
@@ -118,52 +123,63 @@ const manifestFile = ".cmt-manifest.json"
 // ---------------------------------------------------------------------------
 
 // Stats returns counts of each action type across the entire plan.
-func (p *SyncPlan) Stats() (hosts, projects, add, modify, delete, unchanged int) {
-	hosts = len(p.HostPlans)
+func (p *SyncPlan) Stats() (int, int, int, int, int, int) {
+	hostCount := len(p.HostPlans)
+	projectCount := 0
+	addCount := 0
+	modifyCount := 0
+	deleteCount := 0
+	unchangedCount := 0
 
-	for _, hp := range p.HostPlans {
-		projects += len(hp.Projects)
+	for _, hostPlan := range p.HostPlans {
+		projectCount += len(hostPlan.Projects)
 
-		for _, pp := range hp.Projects {
-			for _, fp := range pp.Files {
-				switch fp.Action {
+		for _, projectPlan := range hostPlan.Projects {
+			for _, filePlan := range projectPlan.Files {
+				switch filePlan.Action {
 				case ActionAdd:
-					add++
+					addCount++
 				case ActionModify:
-					modify++
+					modifyCount++
 				case ActionDelete:
-					delete++
+					deleteCount++
 				case ActionUnchanged:
-					unchanged++
+					unchangedCount++
 				}
 			}
 		}
 	}
 
-	return
+	return hostCount, projectCount, addCount, modifyCount, deleteCount, unchangedCount
 }
 
 // DirStats returns counts of directories to create and already existing.
-func (p *SyncPlan) DirStats() (toCreate, existing int) {
-	for _, hp := range p.HostPlans {
-		for _, pp := range hp.Projects {
-			for _, dp := range pp.Dirs {
-				if dp.Exists {
-					existing++
+func (p *SyncPlan) DirStats() (int, int) {
+	toCreateCount := 0
+	existingCount := 0
+
+	for _, hostPlan := range p.HostPlans {
+		for _, projectPlan := range hostPlan.Projects {
+			for _, directoryPlan := range projectPlan.Dirs {
+				if directoryPlan.Exists {
+					existingCount++
 				} else {
-					toCreate++
+					toCreateCount++
 				}
 			}
 		}
 	}
 
-	return
+	return toCreateCount, existingCount
 }
 
 // HasChanges returns true if the plan contains any add/modify/delete actions
 // or directories to create.
 func (p *SyncPlan) HasChanges() bool {
-	_, _, add, mod, del, _ := p.Stats()
+	hostCount, projectCount, add, mod, del, unchangedCount := p.Stats()
+	_ = hostCount
+	_ = projectCount
+	_ = unchangedCount
 	dirCreate, _ := p.DirStats()
 
 	return add+mod+del+dirCreate > 0
@@ -176,58 +192,58 @@ func (p *SyncPlan) HasChanges() bool {
 // Print writes a human-readable plan to w.
 func (p *SyncPlan) Print(w io.Writer) {
 	if len(p.HostPlans) == 0 {
-		fmt.Fprintln(w, "No hosts selected.")
+		_, _ = fmt.Fprintln(w, "No hosts selected.")
 
 		return
 	}
 
-	for _, hp := range p.HostPlans {
-		fmt.Fprintf(w, "\n=== Host: %s (%s@%s:%d) ===\n",
-			hp.Host.Name, hp.Host.User, hp.Host.Host, hp.Host.Port)
+	for _, hostPlan := range p.HostPlans {
+		_, _ = fmt.Fprintf(w, "\n=== Host: %s (%s@%s:%d) ===\n",
+			hostPlan.Host.Name, hostPlan.Host.User, hostPlan.Host.Host, hostPlan.Host.Port)
 
-		if len(hp.Projects) == 0 {
-			fmt.Fprintln(w, "  (no projects)")
+		if len(hostPlan.Projects) == 0 {
+			_, _ = fmt.Fprintln(w, "  (no projects)")
 
 			continue
 		}
 
-		for _, pp := range hp.Projects {
-			fmt.Fprintf(w, "\n  Project: %s\n", pp.ProjectName)
-			fmt.Fprintf(w, "    Remote: %s\n", pp.RemoteDir)
+		for _, projectPlan := range hostPlan.Projects {
+			_, _ = fmt.Fprintf(w, "\n  Project: %s\n", projectPlan.ProjectName)
+			_, _ = fmt.Fprintf(w, "    Remote: %s\n", projectPlan.RemoteDir)
 
-			if pp.PostSyncCommand != "" {
-				fmt.Fprintf(w, "    Post-sync: %s\n", pp.PostSyncCommand)
+			if projectPlan.PostSyncCommand != "" {
+				_, _ = fmt.Fprintf(w, "    Post-sync: %s\n", projectPlan.PostSyncCommand)
 			}
 
-			fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w)
 
 			// Show directory plans.
-			if len(pp.Dirs) > 0 {
-				fmt.Fprintln(w, "    Dirs:")
+			if len(projectPlan.Dirs) > 0 {
+				_, _ = fmt.Fprintln(w, "    Dirs:")
 
-				for _, dp := range pp.Dirs {
-					if dp.Exists {
-						fmt.Fprintf(w, "      = %s/ (exists)\n", dp.RelativePath)
+				for _, directoryPlan := range projectPlan.Dirs {
+					if directoryPlan.Exists {
+						_, _ = fmt.Fprintf(w, "      = %s/ (exists)\n", directoryPlan.RelativePath)
 					} else {
-						fmt.Fprintf(w, "      + %s/ (create)\n", dp.RelativePath)
+						_, _ = fmt.Fprintf(w, "      + %s/ (create)\n", directoryPlan.RelativePath)
 					}
 				}
 
-				fmt.Fprintln(w)
+				_, _ = fmt.Fprintln(w)
 			}
 
-			if len(pp.Files) == 0 && len(pp.Dirs) == 0 {
-				fmt.Fprintln(w, "    (no files or dirs)")
+			if len(projectPlan.Files) == 0 && len(projectPlan.Dirs) == 0 {
+				_, _ = fmt.Fprintln(w, "    (no files or dirs)")
 
 				continue
 			}
 
-			for _, fp := range pp.Files {
+			for _, filePlan := range projectPlan.Files {
 				label := ""
 
-				switch fp.Action {
+				switch filePlan.Action {
 				case ActionAdd:
-					label = "new, " + humanSize(len(fp.LocalData))
+					label = "new, " + humanSize(len(filePlan.LocalData))
 				case ActionModify:
 					label = "modified"
 				case ActionDelete:
@@ -236,12 +252,12 @@ func (p *SyncPlan) Print(w io.Writer) {
 					label = "unchanged"
 				}
 
-				fmt.Fprintf(w, "    %s %s (%s)\n", fp.Action.Symbol(), fp.RelativePath, label)
+				_, _ = fmt.Fprintf(w, "    %s %s (%s)\n", filePlan.Action.Symbol(), filePlan.RelativePath, label)
 
-				if fp.Diff != "" {
-					for line := range strings.SplitSeq(fp.Diff, "\n") {
+				if filePlan.Diff != "" {
+					for line := range strings.SplitSeq(filePlan.Diff, "\n") {
 						if line != "" {
-							fmt.Fprintf(w, "        %s\n", line)
+							_, _ = fmt.Fprintf(w, "        %s\n", line)
 						}
 					}
 				}
@@ -252,14 +268,14 @@ func (p *SyncPlan) Print(w io.Writer) {
 	hosts, projects, add, mod, del, unch := p.Stats()
 	dirCreate, _ := p.DirStats()
 
-	fmt.Fprintf(w, "\nSummary: %d host(s), %d project(s) — %d to add, %d to modify, %d to delete, %d unchanged",
+	_, _ = fmt.Fprintf(w, "\nSummary: %d host(s), %d project(s) — %d to add, %d to modify, %d to delete, %d unchanged",
 		hosts, projects, add, mod, del, unch)
 
 	if dirCreate > 0 {
-		fmt.Fprintf(w, ", %d dir(s) to create", dirCreate)
+		_, _ = fmt.Fprintf(w, ", %d dir(s) to create", dirCreate)
 	}
 
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w)
 }
 
 // ---------------------------------------------------------------------------
@@ -268,19 +284,25 @@ func (p *SyncPlan) Print(w io.Writer) {
 
 // BuildPlan connects to each selected host and computes the diff.
 func BuildPlan(cfg *config.CmtConfig, hostFilter, projectFilter []string) (*SyncPlan, error) {
-	return BuildPlanWithDeps(cfg, hostFilter, projectFilter, PlanDependencies{})
+	var dependencies PlanDependencies
+
+	return BuildPlanWithDeps(cfg, hostFilter, projectFilter, dependencies)
 }
 
 // BuildPlanWithDeps connects to each selected host using injected dependencies.
 func BuildPlanWithDeps(cfg *config.CmtConfig, hostFilter, projectFilter []string, deps PlanDependencies) (*SyncPlan, error) {
 	clientFactory := deps.ClientFactory
 	if clientFactory == nil {
-		clientFactory = remote.DefaultClientFactory{}
+		defaultFactory := new(remote.DefaultClientFactory)
+		defaultFactory.Runner = nil
+		clientFactory = *defaultFactory
 	}
 
 	sshResolver := deps.SSHResolver
 	if sshResolver == nil {
-		sshResolver = config.DefaultSSHConfigResolver{}
+		defaultResolver := new(config.DefaultSSHConfigResolver)
+		defaultResolver.Runner = nil
+		sshResolver = *defaultResolver
 	}
 
 	// Discover and filter projects.
@@ -299,13 +321,18 @@ func BuildPlanWithDeps(cfg *config.CmtConfig, hostFilter, projectFilter []string
 		return nil, fmt.Errorf("no hosts matched filter %v", hostFilter)
 	}
 
-	plan := &SyncPlan{}
+	plan := new(SyncPlan)
+	plan.HostPlans = nil
 
 	for _, host := range hosts {
 		// Load host config.
 		hostCfg, err := config.LoadHostConfig(cfg.BasePath, host.Name)
-		if err != nil {
+		if err != nil && !errors.Is(err, config.ErrHostConfigNotFound) {
 			return nil, fmt.Errorf("loading host config for %s: %w", host.Name, err)
+		}
+
+		if errors.Is(err, config.ErrHostConfigNotFound) {
+			hostCfg = nil
 		}
 
 		// Resolve SSH config via ssh -G (always runs; uses -F when
@@ -316,8 +343,10 @@ func BuildPlanWithDeps(cfg *config.CmtConfig, hostFilter, projectFilter []string
 		}
 
 		hostDir := filepath.Join(cfg.BasePath, "hosts", host.Name)
-		if err := sshResolver.Resolve(&host, sshConfigPath, hostDir); err != nil {
-			return nil, fmt.Errorf("resolving SSH config for %s: %w", host.Name, err)
+
+		resolveErr := sshResolver.Resolve(&host, sshConfigPath, hostDir)
+		if resolveErr != nil {
+			return nil, fmt.Errorf("resolving SSH config for %s: %w", host.Name, resolveErr)
 		}
 
 		// Connect via SSH/SFTP.
@@ -327,7 +356,7 @@ func BuildPlanWithDeps(cfg *config.CmtConfig, hostFilter, projectFilter []string
 		}
 
 		hostPlan, err := buildHostPlan(cfg, host, hostCfg, projects, client)
-		client.Close()
+		_ = client.Close()
 
 		if err != nil {
 			return nil, err
@@ -346,7 +375,9 @@ func buildHostPlan(
 	projects []string,
 	client remote.RemoteClient,
 ) (*HostPlan, error) {
-	hp := &HostPlan{Host: host}
+	hostPlan := new(HostPlan)
+	hostPlan.Host = host
+	hostPlan.Projects = nil
 
 	for _, project := range projects {
 		resolved := config.ResolveProjectConfig(cfg.Defaults, hostCfg, project)
@@ -357,7 +388,7 @@ func buildHostPlan(
 		remoteDir := path.Join(resolved.RemotePath, project)
 
 		// Build directory plans.
-		var dirPlans []DirPlan
+		dirPlans := make([]DirPlan, 0, len(resolved.Dirs))
 
 		for _, d := range resolved.Dirs {
 			absDir := path.Join(remoteDir, d)
@@ -390,7 +421,7 @@ func buildHostPlan(
 			return nil, fmt.Errorf("building file plan for %s/%s: %w", host.Name, project, err)
 		}
 
-		hp.Projects = append(hp.Projects, ProjectPlan{
+		hostPlan.Projects = append(hostPlan.Projects, ProjectPlan{
 			ProjectName:     project,
 			RemoteDir:       remoteDir,
 			PostSyncCommand: resolved.PostSyncCommand,
@@ -399,7 +430,7 @@ func buildHostPlan(
 		})
 	}
 
-	return hp, nil
+	return hostPlan, nil
 }
 
 func buildFilePlans(
@@ -409,72 +440,80 @@ func buildFilePlans(
 	client remote.RemoteClient,
 	templateVars map[string]any,
 ) ([]FilePlan, error) {
-	var plans []FilePlan
+	plans := make([]FilePlan, 0, len(localFiles))
 
 	localSet := make(map[string]bool, len(localFiles))
 
 	for relPath, localPath := range localFiles {
 		localSet[relPath] = true
 
-		localData, err := os.ReadFile(localPath)
+		cleanLocalPath := filepath.Clean(localPath)
+
+		localData, err := os.ReadFile(cleanLocalPath)
 		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", localPath, err)
+			return nil, fmt.Errorf("reading %s: %w", cleanLocalPath, err)
 		}
 
 		// Render file as Go template.
 		localData, err = RenderTemplate(localData, templateVars)
 		if err != nil {
-			return nil, fmt.Errorf("rendering template %s: %w", localPath, err)
+			return nil, fmt.Errorf("rendering template %s: %w", cleanLocalPath, err)
 		}
 
 		remotePath := path.Join(remoteDir, relPath)
 		remoteData, readErr := client.ReadFile(remotePath)
 
-		fp := FilePlan{
-			RelativePath: relPath,
-			LocalPath:    localPath,
-			RemotePath:   remotePath,
-			LocalData:    localData,
-		}
+		filePlan := new(FilePlan)
+		filePlan.RelativePath = relPath
+		filePlan.LocalPath = localPath
+		filePlan.RemotePath = remotePath
+		filePlan.Action = ActionUnchanged
+		filePlan.LocalData = localData
+		filePlan.RemoteData = nil
+		filePlan.Diff = ""
 
-		if readErr != nil {
+		switch {
+		case readErr != nil:
 			// Remote file does not exist.
-			fp.Action = ActionAdd
-		} else if bytes.Equal(localData, remoteData) {
-			fp.Action = ActionUnchanged
-			fp.RemoteData = remoteData
-		} else {
-			fp.Action = ActionModify
+			filePlan.Action = ActionAdd
+		case bytes.Equal(localData, remoteData):
+			filePlan.Action = ActionUnchanged
+			filePlan.RemoteData = remoteData
+		default:
+			filePlan.Action = ActionModify
 
-			fp.RemoteData = remoteData
+			filePlan.RemoteData = remoteData
 
 			if !isBinary(localData) && !isBinary(remoteData) {
-				fp.Diff = computeDiff(relPath, remoteData, localData)
+				filePlan.Diff = computeDiff(relPath, remoteData, localData)
 			}
 		}
 
-		plans = append(plans, fp)
+		plans = append(plans, *filePlan)
 	}
 
 	// Files in manifest but not in local → delete.
 	if manifest != nil {
-		for _, mf := range manifest.ManagedFiles {
-			if mf == manifestFile {
+		for _, managedFile := range manifest.ManagedFiles {
+			if managedFile == manifestFile {
 				continue
 			}
 
-			if localSet[mf] {
+			if localSet[managedFile] {
 				continue
 			}
 
-			remotePath := path.Join(remoteDir, mf)
+			remotePath := path.Join(remoteDir, managedFile)
 			remoteData, _ := client.ReadFile(remotePath)
-			plans = append(plans, FilePlan{
-				RelativePath: mf,
-				RemotePath:   remotePath,
-				Action:       ActionDelete,
-				RemoteData:   remoteData,
-			})
+			deletePlan := new(FilePlan)
+			deletePlan.RelativePath = managedFile
+			deletePlan.LocalPath = ""
+			deletePlan.RemotePath = remotePath
+			deletePlan.Action = ActionDelete
+			deletePlan.LocalData = nil
+			deletePlan.RemoteData = remoteData
+			deletePlan.Diff = ""
+			plans = append(plans, *deletePlan)
 		}
 	}
 
@@ -499,8 +538,8 @@ func CollectLocalFiles(basePath, hostName, projectName string) (map[string]strin
 	hostProjectDir := filepath.Join(basePath, "hosts", hostName, projectName)
 
 	// 1. compose.yml from project
-	if p := filepath.Join(projectDir, "compose.yml"); fileExists(p) {
-		files["compose.yml"] = p
+	if composePath := filepath.Join(projectDir, "compose.yml"); fileExists(composePath) {
+		files["compose.yml"] = composePath
 	}
 
 	// 2. files/ from project
@@ -510,17 +549,17 @@ func CollectLocalFiles(basePath, hostName, projectName string) (map[string]strin
 	}
 
 	// 3. compose.override.yml from host project
-	if p := filepath.Join(hostProjectDir, "compose.override.yml"); fileExists(p) {
-		files["compose.override.yml"] = p
+	if overridePath := filepath.Join(hostProjectDir, "compose.override.yml"); fileExists(overridePath) {
+		files["compose.override.yml"] = overridePath
 	}
 
 	// 4. .env from host project
-	if p := filepath.Join(hostProjectDir, ".env"); fileExists(p) {
-		files[".env"] = p
+	if envPath := filepath.Join(hostProjectDir, ".env"); fileExists(envPath) {
+		files[".env"] = envPath
 	}
 
 	// 5. files/ from host project (overwrites project-level files)
-	err := walkFiles(filepath.Join(hostProjectDir, "files"), files)
+	err = walkFiles(filepath.Join(hostProjectDir, "files"), files)
 	if err != nil {
 		return nil, err
 	}
@@ -538,24 +577,24 @@ func readManifest(client remote.RemoteClient, remoteDir string) *Manifest {
 		return nil
 	}
 
-	var m Manifest
-	if json.Unmarshal(data, &m) != nil {
+	var manifest Manifest
+	if json.Unmarshal(data, &manifest) != nil {
 		return nil
 	}
 
-	return &m
+	return &manifest
 }
 
 // BuildManifest creates a manifest from the set of local files.
 func BuildManifest(localFiles map[string]string) Manifest {
-	var m Manifest
+	var manifest Manifest
 	for rel := range localFiles {
-		m.ManagedFiles = append(m.ManagedFiles, rel)
+		manifest.ManagedFiles = append(manifest.ManagedFiles, rel)
 	}
 
-	sort.Strings(m.ManagedFiles)
+	sort.Strings(manifest.ManagedFiles)
 
-	return m
+	return manifest
 }
 
 // ---------------------------------------------------------------------------
@@ -563,14 +602,16 @@ func BuildManifest(localFiles map[string]string) Manifest {
 // ---------------------------------------------------------------------------
 
 func computeDiff(name string, remote, local []byte) string {
-	diff := difflib.UnifiedDiff{
-		A:        difflib.SplitLines(string(remote)),
-		B:        difflib.SplitLines(string(local)),
-		FromFile: name + " (remote)",
-		ToFile:   name + " (local)",
-		Context:  3,
-	}
-	text, _ := difflib.GetUnifiedDiffString(diff)
+	diff := new(difflib.UnifiedDiff)
+	diff.A = difflib.SplitLines(string(remote))
+	diff.B = difflib.SplitLines(string(local))
+	diff.FromFile = name + " (remote)"
+	diff.ToFile = name + " (local)"
+	diff.FromDate = ""
+	diff.ToDate = ""
+	diff.Context = diffContextLines
+	diff.Eol = ""
+	text, _ := difflib.GetUnifiedDiffString(*diff)
 
 	return text
 }
@@ -578,8 +619,8 @@ func computeDiff(name string, remote, local []byte) string {
 func isBinary(data []byte) bool {
 	// Check first 8 KB for null bytes.
 	check := data
-	if len(check) > 8192 {
-		check = check[:8192]
+	if len(check) > binaryProbeBytes {
+		check = check[:binaryProbeBytes]
 	}
 
 	return bytes.ContainsRune(check, 0)
@@ -593,34 +634,44 @@ func fileExists(p string) bool {
 
 func walkFiles(dir string, out map[string]string) error {
 	info, err := os.Stat(dir)
-	if err != nil || !info.IsDir() {
-		return nil // directory does not exist; not an error
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+
+		return fmt.Errorf("stat %s: %w", dir, err)
 	}
 
-	return filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+	if !info.IsDir() {
+		return nil
+	}
+
+	return filepath.WalkDir(dir, func(pathValue string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
 
-		rel, _ := filepath.Rel(dir, p)
-		out[rel] = p
+		rel, _ := filepath.Rel(dir, pathValue)
+		out[rel] = pathValue
 
 		return nil
 	})
 }
 
-func humanSize(n int) string {
-	const (
-		kb = 1024
-		mb = 1024 * kb
-	)
+const (
+	kiloBytes        = 1024
+	megaBytes        = 1024 * kiloBytes
+	diffContextLines = 3
+	binaryProbeBytes = 8192
+)
 
+func humanSize(byteCount int) string {
 	switch {
-	case n >= mb:
-		return fmt.Sprintf("%.1f MB", float64(n)/float64(mb))
-	case n >= kb:
-		return fmt.Sprintf("%.1f KB", float64(n)/float64(kb))
+	case byteCount >= megaBytes:
+		return fmt.Sprintf("%.1f MB", float64(byteCount)/float64(megaBytes))
+	case byteCount >= kiloBytes:
+		return fmt.Sprintf("%.1f KB", float64(byteCount)/float64(kiloBytes))
 	default:
-		return fmt.Sprintf("%d B", n)
+		return fmt.Sprintf("%d B", byteCount)
 	}
 }

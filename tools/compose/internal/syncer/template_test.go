@@ -14,18 +14,23 @@ func TestParseEnvFile(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	p := filepath.Join(dir, ".env")
-	os.WriteFile(p, []byte(`# comment
+
+	envPath := filepath.Join(dir, ".env")
+
+	err := os.WriteFile(envPath, []byte(`# comment
 KEY1=value1
 KEY2=value2
 QUOTED="hello world"
 SINGLE_QUOTED='foo bar'
-  SPACED = spaced_val  
+  SPACED = spaced_val
 
 EMPTY=
-`), 0644)
+`), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	vars, err := parseEnvFile(p)
+	vars, err := parseEnvFile(envPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,16 +44,16 @@ EMPTY=
 		"EMPTY":         "",
 	}
 
-	for k, want := range tests {
-		got, ok := vars[k]
+	for key, want := range tests {
+		got, ok := vars[key]
 		if !ok {
-			t.Errorf("missing key %q", k)
+			t.Errorf("missing key %q", key)
 
 			continue
 		}
 
 		if got != want {
-			t.Errorf("key %q = %q, want %q", k, got, want)
+			t.Errorf("key %q = %q, want %q", key, got, want)
 		}
 	}
 }
@@ -74,13 +79,18 @@ func TestParseSecretsYAML(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	p := filepath.Join(dir, "env.secrets.yml")
-	os.WriteFile(p, []byte(`github_client_id: abc123
+
+	secretsPath := filepath.Join(dir, "env.secrets.yml")
+
+	err := os.WriteFile(secretsPath, []byte(`github_client_id: abc123
 github_client_secret: secret456
 smtp_port: 587
-`), 0644)
+`), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	vars, err := parseSecretsYAML(p)
+	vars, err := parseSecretsYAML(secretsPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,10 +125,15 @@ func TestParseSecretsYAML_InvalidYAML(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	p := filepath.Join(dir, "env.secrets.yml")
-	os.WriteFile(p, []byte(`{invalid: yaml: [}`), 0644)
 
-	_, err := parseSecretsYAML(p)
+	secretsPath := filepath.Join(dir, "env.secrets.yml")
+
+	err := os.WriteFile(secretsPath, []byte(`{invalid: yaml: [}`), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = parseSecretsYAML(secretsPath)
 	if err == nil {
 		t.Error("expected error for invalid YAML")
 	}
@@ -132,18 +147,29 @@ func TestLoadTemplateVars_SecretsOverrideEnv(t *testing.T) {
 	t.Parallel()
 
 	base := t.TempDir()
+
 	hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
-	os.MkdirAll(hostProjectDir, 0755)
+
+	err := os.MkdirAll(hostProjectDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// .env has KEY1 and SHARED.
-	os.WriteFile(filepath.Join(hostProjectDir, ".env"), []byte(`KEY1=from_env
+	err = os.WriteFile(filepath.Join(hostProjectDir, ".env"), []byte(`KEY1=from_env
 SHARED=env_value
-`), 0644)
+`), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// env.secrets.yml has KEY2 and overrides SHARED.
-	os.WriteFile(filepath.Join(hostProjectDir, "env.secrets.yml"), []byte(`KEY2: from_secrets
+	err = os.WriteFile(filepath.Join(hostProjectDir, "env.secrets.yml"), []byte(`KEY2: from_secrets
 SHARED: secrets_value
-`), 0644)
+`), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	vars, err := LoadTemplateVars(base, "server1", "grafana")
 	if err != nil {
@@ -167,7 +193,11 @@ func TestLoadTemplateVars_NoFiles(t *testing.T) {
 	t.Parallel()
 
 	base := t.TempDir()
-	os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0755)
+
+	err := os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	vars, err := LoadTemplateVars(base, "server1", "grafana")
 	if err != nil {
@@ -183,11 +213,19 @@ func TestLoadTemplateVars_OnlySecrets(t *testing.T) {
 	t.Parallel()
 
 	base := t.TempDir()
-	hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
-	os.MkdirAll(hostProjectDir, 0755)
 
-	os.WriteFile(filepath.Join(hostProjectDir, "env.secrets.yml"), []byte(`secret_key: s3cret
-`), 0644)
+	hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
+
+	err := os.MkdirAll(hostProjectDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(hostProjectDir, "env.secrets.yml"), []byte(`secret_key: s3cret
+`), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	vars, err := LoadTemplateVars(base, "server1", "grafana")
 	if err != nil {

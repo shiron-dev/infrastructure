@@ -25,14 +25,18 @@ type ApplyDependencies struct {
 // If autoApprove is false, the plan is printed and the user is prompted
 // for confirmation before any changes are made.
 func Apply(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, w io.Writer) error {
-	return ApplyWithDeps(cfg, plan, autoApprove, w, ApplyDependencies{})
+	var dependencies ApplyDependencies
+
+	return ApplyWithDeps(cfg, plan, autoApprove, w, dependencies)
 }
 
 // ApplyWithDeps executes Apply with injected dependencies.
-func ApplyWithDeps(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, w io.Writer, deps ApplyDependencies) error {
+func ApplyWithDeps(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, writer io.Writer, deps ApplyDependencies) error {
 	clientFactory := deps.ClientFactory
 	if clientFactory == nil {
-		clientFactory = remote.DefaultClientFactory{}
+		defaultFactory := new(remote.DefaultClientFactory)
+		defaultFactory.Runner = nil
+		clientFactory = *defaultFactory
 	}
 
 	input := deps.Input
@@ -41,17 +45,17 @@ func ApplyWithDeps(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, w io
 	}
 
 	if !plan.HasChanges() {
-		fmt.Fprintln(w, "No changes to apply.")
+		_, _ = fmt.Fprintln(writer, "No changes to apply.")
 
 		return nil
 	}
 
 	// Show the plan first.
-	plan.Print(w)
+	plan.Print(writer)
 
 	// Confirm unless --auto-approve.
 	if !autoApprove {
-		fmt.Fprint(w, "\nApply these changes? (y/N): ")
+		_, _ = fmt.Fprint(writer, "\nApply these changes? (y/N): ")
 
 		reader := bufio.NewReader(input)
 		ans, _ := reader.ReadString('\n')
@@ -59,44 +63,48 @@ func ApplyWithDeps(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, w io
 		ans = strings.TrimSpace(strings.ToLower(ans))
 
 		if ans != "y" && ans != "yes" {
-			fmt.Fprintln(w, "Apply cancelled.")
+			_, _ = fmt.Fprintln(writer, "Apply cancelled.")
 
 			return nil
 		}
 	}
 
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(writer)
 
-	for _, hp := range plan.HostPlans {
-		fmt.Fprintf(w, "Applying to %s...\n", hp.Host.Name)
+	for _, hostPlan := range plan.HostPlans {
+		_, _ = fmt.Fprintf(writer, "Applying to %s...\n", hostPlan.Host.Name)
 
-		client, err := clientFactory.NewClient(hp.Host)
+		client, err := clientFactory.NewClient(hostPlan.Host)
 		if err != nil {
-			return fmt.Errorf("connecting to %s: %w", hp.Host.Name, err)
+			return fmt.Errorf("connecting to %s: %w", hostPlan.Host.Name, err)
 		}
 
-		if err := applyHostPlan(cfg, hp, client, w); err != nil {
-			client.Close()
+		applyErr := applyHostPlan(cfg, hostPlan, client, writer)
+		if applyErr != nil {
+			_ = client.Close()
 
-			return err
+			return applyErr
 		}
 
-		client.Close()
+		_ = client.Close()
 	}
 
-	_, _, add, mod, del, _ := plan.Stats()
-	fmt.Fprintf(w, "\nApply complete! %d file(s) synced (%d added, %d modified, %d deleted)\n",
-		add+mod+del, add, mod, del)
+	totalHosts, totalProjects, addCount, modifyCount, deleteCount, unchangedCount := plan.Stats()
+	_ = totalHosts
+	_ = totalProjects
+	_ = unchangedCount
+	_, _ = fmt.Fprintf(writer, "\nApply complete! %d file(s) synced (%d added, %d modified, %d deleted)\n",
+		addCount+modifyCount+deleteCount, addCount, modifyCount, deleteCount)
 
 	return nil
 }
 
-func applyHostPlan(cfg *config.CmtConfig, hp HostPlan, client remote.RemoteClient, w io.Writer) error {
-	for _, pp := range hp.Projects {
+func applyHostPlan(cfg *config.CmtConfig, hostPlan HostPlan, client remote.RemoteClient, writer io.Writer) error {
+	for _, projectPlan := range hostPlan.Projects {
 		hasChanges := false
 
-		for _, fp := range pp.Files {
-			if fp.Action != ActionUnchanged {
+		for _, filePlan := range projectPlan.Files {
+			if filePlan.Action != ActionUnchanged {
 				hasChanges = true
 
 				break
@@ -104,98 +112,102 @@ func applyHostPlan(cfg *config.CmtConfig, hp HostPlan, client remote.RemoteClien
 		}
 
 		if !hasChanges {
-			fmt.Fprintf(w, "  %s: no changes\n", pp.ProjectName)
+			_, _ = fmt.Fprintf(writer, "  %s: no changes\n", projectPlan.ProjectName)
 
 			continue
 		}
 
-		fmt.Fprintf(w, "  %s:\n", pp.ProjectName)
+		_, _ = fmt.Fprintf(writer, "  %s:\n", projectPlan.ProjectName)
 
 		// Create pre-configured directories.
-		for _, dp := range pp.Dirs {
-			if dp.Exists {
+		for _, dirPlan := range projectPlan.Dirs {
+			if dirPlan.Exists {
 				continue
 			}
 
-			fmt.Fprintf(w, "    creating dir %s/... ", dp.RelativePath)
-			err := client.MkdirAll(dp.RemotePath)
+			_, _ = fmt.Fprintf(writer, "    creating dir %s/... ", dirPlan.RelativePath)
 
+			err := client.MkdirAll(dirPlan.RemotePath)
 			if err != nil {
-				fmt.Fprintln(w, "FAILED")
+				_, _ = fmt.Fprintln(writer, "FAILED")
 
-				return fmt.Errorf("creating directory %s: %w", dp.RemotePath, err)
+				return fmt.Errorf("creating directory %s: %w", dirPlan.RemotePath, err)
 			}
 
-			fmt.Fprintln(w, "done")
+			_, _ = fmt.Fprintln(writer, "done")
 		}
 
 		// Collect managed files for manifest.
 		localFiles := make(map[string]string)
 
-		for _, fp := range pp.Files {
-			switch fp.Action {
+		for _, filePlan := range projectPlan.Files {
+			switch filePlan.Action {
 			case ActionAdd, ActionModify:
-				fmt.Fprintf(w, "    uploading %s... ", fp.RelativePath)
-				err := client.WriteFile(fp.RemotePath, fp.LocalData)
+				_, _ = fmt.Fprintf(writer, "    uploading %s... ", filePlan.RelativePath)
 
+				err := client.WriteFile(filePlan.RemotePath, filePlan.LocalData)
 				if err != nil {
-					fmt.Fprintln(w, "FAILED")
+					_, _ = fmt.Fprintln(writer, "FAILED")
 
-					return fmt.Errorf("writing %s: %w", fp.RemotePath, err)
+					return fmt.Errorf("writing %s: %w", filePlan.RemotePath, err)
 				}
 
-				fmt.Fprintln(w, "done")
+				_, _ = fmt.Fprintln(writer, "done")
 
-				localFiles[fp.RelativePath] = fp.LocalPath
+				localFiles[filePlan.RelativePath] = filePlan.LocalPath
 
 			case ActionDelete:
-				fmt.Fprintf(w, "    deleting %s... ", fp.RelativePath)
-				err := client.Remove(fp.RemotePath)
+				_, _ = fmt.Fprintf(writer, "    deleting %s... ", filePlan.RelativePath)
 
+				err := client.Remove(filePlan.RemotePath)
 				if err != nil {
-					fmt.Fprintln(w, "FAILED")
+					_, _ = fmt.Fprintln(writer, "FAILED")
 
-					return fmt.Errorf("deleting %s: %w", fp.RemotePath, err)
+					return fmt.Errorf("deleting %s: %w", filePlan.RemotePath, err)
 				}
 
-				fmt.Fprintln(w, "done")
+				_, _ = fmt.Fprintln(writer, "done")
 
 			case ActionUnchanged:
-				localFiles[fp.RelativePath] = fp.LocalPath
+				localFiles[filePlan.RelativePath] = filePlan.LocalPath
 			}
 		}
 
 		// Write updated manifest.
 		manifest := BuildManifest(localFiles)
-		manifestData, _ := json.MarshalIndent(manifest, "", "  ")
 
-		manifestPath := path.Join(pp.RemoteDir, manifestFile)
+		manifestData, marshalErr := json.MarshalIndent(manifest, "", "  ")
+		if marshalErr != nil {
+			return fmt.Errorf("marshalling manifest: %w", marshalErr)
+		}
+
+		manifestPath := path.Join(projectPlan.RemoteDir, manifestFile)
+
 		err := client.WriteFile(manifestPath, manifestData)
-
 		if err != nil {
 			return fmt.Errorf("writing manifest: %w", err)
 		}
 
 		// Run post-sync command.
-		if pp.PostSyncCommand != "" {
-			fmt.Fprintf(w, "    running post-sync command... ")
+		if projectPlan.PostSyncCommand != "" {
+			_, _ = fmt.Fprintf(writer, "    running post-sync command... ")
 
-			out, err := client.RunCommand(pp.RemoteDir, pp.PostSyncCommand)
+			out, err := client.RunCommand(projectPlan.RemoteDir, projectPlan.PostSyncCommand)
 			if err != nil {
-				fmt.Fprintln(w, "FAILED")
+				_, _ = fmt.Fprintln(writer, "FAILED")
 
 				if out != "" {
-					fmt.Fprintf(w, "    output: %s\n", out)
+					_, _ = fmt.Fprintf(writer, "    output: %s\n", out)
 				}
 
-				return fmt.Errorf("post-sync command on %s/%s: %w", hp.Host.Name, pp.ProjectName, err)
+				return fmt.Errorf("post-sync command on %s/%s: %w", hostPlan.Host.Name, projectPlan.ProjectName, err)
 			}
 
-			fmt.Fprintln(w, "done")
+			_, _ = fmt.Fprintln(writer, "done")
 
 			if out != "" {
 				for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
-					fmt.Fprintf(w, "      %s\n", line)
+					_, _ = fmt.Fprintf(writer, "      %s\n", line)
 				}
 			}
 		}
