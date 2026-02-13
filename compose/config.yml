@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=../tools/compose/schemas/cmt-config.schema.json
+
+basePath: .
+
+defaults:
+  remotePath: /opt/compose
+  postSyncCommand: docker compose up -d
+
+hosts:
+  - name: arm-srv
+    host: arm-srv.shiron.dev
+    user: ansible_user

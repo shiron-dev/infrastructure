@@ -8,10 +8,10 @@ services:
     environment:
       - GF_SERVER_ROOT_URL=https://grafana.shiron.dev/
       - GF_INSTALL_PLUGINS=grafana-clock-panel, grafana-simple-json-datasource
-      - GF_AUTH_GITHUB_CLIENT_ID=${GRAFANA_GITHUB_CLIENT_ID}
-      - GF_AUTH_GITHUB_CLIENT_SECRET=${GRAFANA_GITHUB_CLIENT_SECRET}
-      - GF_SMTP_HOST=${GRAFANA_SMTP_HOST}
-      - GF_SMTP_PASSWORD=${GRAFANA_SMTP_PASSWORD}
+      - GF_AUTH_GITHUB_CLIENT_ID={{ .grafana_github_app_client_id }}
+      - GF_AUTH_GITHUB_CLIENT_SECRET={{ .grafana_github_app_client_secret }}
+      - GF_SMTP_HOST={{ .grafana_smtp_host }}
+      - GF_SMTP_PASSWORD={{ .grafana_smtp_password }}
     volumes:
       - "./grafana_storage:/var/lib/grafana"
       - "./grafana_conf:/etc/grafana/"
@@ -39,7 +39,7 @@ services:
     restart: always
     command: tunnel run
     environment:
-      TUNNEL_TOKEN: "${CF_TUNNEL_TOKEN}"
+      TUNNEL_TOKEN: "{{ .cf_tunnel_token }}"
     security_opt:
       - no-new-privileges:true
     cap_drop:
