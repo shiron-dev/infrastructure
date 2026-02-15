@@ -1,1 +1,4 @@
-../ansible/ssh_config
+Match host arm-srv.shiron.dev exec "cloudflared access ssh-gen --hostname %h"
+ProxyCommand cloudflared access ssh --hostname %h
+IdentityFile ~/.cloudflared/%h-cf_key
+CertificateFile ~/.cloudflared/%h-cf_key-cert.pub
