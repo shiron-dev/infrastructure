@@ -191,41 +191,50 @@ func (p *SyncPlan) HasChanges() bool {
 
 // Print writes a human-readable plan to w.
 func (p *SyncPlan) Print(w io.Writer) {
+	style := newOutputStyle(w)
+
 	if len(p.HostPlans) == 0 {
-		_, _ = fmt.Fprintln(w, "No hosts selected.")
+		_, _ = fmt.Fprintln(w, style.muted("No hosts selected."))
 
 		return
 	}
 
 	for _, hostPlan := range p.HostPlans {
-		_, _ = fmt.Fprintf(w, "\n=== Host: %s (%s@%s:%d) ===\n",
+		hostLine := fmt.Sprintf("=== Host: %s (%s@%s:%d) ===",
 			hostPlan.Host.Name, hostPlan.Host.User, hostPlan.Host.Host, hostPlan.Host.Port)
+		_, _ = fmt.Fprintf(w, "\n%s\n", style.hostHeader(hostLine))
 
 		if len(hostPlan.Projects) == 0 {
-			_, _ = fmt.Fprintln(w, "  (no projects)")
+			_, _ = fmt.Fprintln(w, style.muted("  (no projects)"))
 
 			continue
 		}
 
 		for _, projectPlan := range hostPlan.Projects {
-			_, _ = fmt.Fprintf(w, "\n  Project: %s\n", projectPlan.ProjectName)
-			_, _ = fmt.Fprintf(w, "    Remote: %s\n", projectPlan.RemoteDir)
+			_, _ = fmt.Fprintf(w, "\n  %s %s\n", style.key("Project:"), style.projectName(projectPlan.ProjectName))
+			_, _ = fmt.Fprintf(w, "    %s %s\n", style.key("Remote:"), projectPlan.RemoteDir)
 
 			if projectPlan.PostSyncCommand != "" {
-				_, _ = fmt.Fprintf(w, "    Post-sync: %s\n", projectPlan.PostSyncCommand)
+				_, _ = fmt.Fprintf(w, "    %s %s\n", style.key("Post-sync:"), projectPlan.PostSyncCommand)
 			}
 
 			_, _ = fmt.Fprintln(w)
 
 			// Show directory plans.
 			if len(projectPlan.Dirs) > 0 {
-				_, _ = fmt.Fprintln(w, "    Dirs:")
+				_, _ = fmt.Fprintln(w, "    "+style.key("Dirs:"))
 
 				for _, directoryPlan := range projectPlan.Dirs {
 					if directoryPlan.Exists {
-						_, _ = fmt.Fprintf(w, "      = %s/ (exists)\n", directoryPlan.RelativePath)
+						_, _ = fmt.Fprintf(w, "      %s %s/ %s\n",
+							style.actionSymbol(ActionUnchanged),
+							directoryPlan.RelativePath,
+							style.muted("(exists)"))
 					} else {
-						_, _ = fmt.Fprintf(w, "      + %s/ (create)\n", directoryPlan.RelativePath)
+						_, _ = fmt.Fprintf(w, "      %s %s/ %s\n",
+							style.actionSymbol(ActionAdd),
+							directoryPlan.RelativePath,
+							style.success("(create)"))
 					}
 				}
 
@@ -233,7 +242,7 @@ func (p *SyncPlan) Print(w io.Writer) {
 			}
 
 			if len(projectPlan.Files) == 0 && len(projectPlan.Dirs) == 0 {
-				_, _ = fmt.Fprintln(w, "    (no files or dirs)")
+				_, _ = fmt.Fprintln(w, style.muted("    (no files or dirs)"))
 
 				continue
 			}
@@ -252,12 +261,12 @@ func (p *SyncPlan) Print(w io.Writer) {
 					label = "unchanged"
 				}
 
-				_, _ = fmt.Fprintf(w, "    %s %s (%s)\n", filePlan.Action.Symbol(), filePlan.RelativePath, label)
+				_, _ = fmt.Fprintf(w, "    %s %s (%s)\n", style.actionSymbol(filePlan.Action), filePlan.RelativePath, label)
 
 				if filePlan.Diff != "" {
 					for line := range strings.SplitSeq(filePlan.Diff, "\n") {
 						if line != "" {
-							_, _ = fmt.Fprintf(w, "        %s\n", line)
+							_, _ = fmt.Fprintf(w, "        %s\n", style.diffLine(line))
 						}
 					}
 				}
@@ -268,11 +277,17 @@ func (p *SyncPlan) Print(w io.Writer) {
 	hosts, projects, add, mod, del, unch := p.Stats()
 	dirCreate, _ := p.DirStats()
 
-	_, _ = fmt.Fprintf(w, "\nSummary: %d host(s), %d project(s) — %d to add, %d to modify, %d to delete, %d unchanged",
-		hosts, projects, add, mod, del, unch)
+	_, _ = fmt.Fprintf(w, "\n%s %d host(s), %d project(s) — %s to add, %s to modify, %s to delete, %s unchanged",
+		style.key("Summary:"),
+		hosts,
+		projects,
+		style.success(fmt.Sprintf("%d", add)),
+		style.warning(fmt.Sprintf("%d", mod)),
+		style.danger(fmt.Sprintf("%d", del)),
+		style.muted(fmt.Sprintf("%d", unch)))
 
 	if dirCreate > 0 {
-		_, _ = fmt.Fprintf(w, ", %d dir(s) to create", dirCreate)
+		_, _ = fmt.Fprintf(w, ", %s dir(s) to create", style.success(fmt.Sprintf("%d", dirCreate)))
 	}
 
 	_, _ = fmt.Fprintln(w)

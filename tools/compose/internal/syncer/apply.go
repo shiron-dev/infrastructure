@@ -32,6 +32,8 @@ func Apply(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, w io.Writer)
 
 // ApplyWithDeps executes Apply with injected dependencies.
 func ApplyWithDeps(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, writer io.Writer, deps ApplyDependencies) error {
+	style := newOutputStyle(writer)
+
 	clientFactory := deps.ClientFactory
 	if clientFactory == nil {
 		defaultFactory := new(remote.DefaultClientFactory)
@@ -45,7 +47,7 @@ func ApplyWithDeps(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, writ
 	}
 
 	if !plan.HasChanges() {
-		_, _ = fmt.Fprintln(writer, "No changes to apply.")
+		_, _ = fmt.Fprintln(writer, style.muted("No changes to apply."))
 
 		return nil
 	}
@@ -55,7 +57,7 @@ func ApplyWithDeps(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, writ
 
 	// Confirm unless --auto-approve.
 	if !autoApprove {
-		_, _ = fmt.Fprint(writer, "\nApply these changes? (y/N): ")
+		_, _ = fmt.Fprint(writer, "\n"+style.key("Apply these changes? (y/N): "))
 
 		reader := bufio.NewReader(input)
 		ans, _ := reader.ReadString('\n')
@@ -63,7 +65,7 @@ func ApplyWithDeps(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, writ
 		ans = strings.TrimSpace(strings.ToLower(ans))
 
 		if ans != "y" && ans != "yes" {
-			_, _ = fmt.Fprintln(writer, "Apply cancelled.")
+			_, _ = fmt.Fprintln(writer, style.warning("Apply cancelled."))
 
 			return nil
 		}
@@ -72,7 +74,7 @@ func ApplyWithDeps(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, writ
 	_, _ = fmt.Fprintln(writer)
 
 	for _, hostPlan := range plan.HostPlans {
-		_, _ = fmt.Fprintf(writer, "Applying to %s...\n", hostPlan.Host.Name)
+		_, _ = fmt.Fprintf(writer, "%s %s...\n", style.key("Applying to"), style.projectName(hostPlan.Host.Name))
 
 		client, err := clientFactory.NewClient(hostPlan.Host)
 		if err != nil {
@@ -93,13 +95,22 @@ func ApplyWithDeps(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, writ
 	_ = totalHosts
 	_ = totalProjects
 	_ = unchangedCount
-	_, _ = fmt.Fprintf(writer, "\nApply complete! %d file(s) synced (%d added, %d modified, %d deleted)\n",
-		addCount+modifyCount+deleteCount, addCount, modifyCount, deleteCount)
+	_, _ = fmt.Fprintf(
+		writer,
+		"\n%s %d file(s) synced (%s added, %s modified, %s deleted)\n",
+		style.success("Apply complete!"),
+		addCount+modifyCount+deleteCount,
+		style.success(fmt.Sprintf("%d", addCount)),
+		style.warning(fmt.Sprintf("%d", modifyCount)),
+		style.danger(fmt.Sprintf("%d", deleteCount)),
+	)
 
 	return nil
 }
 
 func applyHostPlan(cfg *config.CmtConfig, hostPlan HostPlan, client remote.RemoteClient, writer io.Writer) error {
+	style := newOutputStyle(writer)
+
 	for _, projectPlan := range hostPlan.Projects {
 		hasChanges := false
 
@@ -112,12 +123,12 @@ func applyHostPlan(cfg *config.CmtConfig, hostPlan HostPlan, client remote.Remot
 		}
 
 		if !hasChanges {
-			_, _ = fmt.Fprintf(writer, "  %s: no changes\n", projectPlan.ProjectName)
+			_, _ = fmt.Fprintf(writer, "  %s: %s\n", style.projectName(projectPlan.ProjectName), style.muted("no changes"))
 
 			continue
 		}
 
-		_, _ = fmt.Fprintf(writer, "  %s:\n", projectPlan.ProjectName)
+		_, _ = fmt.Fprintf(writer, "  %s:\n", style.projectName(projectPlan.ProjectName))
 
 		// Create pre-configured directories.
 		for _, dirPlan := range projectPlan.Dirs {
@@ -125,16 +136,16 @@ func applyHostPlan(cfg *config.CmtConfig, hostPlan HostPlan, client remote.Remot
 				continue
 			}
 
-			_, _ = fmt.Fprintf(writer, "    creating dir %s/... ", dirPlan.RelativePath)
+			_, _ = fmt.Fprintf(writer, "    %s %s/... ", style.key("creating dir"), dirPlan.RelativePath)
 
 			err := client.MkdirAll(dirPlan.RemotePath)
 			if err != nil {
-				_, _ = fmt.Fprintln(writer, "FAILED")
+				_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
 				return fmt.Errorf("creating directory %s: %w", dirPlan.RemotePath, err)
 			}
 
-			_, _ = fmt.Fprintln(writer, "done")
+			_, _ = fmt.Fprintln(writer, style.success("done"))
 		}
 
 		// Collect managed files for manifest.
@@ -143,30 +154,30 @@ func applyHostPlan(cfg *config.CmtConfig, hostPlan HostPlan, client remote.Remot
 		for _, filePlan := range projectPlan.Files {
 			switch filePlan.Action {
 			case ActionAdd, ActionModify:
-				_, _ = fmt.Fprintf(writer, "    uploading %s... ", filePlan.RelativePath)
+				_, _ = fmt.Fprintf(writer, "    %s %s... ", style.key("uploading"), filePlan.RelativePath)
 
 				err := client.WriteFile(filePlan.RemotePath, filePlan.LocalData)
 				if err != nil {
-					_, _ = fmt.Fprintln(writer, "FAILED")
+					_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
 					return fmt.Errorf("writing %s: %w", filePlan.RemotePath, err)
 				}
 
-				_, _ = fmt.Fprintln(writer, "done")
+				_, _ = fmt.Fprintln(writer, style.success("done"))
 
 				localFiles[filePlan.RelativePath] = filePlan.LocalPath
 
 			case ActionDelete:
-				_, _ = fmt.Fprintf(writer, "    deleting %s... ", filePlan.RelativePath)
+				_, _ = fmt.Fprintf(writer, "    %s %s... ", style.key("deleting"), filePlan.RelativePath)
 
 				err := client.Remove(filePlan.RemotePath)
 				if err != nil {
-					_, _ = fmt.Fprintln(writer, "FAILED")
+					_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
 					return fmt.Errorf("deleting %s: %w", filePlan.RemotePath, err)
 				}
 
-				_, _ = fmt.Fprintln(writer, "done")
+				_, _ = fmt.Fprintln(writer, style.success("done"))
 
 			case ActionUnchanged:
 				localFiles[filePlan.RelativePath] = filePlan.LocalPath
@@ -190,20 +201,20 @@ func applyHostPlan(cfg *config.CmtConfig, hostPlan HostPlan, client remote.Remot
 
 		// Run post-sync command.
 		if projectPlan.PostSyncCommand != "" {
-			_, _ = fmt.Fprintf(writer, "    running post-sync command... ")
+			_, _ = fmt.Fprintf(writer, "    %s... ", style.key("running post-sync command"))
 
 			out, err := client.RunCommand(projectPlan.RemoteDir, projectPlan.PostSyncCommand)
 			if err != nil {
-				_, _ = fmt.Fprintln(writer, "FAILED")
+				_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
 				if out != "" {
-					_, _ = fmt.Fprintf(writer, "    output: %s\n", out)
+					_, _ = fmt.Fprintf(writer, "    %s %s\n", style.key("output:"), out)
 				}
 
 				return fmt.Errorf("post-sync command on %s/%s: %w", hostPlan.Host.Name, projectPlan.ProjectName, err)
 			}
 
-			_, _ = fmt.Fprintln(writer, "done")
+			_, _ = fmt.Fprintln(writer, style.success("done"))
 
 			if out != "" {
 				for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
