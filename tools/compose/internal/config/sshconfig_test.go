@@ -14,116 +14,110 @@ import (
 func TestParseSSHGOutput(t *testing.T) {
 	t.Parallel()
 
-	t.Run("basic key-value pairs", func(t *testing.T) {
-		t.Parallel()
+	assertSingle := func(t *testing.T, single map[string]string, key, want string) {
+		t.Helper()
 
-		input := "hostname 192.168.1.1\nuser deploy\nport 2222\n"
-		single, multi := parseSSHGOutput(input)
+		if single[key] != want {
+			t.Errorf("%s = %q, want %q", key, single[key], want)
+		}
+	}
 
-		if single["hostname"] != "192.168.1.1" {
-			t.Errorf("hostname = %q, want 192.168.1.1", single["hostname"])
+	assertMulti := func(t *testing.T, multi map[string][]string, key string, want []string) {
+		t.Helper()
+
+		got := multi[key]
+		if len(got) != len(want) {
+			t.Fatalf("%s length = %d, want %d", key, len(got), len(want))
 		}
 
-		if single["user"] != "deploy" {
-			t.Errorf("user = %q, want deploy", single["user"])
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("%s[%d] = %q, want %q", key, i, got[i], want[i])
+			}
 		}
+	}
 
-		if single["port"] != "2222" {
-			t.Errorf("port = %q, want 2222", single["port"])
-		}
+	testCases := []struct {
+		name     string
+		input    string
+		validate func(*testing.T, map[string]string, map[string][]string)
+	}{
+		{
+			name:  "basic key-value pairs",
+			input: "hostname 192.168.1.1\nuser deploy\nport 2222\n",
+			validate: func(t *testing.T, single map[string]string, multi map[string][]string) {
+				t.Helper()
+				assertSingle(t, single, "hostname", "192.168.1.1")
+				assertSingle(t, single, "user", "deploy")
+				assertSingle(t, single, "port", "2222")
+				assertMulti(t, multi, "hostname", []string{"192.168.1.1"})
+			},
+		},
+		{
+			name:  "keys are lowercased",
+			input: "HostName example.com\nUser admin\nPort 22\n",
+			validate: func(t *testing.T, single map[string]string, _ map[string][]string) {
+				t.Helper()
+				assertSingle(t, single, "hostname", "example.com")
+				assertSingle(t, single, "user", "admin")
+				assertSingle(t, single, "port", "22")
+			},
+		},
+		{
+			name:  "multi-value keys",
+			input: "identityfile ~/.ssh/id_rsa\nidentityfile ~/.ssh/id_ed25519\nhostname host1\n",
+			validate: func(t *testing.T, single map[string]string, multi map[string][]string) {
+				t.Helper()
+				assertSingle(t, single, "identityfile", "~/.ssh/id_ed25519")
+				assertMulti(t, multi, "identityfile", []string{"~/.ssh/id_rsa", "~/.ssh/id_ed25519"})
+			},
+		},
+		{
+			name:  "invalid lines are skipped",
+			input: "hostname example.com\nno-space-line\n\nport 22\n",
+			validate: func(t *testing.T, single map[string]string, _ map[string][]string) {
+				t.Helper()
+				assertSingle(t, single, "hostname", "example.com")
+				assertSingle(t, single, "port", "22")
 
-		// multi should also have them
-		if len(multi["hostname"]) != 1 || multi["hostname"][0] != "192.168.1.1" {
-			t.Errorf("multi hostname = %v", multi["hostname"])
-		}
-	})
+				if _, ok := single["no-space-line"]; ok {
+					t.Error("no-space-line should be skipped")
+				}
+			},
+		},
+		{
+			name:  "empty input",
+			input: "",
+			validate: func(t *testing.T, single map[string]string, multi map[string][]string) {
+				t.Helper()
 
-	t.Run("keys are lowercased", func(t *testing.T) {
-		t.Parallel()
+				if len(single) != 0 {
+					t.Errorf("expected empty single, got %v", single)
+				}
 
-		input := "HostName example.com\nUser admin\nPort 22\n"
-		single, _ := parseSSHGOutput(input)
+				if len(multi) != 0 {
+					t.Errorf("expected empty multi, got %v", multi)
+				}
+			},
+		},
+		{
+			name:  "value with spaces",
+			input: "proxycommand ssh -W %h:%p bastion\n",
+			validate: func(t *testing.T, single map[string]string, _ map[string][]string) {
+				t.Helper()
+				assertSingle(t, single, "proxycommand", "ssh -W %h:%p bastion")
+			},
+		},
+	}
 
-		if single["hostname"] != "example.com" {
-			t.Errorf("hostname = %q, want example.com", single["hostname"])
-		}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-		if single["user"] != "admin" {
-			t.Errorf("user = %q, want admin", single["user"])
-		}
-
-		if single["port"] != "22" {
-			t.Errorf("port = %q, want 22", single["port"])
-		}
-	})
-
-	t.Run("multi-value keys", func(t *testing.T) {
-		t.Parallel()
-
-		input := "identityfile ~/.ssh/id_rsa\nidentityfile ~/.ssh/id_ed25519\nhostname host1\n"
-		single, multi := parseSSHGOutput(input)
-
-		// single keeps the last value
-		if single["identityfile"] != "~/.ssh/id_ed25519" {
-			t.Errorf("single identityfile = %q, want ~/.ssh/id_ed25519", single["identityfile"])
-		}
-
-		// multi keeps all values
-		if len(multi["identityfile"]) != 2 {
-			t.Fatalf("expected 2 identity files, got %d", len(multi["identityfile"]))
-		}
-
-		if multi["identityfile"][0] != "~/.ssh/id_rsa" {
-			t.Errorf("multi identityfile[0] = %q", multi["identityfile"][0])
-		}
-
-		if multi["identityfile"][1] != "~/.ssh/id_ed25519" {
-			t.Errorf("multi identityfile[1] = %q", multi["identityfile"][1])
-		}
-	})
-
-	t.Run("invalid lines are skipped", func(t *testing.T) {
-		t.Parallel()
-
-		input := "hostname example.com\nno-space-line\n\nport 22\n"
-		single, _ := parseSSHGOutput(input)
-
-		if single["hostname"] != "example.com" {
-			t.Errorf("hostname = %q", single["hostname"])
-		}
-
-		if single["port"] != "22" {
-			t.Errorf("port = %q", single["port"])
-		}
-
-		if _, ok := single["no-space-line"]; ok {
-			t.Error("no-space-line should be skipped")
-		}
-	})
-
-	t.Run("empty input", func(t *testing.T) {
-		t.Parallel()
-
-		single, multi := parseSSHGOutput("")
-		if len(single) != 0 {
-			t.Errorf("expected empty single, got %v", single)
-		}
-
-		if len(multi) != 0 {
-			t.Errorf("expected empty multi, got %v", multi)
-		}
-	})
-
-	t.Run("value with spaces", func(t *testing.T) {
-		t.Parallel()
-
-		input := "proxycommand ssh -W %h:%p bastion\n"
-		single, _ := parseSSHGOutput(input)
-
-		if single["proxycommand"] != "ssh -W %h:%p bastion" {
-			t.Errorf("proxycommand = %q, want %q", single["proxycommand"], "ssh -W %h:%p bastion")
-		}
-	})
+			single, multi := parseSSHGOutput(tc.input)
+			tc.validate(t, single, multi)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -18,82 +18,75 @@ func TestCollectLocalFiles(t *testing.T) {
 	t.Parallel()
 
 	base := t.TempDir()
-
-	// Create project files.
-	projDir := filepath.Join(base, "projects", "grafana")
-
-	err := os.MkdirAll(filepath.Join(projDir, "files", "provisioning"), 0750)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = os.WriteFile(filepath.Join(projDir, "compose.yml"), []byte("services: {}"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = os.WriteFile(filepath.Join(projDir, "files", "grafana.ini"), []byte("[server]"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = os.WriteFile(filepath.Join(projDir, "files", "provisioning", "ds.yml"), []byte("ds: 1"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create host project files.
-	hostDir := filepath.Join(base, "hosts", "server1", "grafana")
-
-	err = os.MkdirAll(filepath.Join(hostDir, "files"), 0750)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = os.WriteFile(filepath.Join(hostDir, "compose.override.yml"), []byte("override: true"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = os.WriteFile(filepath.Join(hostDir, ".env"), []byte("GF_ADMIN=admin"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// This should override the project-level grafana.ini.
-	grafanaContent := []byte("[server]\nhost_override=true")
-
-	err = os.WriteFile(filepath.Join(hostDir, "files", "grafana.ini"), grafanaContent, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
+	setupCollectLocalFilesFixture(t, base)
 
 	files, err := CollectLocalFiles(base, "server1", "grafana")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expected := map[string]bool{
-		"compose.yml":          true,
-		"compose.override.yml": true,
-		".env":                 true,
-		"grafana.ini":          true,
-		"provisioning/ds.yml":  true,
+	expected := []string{
+		"compose.yml",
+		"compose.override.yml",
+		".env",
+		"grafana.ini",
+		"provisioning/ds.yml",
 	}
 
-	if len(files) != len(expected) {
-		t.Errorf("expected %d files, got %d: %v", len(expected), len(files), files)
-	}
-
-	for key := range expected {
-		if _, ok := files[key]; !ok {
-			t.Errorf("missing file %q", key)
-		}
-	}
+	assertContainsFiles(t, files, expected)
 
 	// Verify host override wins for grafana.ini.
 	data, _ := os.ReadFile(files["grafana.ini"])
 	if string(data) != "[server]\nhost_override=true" {
 		t.Errorf("grafana.ini should be host version, got %q", string(data))
+	}
+}
+
+func setupCollectLocalFilesFixture(t *testing.T, base string) {
+	t.Helper()
+
+	projDir := filepath.Join(base, "projects", "grafana")
+	mustMkdirAll(t, filepath.Join(projDir, "files", "provisioning"))
+	mustWriteFile(t, filepath.Join(projDir, "compose.yml"), []byte("services: {}"))
+	mustWriteFile(t, filepath.Join(projDir, "files", "grafana.ini"), []byte("[server]"))
+	mustWriteFile(t, filepath.Join(projDir, "files", "provisioning", "ds.yml"), []byte("ds: 1"))
+
+	hostDir := filepath.Join(base, "hosts", "server1", "grafana")
+	mustMkdirAll(t, filepath.Join(hostDir, "files"))
+	mustWriteFile(t, filepath.Join(hostDir, "compose.override.yml"), []byte("override: true"))
+	mustWriteFile(t, filepath.Join(hostDir, ".env"), []byte("GF_ADMIN=admin"))
+	mustWriteFile(t, filepath.Join(hostDir, "files", "grafana.ini"), []byte("[server]\nhost_override=true"))
+}
+
+func assertContainsFiles(t *testing.T, got map[string]string, expected []string) {
+	t.Helper()
+
+	if len(got) != len(expected) {
+		t.Errorf("expected %d files, got %d: %v", len(expected), len(got), got)
+	}
+
+	for _, key := range expected {
+		if _, ok := got[key]; !ok {
+			t.Errorf("missing file %q", key)
+		}
+	}
+}
+
+func mustMkdirAll(t *testing.T, dir string) {
+	t.Helper()
+
+	err := os.MkdirAll(dir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustWriteFile(t *testing.T, filePath string, content []byte) {
+	t.Helper()
+
+	err := os.WriteFile(filePath, content, 0600)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -25,11 +25,11 @@ type outputStyle struct {
 	enabled bool
 }
 
-func newOutputStyle(w io.Writer) outputStyle {
-	return outputStyle{enabled: shouldUseColor(w)}
+func newOutputStyle(writer io.Writer) outputStyle {
+	return outputStyle{enabled: shouldUseColor(writer)}
 }
 
-func shouldUseColor(w io.Writer) bool {
+func shouldUseColor(writer io.Writer) bool {
 	// https://no-color.org/
 	if os.Getenv("NO_COLOR") != "" {
 		return false
@@ -44,7 +44,7 @@ func shouldUseColor(w io.Writer) bool {
 		return true
 	}
 
-	fdWriter, ok := w.(interface{ Fd() uintptr })
+	fdWriter, ok := writer.(interface{ Fd() uintptr })
 	if !ok {
 		return false
 	}

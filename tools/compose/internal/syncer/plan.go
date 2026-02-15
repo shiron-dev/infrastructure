@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"cmt/internal/config"
@@ -189,108 +190,145 @@ func (p *SyncPlan) HasChanges() bool {
 // Plan display
 // ---------------------------------------------------------------------------
 
-// Print writes a human-readable plan to w.
-func (p *SyncPlan) Print(w io.Writer) {
-	style := newOutputStyle(w)
+// Print writes a human-readable plan to writer.
+func (p *SyncPlan) Print(writer io.Writer) {
+	style := newOutputStyle(writer)
 
 	if len(p.HostPlans) == 0 {
-		_, _ = fmt.Fprintln(w, style.muted("No hosts selected."))
+		_, _ = fmt.Fprintln(writer, style.muted("No hosts selected."))
 
 		return
 	}
 
 	for _, hostPlan := range p.HostPlans {
-		hostLine := fmt.Sprintf("=== Host: %s (%s@%s:%d) ===",
-			hostPlan.Host.Name, hostPlan.Host.User, hostPlan.Host.Host, hostPlan.Host.Port)
-		_, _ = fmt.Fprintf(w, "\n%s\n", style.hostHeader(hostLine))
-
-		if len(hostPlan.Projects) == 0 {
-			_, _ = fmt.Fprintln(w, style.muted("  (no projects)"))
-
-			continue
-		}
-
-		for _, projectPlan := range hostPlan.Projects {
-			_, _ = fmt.Fprintf(w, "\n  %s %s\n", style.key("Project:"), style.projectName(projectPlan.ProjectName))
-			_, _ = fmt.Fprintf(w, "    %s %s\n", style.key("Remote:"), projectPlan.RemoteDir)
-
-			if projectPlan.PostSyncCommand != "" {
-				_, _ = fmt.Fprintf(w, "    %s %s\n", style.key("Post-sync:"), projectPlan.PostSyncCommand)
-			}
-
-			_, _ = fmt.Fprintln(w)
-
-			// Show directory plans.
-			if len(projectPlan.Dirs) > 0 {
-				_, _ = fmt.Fprintln(w, "    "+style.key("Dirs:"))
-
-				for _, directoryPlan := range projectPlan.Dirs {
-					if directoryPlan.Exists {
-						_, _ = fmt.Fprintf(w, "      %s %s/ %s\n",
-							style.actionSymbol(ActionUnchanged),
-							directoryPlan.RelativePath,
-							style.muted("(exists)"))
-					} else {
-						_, _ = fmt.Fprintf(w, "      %s %s/ %s\n",
-							style.actionSymbol(ActionAdd),
-							directoryPlan.RelativePath,
-							style.success("(create)"))
-					}
-				}
-
-				_, _ = fmt.Fprintln(w)
-			}
-
-			if len(projectPlan.Files) == 0 && len(projectPlan.Dirs) == 0 {
-				_, _ = fmt.Fprintln(w, style.muted("    (no files or dirs)"))
-
-				continue
-			}
-
-			for _, filePlan := range projectPlan.Files {
-				label := ""
-
-				switch filePlan.Action {
-				case ActionAdd:
-					label = "new, " + humanSize(len(filePlan.LocalData))
-				case ActionModify:
-					label = "modified"
-				case ActionDelete:
-					label = "delete"
-				case ActionUnchanged:
-					label = "unchanged"
-				}
-
-				_, _ = fmt.Fprintf(w, "    %s %s (%s)\n", style.actionSymbol(filePlan.Action), filePlan.RelativePath, label)
-
-				if filePlan.Diff != "" {
-					for line := range strings.SplitSeq(filePlan.Diff, "\n") {
-						if line != "" {
-							_, _ = fmt.Fprintf(w, "        %s\n", style.diffLine(line))
-						}
-					}
-				}
-			}
-		}
+		printHostPlan(writer, style, hostPlan)
 	}
 
 	hosts, projects, add, mod, del, unch := p.Stats()
 	dirCreate, _ := p.DirStats()
 
-	_, _ = fmt.Fprintf(w, "\n%s %d host(s), %d project(s) — %s to add, %s to modify, %s to delete, %s unchanged",
+	_, _ = fmt.Fprintf(writer, "\n%s %d host(s), %d project(s) — %s to add, %s to modify, %s to delete, %s unchanged",
 		style.key("Summary:"),
 		hosts,
 		projects,
-		style.success(fmt.Sprintf("%d", add)),
-		style.warning(fmt.Sprintf("%d", mod)),
-		style.danger(fmt.Sprintf("%d", del)),
-		style.muted(fmt.Sprintf("%d", unch)))
+		style.success(strconv.Itoa(add)),
+		style.warning(strconv.Itoa(mod)),
+		style.danger(strconv.Itoa(del)),
+		style.muted(strconv.Itoa(unch)))
 
 	if dirCreate > 0 {
-		_, _ = fmt.Fprintf(w, ", %s dir(s) to create", style.success(fmt.Sprintf("%d", dirCreate)))
+		_, _ = fmt.Fprintf(writer, ", %s dir(s) to create", style.success(strconv.Itoa(dirCreate)))
 	}
 
-	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(writer)
+}
+
+func printHostPlan(writer io.Writer, style outputStyle, hostPlan HostPlan) {
+	hostLine := fmt.Sprintf(
+		"=== Host: %s (%s@%s:%d) ===",
+		hostPlan.Host.Name,
+		hostPlan.Host.User,
+		hostPlan.Host.Host,
+		hostPlan.Host.Port,
+	)
+	_, _ = fmt.Fprintf(writer, "\n%s\n", style.hostHeader(hostLine))
+
+	if len(hostPlan.Projects) == 0 {
+		_, _ = fmt.Fprintln(writer, style.muted("  (no projects)"))
+
+		return
+	}
+
+	for _, projectPlan := range hostPlan.Projects {
+		printProjectPlan(writer, style, projectPlan)
+	}
+}
+
+func printProjectPlan(writer io.Writer, style outputStyle, projectPlan ProjectPlan) {
+	_, _ = fmt.Fprintf(writer, "\n  %s %s\n", style.key("Project:"), style.projectName(projectPlan.ProjectName))
+	_, _ = fmt.Fprintf(writer, "    %s %s\n", style.key("Remote:"), projectPlan.RemoteDir)
+
+	if projectPlan.PostSyncCommand != "" {
+		_, _ = fmt.Fprintf(writer, "    %s %s\n", style.key("Post-sync:"), projectPlan.PostSyncCommand)
+	}
+
+	_, _ = fmt.Fprintln(writer)
+	printProjectDirPlans(writer, style, projectPlan.Dirs)
+
+	if len(projectPlan.Files) == 0 && len(projectPlan.Dirs) == 0 {
+		_, _ = fmt.Fprintln(writer, style.muted("    (no files or dirs)"))
+
+		return
+	}
+
+	for _, filePlan := range projectPlan.Files {
+		_, _ = fmt.Fprintf(
+			writer,
+			"    %s %s (%s)\n",
+			style.actionSymbol(filePlan.Action),
+			filePlan.RelativePath,
+			filePlanLabel(filePlan),
+		)
+
+		printFileDiff(writer, style, filePlan.Diff)
+	}
+}
+
+func printProjectDirPlans(writer io.Writer, style outputStyle, dirPlans []DirPlan) {
+	if len(dirPlans) == 0 {
+		return
+	}
+
+	_, _ = fmt.Fprintln(writer, "    "+style.key("Dirs:"))
+
+	for _, directoryPlan := range dirPlans {
+		statusText := style.success("(create)")
+		action := ActionAdd
+
+		if directoryPlan.Exists {
+			statusText = style.muted("(exists)")
+			action = ActionUnchanged
+		}
+
+		_, _ = fmt.Fprintf(
+			writer,
+			"      %s %s/ %s\n",
+			style.actionSymbol(action),
+			directoryPlan.RelativePath,
+			statusText,
+		)
+	}
+
+	_, _ = fmt.Fprintln(writer)
+}
+
+func filePlanLabel(filePlan FilePlan) string {
+	switch filePlan.Action {
+	case ActionAdd:
+		return "new, " + humanSize(len(filePlan.LocalData))
+	case ActionModify:
+		return "modified"
+	case ActionDelete:
+		return "delete"
+	case ActionUnchanged:
+		return "unchanged"
+	default:
+		return "unknown"
+	}
+}
+
+func printFileDiff(writer io.Writer, style outputStyle, diff string) {
+	if diff == "" {
+		return
+	}
+
+	for line := range strings.SplitSeq(diff, "\n") {
+		if line == "" {
+			continue
+		}
+
+		_, _ = fmt.Fprintf(writer, "        %s\n", style.diffLine(line))
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -305,20 +343,12 @@ func BuildPlan(cfg *config.CmtConfig, hostFilter, projectFilter []string) (*Sync
 }
 
 // BuildPlanWithDeps connects to each selected host using injected dependencies.
-func BuildPlanWithDeps(cfg *config.CmtConfig, hostFilter, projectFilter []string, deps PlanDependencies) (*SyncPlan, error) {
-	clientFactory := deps.ClientFactory
-	if clientFactory == nil {
-		defaultFactory := new(remote.DefaultClientFactory)
-		defaultFactory.Runner = nil
-		clientFactory = *defaultFactory
-	}
-
-	sshResolver := deps.SSHResolver
-	if sshResolver == nil {
-		defaultResolver := new(config.DefaultSSHConfigResolver)
-		defaultResolver.Runner = nil
-		sshResolver = *defaultResolver
-	}
+func BuildPlanWithDeps(
+	cfg *config.CmtConfig,
+	hostFilter, projectFilter []string,
+	deps PlanDependencies,
+) (*SyncPlan, error) {
+	clientFactory, sshResolver := resolvePlanDependencies(deps)
 
 	// Discover and filter projects.
 	allProjects, err := config.DiscoverProjects(cfg.BasePath)
@@ -340,39 +370,7 @@ func BuildPlanWithDeps(cfg *config.CmtConfig, hostFilter, projectFilter []string
 	plan.HostPlans = nil
 
 	for _, host := range hosts {
-		// Load host config.
-		hostCfg, err := config.LoadHostConfig(cfg.BasePath, host.Name)
-		if err != nil && !errors.Is(err, config.ErrHostConfigNotFound) {
-			return nil, fmt.Errorf("loading host config for %s: %w", host.Name, err)
-		}
-
-		if errors.Is(err, config.ErrHostConfigNotFound) {
-			hostCfg = nil
-		}
-
-		// Resolve SSH config via ssh -G (always runs; uses -F when
-		// host.yml specifies sshConfig, otherwise default ssh config).
-		sshConfigPath := ""
-		if hostCfg != nil {
-			sshConfigPath = hostCfg.SSHConfig
-		}
-
-		hostDir := filepath.Join(cfg.BasePath, "hosts", host.Name)
-
-		resolveErr := sshResolver.Resolve(&host, sshConfigPath, hostDir)
-		if resolveErr != nil {
-			return nil, fmt.Errorf("resolving SSH config for %s: %w", host.Name, resolveErr)
-		}
-
-		// Connect via SSH/SFTP.
-		client, err := clientFactory.NewClient(host)
-		if err != nil {
-			return nil, fmt.Errorf("connecting to host %s: %w", host.Name, err)
-		}
-
-		hostPlan, err := buildHostPlan(cfg, host, hostCfg, projects, client)
-		_ = client.Close()
-
+		hostPlan, err := buildHostPlanForTarget(cfg, host, projects, clientFactory, sshResolver)
 		if err != nil {
 			return nil, err
 		}
@@ -381,6 +379,91 @@ func BuildPlanWithDeps(cfg *config.CmtConfig, hostFilter, projectFilter []string
 	}
 
 	return plan, nil
+}
+
+func resolvePlanDependencies(deps PlanDependencies) (remote.ClientFactory, config.SSHConfigResolver) {
+	clientFactory := deps.ClientFactory
+	if clientFactory == nil {
+		defaultFactory := new(remote.DefaultClientFactory)
+		defaultFactory.Runner = nil
+		clientFactory = *defaultFactory
+	}
+
+	sshResolver := deps.SSHResolver
+	if sshResolver == nil {
+		defaultResolver := new(config.DefaultSSHConfigResolver)
+		defaultResolver.Runner = nil
+		sshResolver = *defaultResolver
+	}
+
+	return clientFactory, sshResolver
+}
+
+func buildHostPlanForTarget(
+	cfg *config.CmtConfig,
+	host config.HostEntry,
+	projects []string,
+	clientFactory remote.ClientFactory,
+	sshResolver config.SSHConfigResolver,
+) (*HostPlan, error) {
+	hostCfg, found, err := loadHostConfig(cfg.BasePath, host.Name)
+	if err != nil {
+		return nil, fmt.Errorf("loading host config for %s: %w", host.Name, err)
+	}
+
+	if !found {
+		hostCfg = nil
+	}
+
+	err = resolveHostSSHConfig(cfg.BasePath, &host, hostCfg, sshResolver)
+	if err != nil {
+		return nil, fmt.Errorf("resolving SSH config for %s: %w", host.Name, err)
+	}
+
+	client, err := clientFactory.NewClient(host)
+	if err != nil {
+		return nil, fmt.Errorf("connecting to host %s: %w", host.Name, err)
+	}
+
+	defer func() {
+		_ = client.Close()
+	}()
+
+	hostPlan, err := buildHostPlan(cfg, host, hostCfg, projects, client)
+	if err != nil {
+		return nil, err
+	}
+
+	return hostPlan, nil
+}
+
+func loadHostConfig(basePath, hostName string) (*config.HostConfig, bool, error) {
+	hostCfg, err := config.LoadHostConfig(basePath, hostName)
+	if errors.Is(err, config.ErrHostConfigNotFound) {
+		return nil, false, nil
+	}
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	return hostCfg, true, nil
+}
+
+func resolveHostSSHConfig(
+	basePath string,
+	host *config.HostEntry,
+	hostCfg *config.HostConfig,
+	sshResolver config.SSHConfigResolver,
+) error {
+	sshConfigPath := ""
+	if hostCfg != nil {
+		sshConfigPath = hostCfg.SSHConfig
+	}
+
+	hostDir := filepath.Join(basePath, "hosts", host.Name)
+
+	return sshResolver.Resolve(host, sshConfigPath, hostDir)
 }
 
 func buildHostPlan(
@@ -456,87 +539,110 @@ func buildFilePlans(
 	templateVars map[string]any,
 ) ([]FilePlan, error) {
 	plans := make([]FilePlan, 0, len(localFiles))
-
 	localSet := make(map[string]bool, len(localFiles))
 
 	for relPath, localPath := range localFiles {
 		localSet[relPath] = true
 
-		cleanLocalPath := filepath.Clean(localPath)
-
-		localData, err := os.ReadFile(cleanLocalPath)
+		filePlan, err := buildLocalFilePlan(relPath, localPath, remoteDir, client, templateVars)
 		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", cleanLocalPath, err)
+			return nil, err
 		}
 
-		// Render file as Go template.
-		localData, err = RenderTemplate(localData, templateVars)
-		if err != nil {
-			return nil, fmt.Errorf("rendering template %s: %w", cleanLocalPath, err)
-		}
-
-		remotePath := path.Join(remoteDir, relPath)
-		remoteData, readErr := client.ReadFile(remotePath)
-
-		filePlan := new(FilePlan)
-		filePlan.RelativePath = relPath
-		filePlan.LocalPath = localPath
-		filePlan.RemotePath = remotePath
-		filePlan.Action = ActionUnchanged
-		filePlan.LocalData = localData
-		filePlan.RemoteData = nil
-		filePlan.Diff = ""
-
-		switch {
-		case readErr != nil:
-			// Remote file does not exist.
-			filePlan.Action = ActionAdd
-		case bytes.Equal(localData, remoteData):
-			filePlan.Action = ActionUnchanged
-			filePlan.RemoteData = remoteData
-		default:
-			filePlan.Action = ActionModify
-
-			filePlan.RemoteData = remoteData
-
-			if !isBinary(localData) && !isBinary(remoteData) {
-				filePlan.Diff = computeDiff(relPath, remoteData, localData)
-			}
-		}
-
-		plans = append(plans, *filePlan)
+		plans = append(plans, filePlan)
 	}
 
-	// Files in manifest but not in local → delete.
-	if manifest != nil {
-		for _, managedFile := range manifest.ManagedFiles {
-			if managedFile == manifestFile {
-				continue
-			}
-
-			if localSet[managedFile] {
-				continue
-			}
-
-			remotePath := path.Join(remoteDir, managedFile)
-			remoteData, _ := client.ReadFile(remotePath)
-			deletePlan := new(FilePlan)
-			deletePlan.RelativePath = managedFile
-			deletePlan.LocalPath = ""
-			deletePlan.RemotePath = remotePath
-			deletePlan.Action = ActionDelete
-			deletePlan.LocalData = nil
-			deletePlan.RemoteData = remoteData
-			deletePlan.Diff = ""
-			plans = append(plans, *deletePlan)
-		}
-	}
+	plans = append(plans, buildDeleteFilePlans(manifest, localSet, remoteDir, client)...)
 
 	sort.Slice(plans, func(i, j int) bool {
 		return plans[i].RelativePath < plans[j].RelativePath
 	})
 
 	return plans, nil
+}
+
+func buildLocalFilePlan(
+	relPath string,
+	localPath string,
+	remoteDir string,
+	client remote.RemoteClient,
+	templateVars map[string]any,
+) (FilePlan, error) {
+	cleanLocalPath := filepath.Clean(localPath)
+
+	localData, err := os.ReadFile(cleanLocalPath)
+	if err != nil {
+		return FilePlan{}, fmt.Errorf("reading %s: %w", cleanLocalPath, err)
+	}
+
+	localData, err = RenderTemplate(localData, templateVars)
+	if err != nil {
+		return FilePlan{}, fmt.Errorf("rendering template %s: %w", cleanLocalPath, err)
+	}
+
+	remotePath := path.Join(remoteDir, relPath)
+	remoteData, readErr := client.ReadFile(remotePath)
+
+	filePlan := FilePlan{
+		RelativePath: relPath,
+		LocalPath:    localPath,
+		RemotePath:   remotePath,
+		Action:       ActionUnchanged,
+		LocalData:    localData,
+		RemoteData:   nil,
+		Diff:         "",
+	}
+
+	if readErr == nil {
+		filePlan.RemoteData = remoteData
+		if bytes.Equal(localData, remoteData) {
+			return filePlan, nil
+		}
+
+		filePlan.Action = ActionModify
+		if !isBinary(localData) && !isBinary(remoteData) {
+			filePlan.Diff = computeDiff(relPath, remoteData, localData)
+		}
+
+		return filePlan, nil
+	}
+
+	filePlan.Action = ActionAdd
+
+	return filePlan, nil
+}
+
+func buildDeleteFilePlans(
+	manifest *Manifest,
+	localSet map[string]bool,
+	remoteDir string,
+	client remote.RemoteClient,
+) []FilePlan {
+	if manifest == nil {
+		return nil
+	}
+
+	deletePlans := make([]FilePlan, 0)
+
+	for _, managedFile := range manifest.ManagedFiles {
+		if managedFile == manifestFile || localSet[managedFile] {
+			continue
+		}
+
+		remotePath := path.Join(remoteDir, managedFile)
+		remoteData, _ := client.ReadFile(remotePath)
+		deletePlans = append(deletePlans, FilePlan{
+			RelativePath: managedFile,
+			LocalPath:    "",
+			RemotePath:   remotePath,
+			Action:       ActionDelete,
+			LocalData:    nil,
+			RemoteData:   remoteData,
+			Diff:         "",
+		})
+	}
+
+	return deletePlans
 }
 
 // ---------------------------------------------------------------------------
