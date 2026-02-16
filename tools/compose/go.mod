@@ -1,6 +1,6 @@
 module cmt
 
-go 1.25.3
+go 1.26.0
 
 require (
 	github.com/invopop/jsonschema v0.13.0
