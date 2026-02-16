@@ -11,8 +11,6 @@ import (
 
 var ErrHostConfigNotFound = errors.New("host config not found")
 
-// LoadCmtConfig reads and parses the cmt configuration file.
-// Relative basePath values are resolved relative to the config file location.
 func LoadCmtConfig(configPath string) (*CmtConfig, error) {
 	cleanConfigPath := filepath.Clean(configPath)
 
@@ -36,7 +34,6 @@ func LoadCmtConfig(configPath string) (*CmtConfig, error) {
 		return nil, fmt.Errorf("at least one host is required in %s", cleanConfigPath)
 	}
 
-	// Resolve relative basePath against the config file's directory.
 	if !filepath.IsAbs(cfg.BasePath) {
 		configDir := filepath.Dir(cleanConfigPath)
 
@@ -51,8 +48,6 @@ func LoadCmtConfig(configPath string) (*CmtConfig, error) {
 	return &cfg, nil
 }
 
-// LoadHostConfig reads host.yml for the given host name.
-// Returns nil (without error) when the file does not exist.
 func LoadHostConfig(basePath, hostName string) (*HostConfig, error) {
 	hostConfigPath := filepath.Join(basePath, "hosts", hostName, "host.yml")
 	hostConfigPath = filepath.Clean(hostConfigPath)
@@ -80,7 +75,6 @@ func LoadHostConfig(basePath, hostName string) (*HostConfig, error) {
 	return hostConfig, nil
 }
 
-// DiscoverProjects lists project names found under basePath/projects/.
 func DiscoverProjects(basePath string) ([]string, error) {
 	dir := filepath.Join(basePath, "projects")
 
@@ -100,8 +94,6 @@ func DiscoverProjects(basePath string) ([]string, error) {
 	return projects, nil
 }
 
-// FilterHosts returns only the hosts whose names appear in the filter list.
-// If filter is empty, all hosts are returned.
 func FilterHosts(hosts []HostEntry, filter []string) []HostEntry {
 	if len(filter) == 0 {
 		return hosts
@@ -123,8 +115,6 @@ func FilterHosts(hosts []HostEntry, filter []string) []HostEntry {
 	return out
 }
 
-// FilterProjects returns only the project names that appear in the filter list.
-// If filter is empty, all projects are returned.
 func FilterProjects(projects []string, filter []string) []string {
 	if len(filter) == 0 {
 		return projects

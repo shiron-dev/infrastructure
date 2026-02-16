@@ -35,7 +35,7 @@ defaults:
 		t.Fatal(err)
 	}
 
-	// Create the compose directory so basePath resolves.
+	// basePath が解決できるように compose ディレクトリを作成します。
 	err = os.MkdirAll(filepath.Join(dir, "compose"), 0750)
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +46,7 @@ defaults:
 		t.Fatalf("LoadCmtConfig: %v", err)
 	}
 
-	// basePath should be resolved to an absolute path.
+	// basePath は絶対パスに解決されているはずです。
 	if !filepath.IsAbs(cfg.BasePath) {
 		t.Errorf("basePath should be absolute, got %q", cfg.BasePath)
 	}
@@ -54,7 +54,7 @@ defaults:
 	if len(cfg.Hosts) != 2 {
 		t.Fatalf("expected 2 hosts, got %d", len(cfg.Hosts))
 	}
-	// Port defaults to 0 at config level; 22 is applied later by ResolveSSHConfig.
+	// ポートは設定レベルでは 0 がデフォルト。22 は後で ResolveSSHConfig により適用されます。
 	if cfg.Hosts[0].Port != 0 {
 		t.Errorf("default port should be 0 (unset), got %d", cfg.Hosts[0].Port)
 	}
@@ -75,41 +75,41 @@ defaults:
 func TestLoadCmtConfig_Errors(t *testing.T) {
 	t.Parallel()
 
-	t.Run("missing basePath", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name    string
+		content string
+		wantErr bool
+	}{
+		{
+			name:    "missing basePath",
+			content: "hosts:\n  - name: x\n    host: x\n    user: x\n",
+			wantErr: true,
+		},
+		{
+			name:    "no hosts",
+			content: "basePath: .\nhosts: []\n",
+			wantErr: true,
+		},
+	}
 
-		dir := t.TempDir()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		cfgPath := filepath.Join(dir, "bad.yml")
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "bad.yml")
 
-		err := os.WriteFile(cfgPath, []byte("hosts:\n  - name: x\n    host: x\n    user: x\n"), 0600)
-		if err != nil {
-			t.Fatal(err)
-		}
+			err := os.WriteFile(cfgPath, []byte(tt.content), 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		_, err = LoadCmtConfig(cfgPath)
-		if err == nil {
-			t.Error("expected error for missing basePath")
-		}
-	})
-
-	t.Run("no hosts", func(t *testing.T) {
-		t.Parallel()
-
-		dir := t.TempDir()
-
-		cfgPath := filepath.Join(dir, "bad.yml")
-
-		err := os.WriteFile(cfgPath, []byte("basePath: .\nhosts: []\n"), 0600)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		_, err = LoadCmtConfig(cfgPath)
-		if err == nil {
-			t.Error("expected error for empty hosts")
-		}
-	})
+			_, err = LoadCmtConfig(cfgPath)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("LoadCmtConfig() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 func TestDiscoverProjects(t *testing.T) {
@@ -128,7 +128,7 @@ func TestDiscoverProjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A regular file should be ignored.
+	// 通常ファイルは無視されるべきです。
 	err = os.WriteFile(filepath.Join(projDir, "README.md"), []byte("hi"), 0600)
 	if err != nil {
 		t.Fatal(err)
@@ -151,19 +151,43 @@ func TestFilterHosts(t *testing.T) {
 		{Name: "a"}, {Name: "b"}, {Name: "c"},
 	}
 
-	// Empty filter returns all.
-	if got := FilterHosts(hosts, nil); len(got) != 3 {
-		t.Errorf("nil filter: got %d hosts", len(got))
+	tests := []struct {
+		name      string
+		filter    []string
+		wantCount int
+		wantNames []string
+	}{
+		{
+			name:      "nil filter returns all",
+			filter:    nil,
+			wantCount: 3,
+			wantNames: []string{"a", "b", "c"},
+		},
+		{
+			name:      "specific filter",
+			filter:    []string{"a", "c"},
+			wantCount: 2,
+			wantNames: []string{"a", "c"},
+		},
 	}
 
-	// Specific filter.
-	got := FilterHosts(hosts, []string{"a", "c"})
-	if len(got) != 2 {
-		t.Errorf("expected 2, got %d", len(got))
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	if got[0].Name != "a" || got[1].Name != "c" {
-		t.Errorf("unexpected hosts: %v", got)
+			got := FilterHosts(hosts, tt.filter)
+			if len(got) != tt.wantCount {
+				t.Errorf("FilterHosts() count = %d, want %d", len(got), tt.wantCount)
+			}
+
+			for i, name := range tt.wantNames {
+				if i >= len(got) || got[i].Name != name {
+					t.Errorf("FilterHosts() hosts = %v, want names %v", got, tt.wantNames)
+
+					break
+				}
+			}
+		})
 	}
 }
 
@@ -172,13 +196,42 @@ func TestFilterProjects(t *testing.T) {
 
 	projects := []string{"grafana", "prometheus", "loki"}
 
-	if got := FilterProjects(projects, nil); len(got) != 3 {
-		t.Errorf("nil filter: got %d", len(got))
+	tests := []struct {
+		name   string
+		filter []string
+		want   []string
+	}{
+		{
+			name:   "nil filter returns all",
+			filter: nil,
+			want:   []string{"grafana", "prometheus", "loki"},
+		},
+		{
+			name:   "specific filter",
+			filter: []string{"grafana"},
+			want:   []string{"grafana"},
+		},
 	}
 
-	got := FilterProjects(projects, []string{"grafana"})
-	if len(got) != 1 || got[0] != "grafana" {
-		t.Errorf("unexpected: %v", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := FilterProjects(projects, tt.filter)
+			if len(got) != len(tt.want) {
+				t.Errorf("FilterProjects() = %v, want %v", got, tt.want)
+
+				return
+			}
+
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("FilterProjects() = %v, want %v", got, tt.want)
+
+					break
+				}
+			}
+		})
 	}
 }
 
@@ -199,30 +252,49 @@ func TestResolveProjectConfig(t *testing.T) {
 		},
 	}
 
-	// Layer 1 only.
-	resolved := ResolveProjectConfig(cmtDefaults, nil, "grafana")
-	if resolved.RemotePath != "/opt/default" {
-		t.Errorf("expected /opt/default, got %q", resolved.RemotePath)
+	tests := []struct {
+		name            string
+		hostCfg         *HostConfig
+		project         string
+		wantRemotePath  string
+		wantPostCommand string
+	}{
+		{
+			name:            "layer 1 only",
+			hostCfg:         nil,
+			project:         "grafana",
+			wantRemotePath:  "/opt/default",
+			wantPostCommand: "echo default",
+		},
+		{
+			name:            "layer 2 overrides path, layer 1 provides command",
+			hostCfg:         hostCfg,
+			project:         "prometheus",
+			wantRemotePath:  "/opt/host",
+			wantPostCommand: "echo default",
+		},
+		{
+			name:            "layer 3 overrides command",
+			hostCfg:         hostCfg,
+			project:         "grafana",
+			wantRemotePath:  "/opt/host",
+			wantPostCommand: "docker compose up -d",
+		},
 	}
 
-	// Layer 2 overrides path, layer 1 provides command.
-	resolved = ResolveProjectConfig(cmtDefaults, hostCfg, "prometheus")
-	if resolved.RemotePath != "/opt/host" {
-		t.Errorf("expected /opt/host, got %q", resolved.RemotePath)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	if resolved.PostSyncCommand != "echo default" {
-		t.Errorf("expected echo default, got %q", resolved.PostSyncCommand)
-	}
+			resolved := ResolveProjectConfig(cmtDefaults, tt.hostCfg, tt.project)
+			if resolved.RemotePath != tt.wantRemotePath {
+				t.Errorf("RemotePath = %q, want %q", resolved.RemotePath, tt.wantRemotePath)
+			}
 
-	// Layer 3 overrides command.
-	resolved = ResolveProjectConfig(cmtDefaults, hostCfg, "grafana")
-	if resolved.RemotePath != "/opt/host" {
-		t.Errorf("expected /opt/host, got %q", resolved.RemotePath)
-	}
-
-	if resolved.PostSyncCommand != "docker compose up -d" {
-		t.Errorf("expected docker compose up -d, got %q", resolved.PostSyncCommand)
+			if resolved.PostSyncCommand != tt.wantPostCommand {
+				t.Errorf("PostSyncCommand = %q, want %q", resolved.PostSyncCommand, tt.wantPostCommand)
+			}
+		})
 	}
 }
 
@@ -231,7 +303,7 @@ func TestLoadHostConfig(t *testing.T) {
 
 	dir := t.TempDir()
 
-	// No host.yml → nil, nil.
+	// host.yml が無い場合 → nil, nil。
 	hostConfig, err := LoadHostConfig(dir, "nonexistent")
 	if err == nil {
 		t.Fatal("expected not-found error for missing host.yml")
@@ -241,7 +313,7 @@ func TestLoadHostConfig(t *testing.T) {
 		t.Error("expected nil for missing host.yml")
 	}
 
-	// Valid host.yml.
+	// 有効な host.yml。
 	hostDir := filepath.Join(dir, "hosts", "server1")
 
 	err = os.MkdirAll(hostDir, 0750)

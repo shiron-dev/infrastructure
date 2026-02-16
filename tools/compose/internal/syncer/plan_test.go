@@ -35,7 +35,7 @@ func TestCollectLocalFiles(t *testing.T) {
 
 	assertContainsFiles(t, files, expected)
 
-	// Verify host override wins for grafana.ini.
+	// grafana.ini に対してホストの上書きが勝つことを確認します。
 	data, _ := os.ReadFile(files["grafana.ini"])
 	if string(data) != "[server]\nhost_override=true" {
 		t.Errorf("grafana.ini should be host version, got %q", string(data))
@@ -123,7 +123,7 @@ func TestBuildManifest(t *testing.T) {
 	if len(manifest.ManagedFiles) != 3 {
 		t.Errorf("expected 3 managed files, got %d", len(manifest.ManagedFiles))
 	}
-	// Should be sorted.
+	// ソートされているべきです。
 	if manifest.ManagedFiles[0] != ".env" {
 		t.Errorf("expected first file .env, got %q", manifest.ManagedFiles[0])
 	}
@@ -132,12 +132,32 @@ func TestBuildManifest(t *testing.T) {
 func TestIsBinary(t *testing.T) {
 	t.Parallel()
 
-	if isBinary([]byte("hello world")) {
-		t.Error("text should not be binary")
+	tests := []struct {
+		name string
+		data []byte
+		want bool
+	}{
+		{
+			name: "text should not be binary",
+			data: []byte("hello world"),
+			want: false,
+		},
+		{
+			name: "data with null byte should be binary",
+			data: []byte("hello\x00world"),
+			want: true,
+		},
 	}
 
-	if !isBinary([]byte("hello\x00world")) {
-		t.Error("data with null byte should be binary")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := isBinary(tt.data)
+			if got != tt.want {
+				t.Errorf("isBinary() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -278,56 +298,66 @@ func TestActionType_Symbol(t *testing.T) {
 func TestComputeDiff(t *testing.T) {
 	t.Parallel()
 
-	t.Run("identical content", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name         string
+		filename     string
+		remote       []byte
+		local        []byte
+		wantEmpty    bool
+		wantContains []string
+	}{
+		{
+			name:      "identical content",
+			filename:  "file.txt",
+			remote:    []byte("hello\n"),
+			local:     []byte("hello\n"),
+			wantEmpty: true,
+		},
+		{
+			name:     "basic diff",
+			filename: "compose.yml",
+			remote:   []byte("line1\nline2\nline3\n"),
+			local:    []byte("line1\nmodified\nline3\n"),
+			wantContains: []string{
+				"compose.yml (remote)",
+				"compose.yml (local)",
+				"-line2",
+				"+modified",
+			},
+		},
+		{
+			name:     "added lines",
+			filename: "test.txt",
+			remote:   []byte("a\n"),
+			local:    []byte("a\nb\nc\n"),
+			wantContains: []string{
+				"+b",
+				"+c",
+			},
+		},
+	}
 
-		result := computeDiff("file.txt", []byte("hello\n"), []byte("hello\n"))
-		if result != "" {
-			t.Errorf("expected empty diff for identical content, got %q", result)
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	t.Run("basic diff", func(t *testing.T) {
-		t.Parallel()
+			result := computeDiff(tt.filename, tt.remote, tt.local)
 
-		remote := []byte("line1\nline2\nline3\n")
-		local := []byte("line1\nmodified\nline3\n")
+			if tt.wantEmpty {
+				if result != "" {
+					t.Errorf("expected empty diff, got %q", result)
+				}
 
-		result := computeDiff("compose.yml", remote, local)
+				return
+			}
 
-		if !strings.Contains(result, "compose.yml (remote)") {
-			t.Error("diff should contain remote file header")
-		}
-
-		if !strings.Contains(result, "compose.yml (local)") {
-			t.Error("diff should contain local file header")
-		}
-
-		if !strings.Contains(result, "-line2") {
-			t.Error("diff should contain removed line")
-		}
-
-		if !strings.Contains(result, "+modified") {
-			t.Error("diff should contain added line")
-		}
-	})
-
-	t.Run("added lines", func(t *testing.T) {
-		t.Parallel()
-
-		remote := []byte("a\n")
-		local := []byte("a\nb\nc\n")
-
-		result := computeDiff("test.txt", remote, local)
-
-		if !strings.Contains(result, "+b") {
-			t.Error("diff should contain added line b")
-		}
-
-		if !strings.Contains(result, "+c") {
-			t.Error("diff should contain added line c")
-		}
-	})
+			for _, want := range tt.wantContains {
+				if !strings.Contains(result, want) {
+					t.Errorf("diff should contain %q, got:\n%s", want, result)
+				}
+			}
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -363,54 +393,66 @@ func TestDirStats(t *testing.T) {
 	}
 }
 
-func TestHasChanges_NoChanges(t *testing.T) {
+func TestHasChanges(t *testing.T) {
 	t.Parallel()
 
-	plan := &SyncPlan{
-		HostPlans: []HostPlan{
-			{
-				Projects: []ProjectPlan{
+	tests := []struct {
+		name        string
+		plan        *SyncPlan
+		wantChanges bool
+	}{
+		{
+			name: "no changes",
+			plan: &SyncPlan{
+				HostPlans: []HostPlan{
 					{
-						Files: []FilePlan{
-							{Action: ActionUnchanged},
-							{Action: ActionUnchanged},
-						},
-						Dirs: []DirPlan{
-							{Exists: true},
+						Projects: []ProjectPlan{
+							{
+								Files: []FilePlan{
+									{Action: ActionUnchanged},
+									{Action: ActionUnchanged},
+								},
+								Dirs: []DirPlan{
+									{Exists: true},
+								},
+							},
 						},
 					},
 				},
 			},
+			wantChanges: false,
 		},
-	}
-
-	if plan.HasChanges() {
-		t.Error("plan with only unchanged files and existing dirs should not have changes")
-	}
-}
-
-func TestHasChanges_DirCreation(t *testing.T) {
-	t.Parallel()
-
-	plan := &SyncPlan{
-		HostPlans: []HostPlan{
-			{
-				Projects: []ProjectPlan{
+		{
+			name: "dir creation",
+			plan: &SyncPlan{
+				HostPlans: []HostPlan{
 					{
-						Files: []FilePlan{
-							{Action: ActionUnchanged},
-						},
-						Dirs: []DirPlan{
-							{Exists: false}, // needs creation
+						Projects: []ProjectPlan{
+							{
+								Files: []FilePlan{
+									{Action: ActionUnchanged},
+								},
+								Dirs: []DirPlan{
+									{Exists: false},
+								},
+							},
 						},
 					},
 				},
 			},
+			wantChanges: true,
 		},
 	}
 
-	if !plan.HasChanges() {
-		t.Error("plan with dir to create should have changes")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tt.plan.HasChanges()
+			if got != tt.wantChanges {
+				t.Errorf("HasChanges() = %v, want %v", got, tt.wantChanges)
+			}
+		})
 	}
 }
 
@@ -474,7 +516,7 @@ func TestSyncPlan_Print_FullPlan(t *testing.T) {
 	plan.Print(&buf)
 	output := buf.String()
 
-	// Check host header.
+	// ホストヘッダーをチェックします。
 	if !strings.Contains(output, "Host: server1") {
 		t.Error("output should contain host name")
 	}
@@ -483,7 +525,7 @@ func TestSyncPlan_Print_FullPlan(t *testing.T) {
 		t.Error("output should contain connection info")
 	}
 
-	// Check project info.
+	// プロジェクト情報をチェックします。
 	if !strings.Contains(output, "Project: grafana") {
 		t.Error("output should contain project name")
 	}
@@ -492,12 +534,12 @@ func TestSyncPlan_Print_FullPlan(t *testing.T) {
 		t.Error("output should contain post-sync command")
 	}
 
-	// Check dir plan.
+	// ディレクトリプランをチェックします。
 	if !strings.Contains(output, "+ data/") {
 		t.Error("output should show dir to create")
 	}
 
-	// Check file plans.
+	// ファイルプランをチェックします。
 	if !strings.Contains(output, "+ compose.yml") {
 		t.Error("output should show added file")
 	}
@@ -506,7 +548,7 @@ func TestSyncPlan_Print_FullPlan(t *testing.T) {
 		t.Error("output should show unchanged file")
 	}
 
-	// Check summary.
+	// サマリーをチェックします。
 	if !strings.Contains(output, "Summary:") {
 		t.Error("output should contain summary")
 	}

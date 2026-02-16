@@ -20,17 +20,11 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 )
 
-// PlanDependencies holds injectable dependencies for BuildPlan.
 type PlanDependencies struct {
 	ClientFactory remote.ClientFactory
 	SSHResolver   config.SSHConfigResolver
 }
 
-// ---------------------------------------------------------------------------
-// Actions
-// ---------------------------------------------------------------------------
-
-// ActionType describes what will happen to a file.
 type ActionType int
 
 const (
@@ -70,60 +64,45 @@ func (a ActionType) Symbol() string {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Plan data structures
-// ---------------------------------------------------------------------------
-
-// SyncPlan is the complete plan for all hosts and projects.
 type SyncPlan struct {
 	HostPlans []HostPlan
 }
 
-// HostPlan groups project plans for one host.
 type HostPlan struct {
 	Host     config.HostEntry
 	Projects []ProjectPlan
 }
 
-// ProjectPlan describes what to sync for one project on one host.
 type ProjectPlan struct {
 	ProjectName     string
-	RemoteDir       string // <remotePath>/<project>
+	RemoteDir       string
 	PostSyncCommand string
 	Dirs            []DirPlan
 	Files           []FilePlan
 }
 
-// DirPlan describes the planned action for a pre-created directory.
 type DirPlan struct {
-	RelativePath string // relative to remote project dir
-	RemotePath   string // absolute remote path
-	Exists       bool   // whether it already exists on the remote host
+	RelativePath string
+	RemotePath   string
+	Exists       bool
 }
 
-// FilePlan describes the planned action for a single file.
 type FilePlan struct {
-	RelativePath string // relative to remote project dir
-	LocalPath    string // absolute local path (empty for deletes)
-	RemotePath   string // absolute remote path
+	RelativePath string
+	LocalPath    string
+	RemotePath   string
 	Action       ActionType
 	LocalData    []byte
 	RemoteData   []byte
-	Diff         string // unified diff (text files only)
+	Diff         string
 }
 
-// Manifest tracks files managed by cmt on the remote host.
 type Manifest struct {
 	ManagedFiles []string `json:"managedFiles"`
 }
 
 const manifestFile = ".cmt-manifest.json"
 
-// ---------------------------------------------------------------------------
-// Plan statistics
-// ---------------------------------------------------------------------------
-
-// Stats returns counts of each action type across the entire plan.
 func (p *SyncPlan) Stats() (int, int, int, int, int, int) {
 	hostCount := len(p.HostPlans)
 	projectCount := 0
@@ -154,7 +133,6 @@ func (p *SyncPlan) Stats() (int, int, int, int, int, int) {
 	return hostCount, projectCount, addCount, modifyCount, deleteCount, unchangedCount
 }
 
-// DirStats returns counts of directories to create and already existing.
 func (p *SyncPlan) DirStats() (int, int) {
 	toCreateCount := 0
 	existingCount := 0
@@ -174,8 +152,6 @@ func (p *SyncPlan) DirStats() (int, int) {
 	return toCreateCount, existingCount
 }
 
-// HasChanges returns true if the plan contains any add/modify/delete actions
-// or directories to create.
 func (p *SyncPlan) HasChanges() bool {
 	hostCount, projectCount, add, mod, del, unchangedCount := p.Stats()
 	_ = hostCount
@@ -186,11 +162,6 @@ func (p *SyncPlan) HasChanges() bool {
 	return add+mod+del+dirCreate > 0
 }
 
-// ---------------------------------------------------------------------------
-// Plan display
-// ---------------------------------------------------------------------------
-
-// Print writes a human-readable plan to writer.
 func (p *SyncPlan) Print(writer io.Writer) {
 	style := newOutputStyle(writer)
 
@@ -332,17 +303,12 @@ func printFileDiff(writer io.Writer, style outputStyle, diff string) {
 }
 
 // ---------------------------------------------------------------------------
-// Build plan
-// ---------------------------------------------------------------------------
-
-// BuildPlan connects to each selected host and computes the diff.
 func BuildPlan(cfg *config.CmtConfig, hostFilter, projectFilter []string) (*SyncPlan, error) {
 	var dependencies PlanDependencies
 
 	return BuildPlanWithDeps(cfg, hostFilter, projectFilter, dependencies)
 }
 
-// BuildPlanWithDeps connects to each selected host using injected dependencies.
 func BuildPlanWithDeps(
 	cfg *config.CmtConfig,
 	hostFilter, projectFilter []string,
@@ -350,7 +316,6 @@ func BuildPlanWithDeps(
 ) (*SyncPlan, error) {
 	clientFactory, sshResolver := resolvePlanDependencies(deps)
 
-	// Discover and filter projects.
 	allProjects, err := config.DiscoverProjects(cfg.BasePath)
 	if err != nil {
 		return nil, err
@@ -485,7 +450,6 @@ func buildHostPlan(
 
 		remoteDir := path.Join(resolved.RemotePath, project)
 
-		// Build directory plans.
 		dirPlans := make([]DirPlan, 0, len(resolved.Dirs))
 
 		for _, d := range resolved.Dirs {
@@ -498,22 +462,18 @@ func buildHostPlan(
 			})
 		}
 
-		// Load template variables from host-side .env / env.secrets.yml.
 		templateVars, err := LoadTemplateVars(cfg.BasePath, host.Name, project)
 		if err != nil {
 			return nil, fmt.Errorf("loading template vars for %s/%s: %w", host.Name, project, err)
 		}
 
-		// Collect local files.
 		localFiles, err := CollectLocalFiles(cfg.BasePath, host.Name, project)
 		if err != nil {
 			return nil, fmt.Errorf("collecting files for %s/%s: %w", host.Name, project, err)
 		}
 
-		// Read remote manifest.
 		manifest := readManifest(client, remoteDir)
 
-		// Build file plans.
 		filePlans, err := buildFilePlans(localFiles, remoteDir, manifest, client, templateVars)
 		if err != nil {
 			return nil, fmt.Errorf("building file plan for %s/%s: %w", host.Name, project, err)
@@ -645,41 +605,29 @@ func buildDeleteFilePlans(
 	return deletePlans
 }
 
-// ---------------------------------------------------------------------------
-// Local file collection
-// ---------------------------------------------------------------------------
-
-// CollectLocalFiles gathers all files that should be synced for one
-// (host, project) pair. The returned map is relativePath → absoluteLocalPath.
-// Host-level files override project-level files with the same relative path.
 func CollectLocalFiles(basePath, hostName, projectName string) (map[string]string, error) {
 	files := make(map[string]string)
 
 	projectDir := filepath.Join(basePath, "projects", projectName)
 	hostProjectDir := filepath.Join(basePath, "hosts", hostName, projectName)
 
-	// 1. compose.yml from project
 	if composePath := filepath.Join(projectDir, "compose.yml"); fileExists(composePath) {
 		files["compose.yml"] = composePath
 	}
 
-	// 2. files/ from project
 	err := walkFiles(filepath.Join(projectDir, "files"), files)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. compose.override.yml from host project
 	if overridePath := filepath.Join(hostProjectDir, "compose.override.yml"); fileExists(overridePath) {
 		files["compose.override.yml"] = overridePath
 	}
 
-	// 4. .env from host project
 	if envPath := filepath.Join(hostProjectDir, ".env"); fileExists(envPath) {
 		files[".env"] = envPath
 	}
 
-	// 5. files/ from host project (overwrites project-level files)
 	err = walkFiles(filepath.Join(hostProjectDir, "files"), files)
 	if err != nil {
 		return nil, err
@@ -687,10 +635,6 @@ func CollectLocalFiles(basePath, hostName, projectName string) (map[string]strin
 
 	return files, nil
 }
-
-// ---------------------------------------------------------------------------
-// Manifest helpers
-// ---------------------------------------------------------------------------
 
 func readManifest(client remote.RemoteClient, remoteDir string) *Manifest {
 	data, err := client.ReadFile(path.Join(remoteDir, manifestFile))
@@ -706,7 +650,6 @@ func readManifest(client remote.RemoteClient, remoteDir string) *Manifest {
 	return &manifest
 }
 
-// BuildManifest creates a manifest from the set of local files.
 func BuildManifest(localFiles map[string]string) Manifest {
 	var manifest Manifest
 	for rel := range localFiles {
@@ -717,10 +660,6 @@ func BuildManifest(localFiles map[string]string) Manifest {
 
 	return manifest
 }
-
-// ---------------------------------------------------------------------------
-// Diff / detection helpers
-// ---------------------------------------------------------------------------
 
 func computeDiff(name string, remote, local []byte) string {
 	diff := new(difflib.UnifiedDiff)
@@ -738,7 +677,6 @@ func computeDiff(name string, remote, local []byte) string {
 }
 
 func isBinary(data []byte) bool {
-	// Check first 8 KB for null bytes.
 	check := data
 	if len(check) > binaryProbeBytes {
 		check = check[:binaryProbeBytes]

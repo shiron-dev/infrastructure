@@ -51,10 +51,12 @@ func TestGenerateSchemaJSON(t *testing.T) {
 				if tt.wantErrMsg != "" && !strings.Contains(err.Error(), tt.wantErrMsg) {
 					t.Errorf("error message = %q, want to contain %q", err.Error(), tt.wantErrMsg)
 				}
+
 				return
 			}
 
 			var obj map[string]any
+
 			err = json.Unmarshal(data, &obj)
 			if err != nil {
 				t.Fatalf("invalid JSON: %v", err)

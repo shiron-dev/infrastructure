@@ -14,24 +14,17 @@ import (
 	"cmt/internal/remote"
 )
 
-// ApplyDependencies holds injectable dependencies for Apply.
 type ApplyDependencies struct {
 	ClientFactory remote.ClientFactory
 	Input         io.Reader
 }
 
-// Apply executes a SyncPlan: uploads / deletes files, updates manifests,
-// and runs post-sync commands.
-//
-// If autoApprove is false, the plan is printed and the user is prompted
-// for confirmation before any changes are made.
 func Apply(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, w io.Writer) error {
 	var dependencies ApplyDependencies
 
 	return ApplyWithDeps(cfg, plan, autoApprove, w, dependencies)
 }
 
-// ApplyWithDeps executes Apply with injected dependencies.
 func ApplyWithDeps(
 	cfg *config.CmtConfig,
 	plan *SyncPlan,
@@ -48,7 +41,6 @@ func ApplyWithDeps(
 		return nil
 	}
 
-	// Show the plan first.
 	plan.Print(writer)
 
 	if !autoApprove && !confirmApply(input, writer, style) {

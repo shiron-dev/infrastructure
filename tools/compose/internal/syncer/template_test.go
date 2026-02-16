@@ -58,16 +58,36 @@ EMPTY=
 	}
 }
 
-func TestParseEnvFile_NotExist(t *testing.T) {
+func TestParseEnvFile_EdgeCases(t *testing.T) {
 	t.Parallel()
 
-	vars, err := parseEnvFile("/nonexistent/.env")
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name    string
+		path    string
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name:    "not exist",
+			path:    "/nonexistent/.env",
+			wantLen: 0,
+			wantErr: false,
+		},
 	}
 
-	if len(vars) != 0 {
-		t.Errorf("expected empty map, got %v", vars)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			vars, err := parseEnvFile(tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseEnvFile() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if len(vars) != tt.wantLen {
+				t.Errorf("expected %d vars, got %v", tt.wantLen, vars)
+			}
+		})
 	}
 }
 
@@ -102,40 +122,62 @@ smtp_port: 587
 	if vars["github_client_secret"] != "secret456" {
 		t.Errorf("github_client_secret = %v", vars["github_client_secret"])
 	}
-	// YAML integers are parsed as int.
+	// YAML の整数は int としてパースされます。
 	if vars["smtp_port"] != 587 {
 		t.Errorf("smtp_port = %v (%T)", vars["smtp_port"], vars["smtp_port"])
 	}
 }
 
-func TestParseSecretsYAML_NotExist(t *testing.T) {
+func TestParseSecretsYAML_EdgeCases(t *testing.T) {
 	t.Parallel()
 
-	vars, err := parseSecretsYAML("/nonexistent/env.secrets.yml")
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) string
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name: "not exist",
+			setup: func(t *testing.T) string {
+				return "/nonexistent/env.secrets.yml"
+			},
+			wantLen: 0,
+			wantErr: false,
+		},
+		{
+			name: "invalid YAML",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				secretsPath := filepath.Join(dir, "env.secrets.yml")
+
+				err := os.WriteFile(secretsPath, []byte(`{invalid: yaml: [}`), 0600)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				return secretsPath
+			},
+			wantLen: 0,
+			wantErr: true,
+		},
 	}
 
-	if len(vars) != 0 {
-		t.Errorf("expected empty map, got %v", vars)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-func TestParseSecretsYAML_InvalidYAML(t *testing.T) {
-	t.Parallel()
+			path := tt.setup(t)
 
-	dir := t.TempDir()
+			vars, err := parseSecretsYAML(path)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseSecretsYAML() error = %v, wantErr %v", err, tt.wantErr)
+			}
 
-	secretsPath := filepath.Join(dir, "env.secrets.yml")
-
-	err := os.WriteFile(secretsPath, []byte(`{invalid: yaml: [}`), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = parseSecretsYAML(secretsPath)
-	if err == nil {
-		t.Error("expected error for invalid YAML")
+			if !tt.wantErr && len(vars) != tt.wantLen {
+				t.Errorf("expected %d vars, got %v", tt.wantLen, vars)
+			}
+		})
 	}
 }
 
@@ -155,7 +197,7 @@ func TestLoadTemplateVars_SecretsOverrideEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// .env has KEY1 and SHARED.
+	// .env は KEY1 と SHARED を持っています。
 	err = os.WriteFile(filepath.Join(hostProjectDir, ".env"), []byte(`KEY1=from_env
 SHARED=env_value
 `), 0600)
@@ -163,7 +205,7 @@ SHARED=env_value
 		t.Fatal(err)
 	}
 
-	// env.secrets.yml has KEY2 and overrides SHARED.
+	// env.secrets.yml は KEY2 を持ち、SHARED を上書きします。
 	err = os.WriteFile(filepath.Join(hostProjectDir, "env.secrets.yml"), []byte(`KEY2: from_secrets
 SHARED: secrets_value
 `), 0600)
@@ -183,57 +225,79 @@ SHARED: secrets_value
 	if vars["KEY2"] != "from_secrets" {
 		t.Errorf("KEY2 = %v", vars["KEY2"])
 	}
-	// SHARED should come from env.secrets.yml.
+	// SHARED は env.secrets.yml から来るべきです。
 	if vars["SHARED"] != "secrets_value" {
 		t.Errorf("SHARED = %v, want secrets_value", vars["SHARED"])
 	}
 }
 
-func TestLoadTemplateVars_NoFiles(t *testing.T) {
+func TestLoadTemplateVars_EdgeCases(t *testing.T) {
 	t.Parallel()
 
-	base := t.TempDir()
+	tests := []struct {
+		name     string
+		setup    func(t *testing.T, base string)
+		wantVars map[string]any
+	}{
+		{
+			name: "no files",
+			setup: func(t *testing.T, base string) {
+				err := os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0750)
+				if err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantVars: map[string]any{},
+		},
+		{
+			name: "only secrets",
+			setup: func(t *testing.T, base string) {
+				hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
 
-	err := os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0750)
-	if err != nil {
-		t.Fatal(err)
-	}
+				err := os.MkdirAll(hostProjectDir, 0750)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-	vars, err := LoadTemplateVars(base, "server1", "grafana")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(vars) != 0 {
-		t.Errorf("expected empty vars, got %v", vars)
-	}
-}
-
-func TestLoadTemplateVars_OnlySecrets(t *testing.T) {
-	t.Parallel()
-
-	base := t.TempDir()
-
-	hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
-
-	err := os.MkdirAll(hostProjectDir, 0750)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = os.WriteFile(filepath.Join(hostProjectDir, "env.secrets.yml"), []byte(`secret_key: s3cret
+				err = os.WriteFile(filepath.Join(hostProjectDir, "env.secrets.yml"), []byte(`secret_key: s3cret
 `), 0600)
-	if err != nil {
-		t.Fatal(err)
+				if err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantVars: map[string]any{"secret_key": "s3cret"},
+		},
 	}
 
-	vars, err := LoadTemplateVars(base, "server1", "grafana")
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	if vars["secret_key"] != "s3cret" {
-		t.Errorf("secret_key = %v", vars["secret_key"])
+			base := t.TempDir()
+			tt.setup(t, base)
+
+			vars, err := LoadTemplateVars(base, "server1", "grafana")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(vars) != len(tt.wantVars) {
+				t.Errorf("expected %d vars, got %d: %v", len(tt.wantVars), len(vars), vars)
+			}
+
+			for key, want := range tt.wantVars {
+				got, ok := vars[key]
+				if !ok {
+					t.Errorf("missing key %q", key)
+
+					continue
+				}
+
+				if got != want {
+					t.Errorf("%s = %v, want %v", key, got, want)
+				}
+			}
+		})
 	}
 }
 
@@ -264,73 +328,64 @@ password = s3cret`
 	}
 }
 
-func TestRenderTemplate_NoVars(t *testing.T) {
+func TestRenderTemplate_EdgeCases(t *testing.T) {
 	t.Parallel()
 
-	data := []byte("plain text with no {{ templates }}")
-
-	result, err := RenderTemplate(data, nil)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name       string
+		data       []byte
+		vars       map[string]any
+		wantErr    bool
+		wantResult []byte
+	}{
+		{
+			name:       "no vars",
+			data:       []byte("plain text with no {{ templates }}"),
+			vars:       nil,
+			wantErr:    false,
+			wantResult: []byte("plain text with no {{ templates }}"),
+		},
+		{
+			name:       "empty vars",
+			data:       []byte("plain text"),
+			vars:       map[string]any{},
+			wantErr:    false,
+			wantResult: []byte("plain text"),
+		},
+		{
+			name:       "binary skipped",
+			data:       []byte("binary\x00content"),
+			vars:       map[string]any{"key": "val"},
+			wantErr:    false,
+			wantResult: []byte("binary\x00content"),
+		},
+		{
+			name:    "missing key error",
+			data:    []byte("value = {{ .missing_key }}"),
+			vars:    map[string]any{"other_key": "val"},
+			wantErr: true,
+		},
+		{
+			name:    "invalid template",
+			data:    []byte("bad {{ .unterminated"),
+			vars:    map[string]any{"key": "val"},
+			wantErr: true,
+		},
 	}
 
-	if string(result) != string(data) {
-		t.Errorf("expected unchanged data, got %q", string(result))
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-func TestRenderTemplate_EmptyVars(t *testing.T) {
-	t.Parallel()
+			result, err := RenderTemplate(tt.data, tt.vars)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("RenderTemplate() error = %v, wantErr %v", err, tt.wantErr)
+			}
 
-	data := []byte("plain text")
-
-	result, err := RenderTemplate(data, map[string]any{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if string(result) != string(data) {
-		t.Errorf("expected unchanged data, got %q", string(result))
-	}
-}
-
-func TestRenderTemplate_BinarySkipped(t *testing.T) {
-	t.Parallel()
-
-	data := []byte("binary\x00content")
-	vars := map[string]any{"key": "val"}
-
-	result, err := RenderTemplate(data, vars)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if string(result) != string(data) {
-		t.Error("binary data should be returned unchanged")
-	}
-}
-
-func TestRenderTemplate_MissingKeyError(t *testing.T) {
-	t.Parallel()
-
-	data := []byte("value = {{ .missing_key }}")
-	vars := map[string]any{"other_key": "val"}
-
-	_, err := RenderTemplate(data, vars)
-	if err == nil {
-		t.Error("expected error for missing key")
-	}
-}
-
-func TestRenderTemplate_InvalidTemplate(t *testing.T) {
-	t.Parallel()
-
-	data := []byte("bad {{ .unterminated")
-	vars := map[string]any{"key": "val"}
-
-	_, err := RenderTemplate(data, vars)
-	if err == nil {
-		t.Error("expected error for invalid template syntax")
+			if !tt.wantErr && string(result) != string(tt.wantResult) {
+				t.Errorf("RenderTemplate() = %q, want %q", string(result), string(tt.wantResult))
+			}
+		})
 	}
 }
 

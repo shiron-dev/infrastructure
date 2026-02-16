@@ -7,10 +7,6 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// ---------------------------------------------------------------------------
-// parseSSHGOutput
-// ---------------------------------------------------------------------------
-
 func TestParseSSHGOutput(t *testing.T) {
 	t.Parallel()
 
@@ -127,87 +123,81 @@ func TestParseSSHGOutput(t *testing.T) {
 func TestExpandProxyPlaceholders(t *testing.T) {
 	t.Parallel()
 
-	t.Run("all placeholders", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name     string
+		template string
+		host     string
+		port     int
+		user     string
+		origName string
+		want     string
+	}{
+		{
+			name:     "all placeholders",
+			template: "ssh -W %h:%p -l %r %n",
+			host:     "192.168.1.1",
+			port:     2222,
+			user:     "deploy",
+			origName: "myhost",
+			want:     "ssh -W 192.168.1.1:2222 -l deploy myhost",
+		},
+		{
+			name:     "percent-percent escaping",
+			template: "echo %%h is %h",
+			host:     "resolved.host",
+			port:     22,
+			user:     "user",
+			origName: "orig",
+			want:     "echo %h is resolved.host",
+		},
+		{
+			name:     "no placeholders",
+			template: "nc bastion 22",
+			host:     "host",
+			port:     22,
+			user:     "user",
+			origName: "orig",
+			want:     "nc bastion 22",
+		},
+		{
+			name:     "multiple percent-percent",
+			template: "a%%b%%c",
+			host:     "h",
+			port:     1,
+			user:     "u",
+			origName: "o",
+			want:     "a%b%c",
+		},
+		{
+			name:     "repeated placeholders",
+			template: "%h-%h-%p-%p",
+			host:     "host",
+			port:     80,
+			user:     "user",
+			origName: "orig",
+			want:     "host-host-80-80",
+		},
+		{
+			name:     "identity file path expansion",
+			template: "/home/%r/.ssh/id_%n",
+			host:     "10.0.0.1",
+			port:     22,
+			user:     "admin",
+			origName: "myserver",
+			want:     "/home/admin/.ssh/id_myserver",
+		},
+	}
 
-		result := expandProxyPlaceholders(
-			"ssh -W %h:%p -l %r %n",
-			"192.168.1.1", 2222, "deploy", "myhost",
-		)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		expected := "ssh -W 192.168.1.1:2222 -l deploy myhost"
-
-		if result != expected {
-			t.Errorf("got %q, want %q", result, expected)
-		}
-	})
-
-	t.Run("percent-percent escaping", func(t *testing.T) {
-		t.Parallel()
-
-		result := expandProxyPlaceholders(
-			"echo %%h is %h",
-			"resolved.host", 22, "user", "orig",
-		)
-
-		expected := "echo %h is resolved.host"
-
-		if result != expected {
-			t.Errorf("got %q, want %q", result, expected)
-		}
-	})
-
-	t.Run("no placeholders", func(t *testing.T) {
-		t.Parallel()
-
-		result := expandProxyPlaceholders(
-			"nc bastion 22",
-			"host", 22, "user", "orig",
-		)
-		if result != "nc bastion 22" {
-			t.Errorf("got %q", result)
-		}
-	})
-
-	t.Run("multiple percent-percent", func(t *testing.T) {
-		t.Parallel()
-
-		result := expandProxyPlaceholders(
-			"a%%b%%c",
-			"h", 1, "u", "o",
-		)
-		if result != "a%b%c" {
-			t.Errorf("got %q, want %q", result, "a%b%c")
-		}
-	})
-
-	t.Run("repeated placeholders", func(t *testing.T) {
-		t.Parallel()
-
-		result := expandProxyPlaceholders(
-			"%h-%h-%p-%p",
-			"host", 80, "user", "orig",
-		)
-		if result != "host-host-80-80" {
-			t.Errorf("got %q", result)
-		}
-	})
-
-	t.Run("identity file path expansion", func(t *testing.T) {
-		t.Parallel()
-
-		// Identity files also use expandProxyPlaceholders.
-		result := expandProxyPlaceholders(
-			"/home/%r/.ssh/id_%n",
-			"10.0.0.1", 22, "admin", "myserver",
-		)
-
-		expected := "/home/admin/.ssh/id_myserver"
-
-		if result != expected {
-			t.Errorf("got %q, want %q", result, expected)
-		}
-	})
+			result := expandProxyPlaceholders(tt.template, tt.host, tt.port, tt.user, tt.origName)
+			if result != tt.want {
+				t.Errorf("expandProxyPlaceholders() = %q, want %q", result, tt.want)
+			}
+		})
+	}
 }
 
 func TestResolveSSHConfigWithRunner(t *testing.T) {

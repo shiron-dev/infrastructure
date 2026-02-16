@@ -13,18 +13,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ---------------------------------------------------------------------------
-// Template variable loading
-// ---------------------------------------------------------------------------
-
-// LoadTemplateVars loads template variables from the host project directory.
-// It reads .env (KEY=VALUE format) and env.secrets.yml (flat YAML key-value),
-// merging them with env.secrets.yml values taking priority.
 func LoadTemplateVars(basePath, hostName, projectName string) (map[string]any, error) {
 	hostProjectDir := filepath.Join(basePath, "hosts", hostName, projectName)
 	vars := make(map[string]any)
 
-	// Layer 1: .env (lower priority)
 	envPath := filepath.Join(hostProjectDir, ".env")
 
 	envVars, err := parseEnvFile(envPath)
@@ -34,7 +26,6 @@ func LoadTemplateVars(basePath, hostName, projectName string) (map[string]any, e
 
 	maps.Copy(vars, envVars)
 
-	// Layer 2: env.secrets.yml (higher priority, overrides .env)
 	secretsPath := filepath.Join(hostProjectDir, "env.secrets.yml")
 
 	secretVars, err := parseSecretsYAML(secretsPath)
@@ -47,9 +38,6 @@ func LoadTemplateVars(basePath, hostName, projectName string) (map[string]any, e
 	return vars, nil
 }
 
-// parseEnvFile reads a file in KEY=VALUE format (one per line).
-// Lines starting with # and empty lines are ignored.
-// Returns an empty map (not an error) if the file does not exist.
 func parseEnvFile(path string) (map[string]any, error) {
 	vars := make(map[string]any)
 	cleanPath := filepath.Clean(path)
@@ -71,7 +59,6 @@ func parseEnvFile(path string) (map[string]any, error) {
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		// Skip empty lines and comments.
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -113,8 +100,6 @@ func trimSurroundingQuotes(value string) string {
 	return value
 }
 
-// parseSecretsYAML reads a flat YAML key-value file.
-// Returns an empty map (not an error) if the file does not exist.
 func parseSecretsYAML(path string) (map[string]any, error) {
 	vars := make(map[string]any)
 	cleanPath := filepath.Clean(path)
@@ -140,19 +125,11 @@ func parseSecretsYAML(path string) (map[string]any, error) {
 	return vars, nil
 }
 
-// ---------------------------------------------------------------------------
-// Template rendering
-// ---------------------------------------------------------------------------
-
-// RenderTemplate processes data as a Go text/template with the given variables.
-// Binary data (containing null bytes) is returned as-is without processing.
 func RenderTemplate(data []byte, vars map[string]any) ([]byte, error) {
-	// Skip binary files.
 	if isBinary(data) {
 		return data, nil
 	}
 
-	// Skip if no template variables are available.
 	if len(vars) == 0 {
 		return data, nil
 	}

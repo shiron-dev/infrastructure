@@ -14,30 +14,24 @@ import (
 	"strings"
 )
 
-// SSHConfigRunner runs external commands for SSH config resolution.
 type SSHConfigRunner interface {
 	Output(name string, args ...string) ([]byte, error)
 }
 
-// ExecSSHConfigRunner resolves SSH config via os/exec.
 type ExecSSHConfigRunner struct{}
 
-// Output executes a command and returns stdout.
 func (ExecSSHConfigRunner) Output(name string, args ...string) ([]byte, error) {
 	return exec.CommandContext(context.Background(), name, args...).Output()
 }
 
-// SSHConfigResolver resolves and applies SSH config to a host entry.
 type SSHConfigResolver interface {
 	Resolve(entry *HostEntry, sshConfigPath, hostDir string) error
 }
 
-// DefaultSSHConfigResolver resolves using ssh -G with an injected runner.
 type DefaultSSHConfigResolver struct {
 	Runner SSHConfigRunner
 }
 
-// Resolve resolves SSH config for entry.
 func (r DefaultSSHConfigResolver) Resolve(entry *HostEntry, sshConfigPath, hostDir string) error {
 	runner := r.Runner
 	if runner == nil {
@@ -47,15 +41,10 @@ func (r DefaultSSHConfigResolver) Resolve(entry *HostEntry, sshConfigPath, hostD
 	return ResolveSSHConfigWithRunner(entry, sshConfigPath, hostDir, runner)
 }
 
-// ResolveSSHConfig runs `ssh -G` to resolve SSH configuration for the given
-// host entry and overrides its fields with the resolved values.
-// sshConfigPath is passed via -F when non-empty; relative paths are resolved
-// against hostDir.
 func ResolveSSHConfig(entry *HostEntry, sshConfigPath, hostDir string) error {
 	return ResolveSSHConfigWithRunner(entry, sshConfigPath, hostDir, ExecSSHConfigRunner{})
 }
 
-// ResolveSSHConfigWithRunner is ResolveSSHConfig with an injected command runner.
 func ResolveSSHConfigWithRunner(entry *HostEntry, sshConfigPath, hostDir string, runner SSHConfigRunner) error {
 	originalHost := entry.Host
 	args := buildSSHGArgs(entry, sshConfigPath, hostDir)
@@ -166,8 +155,6 @@ func applyResolvedProxyAndIdentity(
 	}
 }
 
-// parseSSHGOutput parses `ssh -G` key-value output into single-valued and
-// multi-valued maps. Keys are lowercased.
 func parseSSHGOutput(output string) (map[string]string, map[string][]string) {
 	singleValues := make(map[string]string)
 	multiValues := make(map[string][]string)
@@ -187,13 +174,6 @@ func parseSSHGOutput(output string) (map[string]string, map[string][]string) {
 	return singleValues, multiValues
 }
 
-// expandProxyPlaceholders expands SSH proxy command tokens:
-//
-//	%h → resolved hostname
-//	%p → resolved port
-//	%r → remote username
-//	%n → original hostname (before resolution)
-//	%% → literal %
 func expandProxyPlaceholders(cmd, hostname string, port int, user, originalHost string) string {
 	cmd = strings.ReplaceAll(cmd, "%%", "\x00")
 	cmd = strings.ReplaceAll(cmd, "%h", hostname)
