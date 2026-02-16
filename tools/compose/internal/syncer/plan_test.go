@@ -456,10 +456,6 @@ func TestHasChanges(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// SyncPlan.Print
-// ---------------------------------------------------------------------------
-
 func TestSyncPlan_Print_NoHosts(t *testing.T) {
 	t.Parallel()
 
@@ -638,5 +634,389 @@ func TestBuildPlanWithDeps_UsesInjectedDependencies(t *testing.T) {
 
 	if files[0].Action != ActionAdd {
 		t.Fatalf("file action = %v, want %v", files[0].Action, ActionAdd)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Pattern-based diff masking
+// ---------------------------------------------------------------------------
+
+func TestBuildDiffMaskPatterns(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		raw     string
+		vars    map[string]any
+		wantLen int
+		wantPfx []string
+		wantSfx []string
+	}{
+		{
+			name:    "env var style",
+			raw:     "DB_HOST={{ .db_host }}\nDB_PORT={{ .db_port }}\n",
+			vars:    map[string]any{"db_host": "pg.local", "db_port": 5432},
+			wantLen: 2,
+			wantPfx: []string{"DB_HOST=", "DB_PORT="},
+			wantSfx: []string{"", ""},
+		},
+		{
+			name:    "value with surrounding text",
+			raw:     `password = """{{ .pw }}"""` + "\n",
+			vars:    map[string]any{"pw": "s3cret"},
+			wantLen: 1,
+			wantPfx: []string{`password = """`},
+			wantSfx: []string{`"""`},
+		},
+		{
+			name:    "no vars returns nil",
+			raw:     "plain line\n",
+			vars:    nil,
+			wantLen: 0,
+		},
+		{
+			name:    "no templates returns nil",
+			raw:     "static content\n",
+			vars:    map[string]any{"key": "val"},
+			wantLen: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rawData := []byte(tt.raw)
+
+			rendered, err := RenderTemplate(rawData, tt.vars)
+			if err != nil && tt.wantLen > 0 {
+				t.Fatalf("render error: %v", err)
+			}
+
+			if tt.vars == nil {
+				rendered = rawData
+			}
+
+			patterns := buildDiffMaskPatterns(rawData, rendered, tt.vars)
+			if len(patterns) != tt.wantLen {
+				t.Fatalf("len = %d, want %d; patterns = %+v", len(patterns), tt.wantLen, patterns)
+			}
+
+			for i, pat := range patterns {
+				if i < len(tt.wantPfx) && pat.prefix != tt.wantPfx[i] {
+					t.Errorf("pattern[%d].prefix = %q, want %q", i, pat.prefix, tt.wantPfx[i])
+				}
+
+				if i < len(tt.wantSfx) && pat.suffix != tt.wantSfx[i] {
+					t.Errorf("pattern[%d].suffix = %q, want %q", i, pat.suffix, tt.wantSfx[i])
+				}
+			}
+		})
+	}
+}
+
+func TestMaskDiffWithPatterns(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		diff        string
+		patterns    []maskPattern
+		wantContain []string
+		wantAbsent  []string
+	}{
+		{
+			name: "masks + and - lines matching pattern",
+			diff: "--- f (remote)\n+++ f (local)\n@@ -1,3 +1,3 @@\n" +
+				" static line\n" +
+				"-      - GF_SMTP_PASSWORD=old_secret\n" +
+				"+      - GF_SMTP_PASSWORD=new_secret\n",
+			patterns: []maskPattern{
+				{prefix: "      - GF_SMTP_PASSWORD=", suffix: ""},
+			},
+			wantContain: []string{
+				"--- f (remote)",
+				"+++ f (local)",
+				"@@ -1,3 +1,3 @@",
+				" static line",
+				"-      - GF_SMTP_PASSWORD=" + maskPlaceholder,
+				"+      - GF_SMTP_PASSWORD=" + maskPlaceholder,
+			},
+			wantAbsent: []string{"old_secret", "new_secret"},
+		},
+		{
+			name: "masks context lines too",
+			diff: " static\n" +
+				" HOST=secret_host\n" +
+				"-PORT=old_port\n" +
+				"+PORT=new_port\n",
+			patterns: []maskPattern{
+				{prefix: "HOST=", suffix: ""},
+				{prefix: "PORT=", suffix: ""},
+			},
+			wantContain: []string{
+				" static",
+				" HOST=" + maskPlaceholder,
+				"-PORT=" + maskPlaceholder,
+				"+PORT=" + maskPlaceholder,
+			},
+			wantAbsent: []string{"secret_host", "old_port", "new_port"},
+		},
+		{
+			name: "preserves suffix",
+			diff: `-password = """old_pw"""` + "\n" +
+				`+password = """new_pw"""` + "\n",
+			patterns: []maskPattern{
+				{prefix: `password = """`, suffix: `"""`},
+			},
+			wantContain: []string{
+				`-password = """` + maskPlaceholder + `"""`,
+				`+password = """` + maskPlaceholder + `"""`,
+			},
+			wantAbsent: []string{"old_pw", "new_pw"},
+		},
+		{
+			name:        "no patterns returns diff unchanged",
+			diff:        "+line1\n-line2\n",
+			patterns:    nil,
+			wantContain: []string{"+line1", "-line2"},
+		},
+		{
+			name: "non-matching lines are preserved",
+			diff: "+unrelated = hello\n+SECRET=hunter2\n",
+			patterns: []maskPattern{
+				{prefix: "SECRET=", suffix: ""},
+			},
+			wantContain: []string{"+unrelated = hello"},
+			wantAbsent:  []string{"hunter2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := maskDiffWithPatterns(tt.diff, tt.patterns)
+
+			for _, want := range tt.wantContain {
+				if !strings.Contains(got, want) {
+					t.Errorf("result should contain %q, got:\n%s", want, got)
+				}
+			}
+
+			for _, absent := range tt.wantAbsent {
+				if strings.Contains(got, absent) {
+					t.Errorf("result should NOT contain %q, got:\n%s", absent, got)
+				}
+			}
+		})
+	}
+}
+
+func TestApplyMaskToLine(t *testing.T) {
+	t.Parallel()
+
+	patterns := []maskPattern{
+		{prefix: "      - GF_PASS=", suffix: ""},
+		{prefix: `pw = """`, suffix: `"""`},
+	}
+
+	tests := []struct {
+		name string
+		line string
+		want string
+	}{
+		{
+			name: "add line masked",
+			line: "+      - GF_PASS=new_secret",
+			want: "+      - GF_PASS=" + maskPlaceholder,
+		},
+		{
+			name: "remove line masked",
+			line: "-      - GF_PASS=old_secret",
+			want: "-      - GF_PASS=" + maskPlaceholder,
+		},
+		{
+			name: "context line masked",
+			line: "       - GF_PASS=same_secret",
+			want: "       - GF_PASS=" + maskPlaceholder,
+		},
+		{
+			name: "suffix preserved",
+			line: `+pw = """s3cret"""`,
+			want: `+pw = """` + maskPlaceholder + `"""`,
+		},
+		{
+			name: "header preserved",
+			line: "--- file (remote)",
+			want: "--- file (remote)",
+		},
+		{
+			name: "hunk preserved",
+			line: "@@ -1,3 +1,3 @@",
+			want: "@@ -1,3 +1,3 @@",
+		},
+		{
+			name: "non-matching line preserved",
+			line: "+unrelated = hello",
+			want: "+unrelated = hello",
+		},
+		{
+			name: "empty line preserved",
+			line: "",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := applyMaskToLine(tt.line, patterns)
+			if got != tt.want {
+				t.Errorf("applyMaskToLine(%q) = %q, want %q", tt.line, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLongestCommonPrefix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		a, b string
+		want string
+	}{
+		{"DB_HOST=pg.local", "DB_HOST=***", "DB_HOST="},
+		{"abc", "abc", "abc"},
+		{"abc", "xyz", ""},
+		{"", "abc", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.a+"_"+tt.b, func(t *testing.T) {
+			t.Parallel()
+
+			got := longestCommonPrefix(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("longestCommonPrefix(%q, %q) = %q, want %q", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLongestCommonSuffix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		a, b string
+		want string
+	}{
+		{`s3cret"""`, `***"""`, `"""`},
+		{"abc", "abc", "abc"},
+		{"abc", "xyz", ""},
+		{"", "abc", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.a+"_"+tt.b, func(t *testing.T) {
+			t.Parallel()
+
+			got := longestCommonSuffix(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("longestCommonSuffix(%q, %q) = %q, want %q", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildMaskedVars(t *testing.T) {
+	t.Parallel()
+
+	vars := map[string]any{
+		"key1": "value1",
+		"key2": 42,
+	}
+
+	masked := buildMaskedVars(vars)
+
+	if len(masked) != len(vars) {
+		t.Fatalf("len = %d, want %d", len(masked), len(vars))
+	}
+
+	for k, v := range masked {
+		if v != maskPlaceholder {
+			t.Errorf("masked[%q] = %v, want %q", k, v, maskPlaceholder)
+		}
+	}
+}
+
+func TestBuildManifestWithMaskHints(t *testing.T) {
+	t.Parallel()
+
+	files := map[string]string{
+		"compose.yml": "/a/compose.yml",
+		".env":        "/a/.env",
+	}
+
+	hints := map[string][]MaskHint{
+		"compose.yml": {
+			{Prefix: "GF_SMTP_PASSWORD=", Suffix: ""},
+		},
+		"deleted.yml": {
+			{Prefix: "SHOULD_NOT_INCLUDE=", Suffix: ""},
+		},
+	}
+
+	manifest := BuildManifestWithMaskHints(files, hints)
+
+	if len(manifest.ManagedFiles) != 2 {
+		t.Fatalf("managed files = %d, want 2", len(manifest.ManagedFiles))
+	}
+
+	if len(manifest.MaskHints) != 1 {
+		t.Fatalf("mask hints files = %d, want 1", len(manifest.MaskHints))
+	}
+
+	composeHints, ok := manifest.MaskHints["compose.yml"]
+	if !ok {
+		t.Fatal("compose.yml mask hints should exist")
+	}
+
+	if len(composeHints) != 1 {
+		t.Fatalf("compose.yml hints = %d, want 1", len(composeHints))
+	}
+
+	if composeHints[0].Prefix != "GF_SMTP_PASSWORD=" {
+		t.Errorf("prefix = %q", composeHints[0].Prefix)
+	}
+}
+
+func TestMaskDiffWithPatterns_UsesManifestHintsForRemovedSecrets(t *testing.T) {
+	t.Parallel()
+
+	diff := `--- compose.yml (remote)
++++ compose.yml (local)
+@@ -1,4 +1,3 @@
+       - GF_SERVER_ROOT_URL=https://grafana.shiron.dev/
+-      - GF_SMTP_PASSWORD=old_secret_value
+       - GF_SMTP_HOST=smtp.example.com:587
+`
+
+	patterns := mergeMaskPatterns(
+		nil,
+		patternsFromMaskHints([]MaskHint{
+			{Prefix: "      - GF_SMTP_PASSWORD=", Suffix: ""},
+		}),
+	)
+
+	masked := maskDiffWithPatterns(diff, patterns)
+
+	if strings.Contains(masked, "old_secret_value") {
+		t.Fatalf("removed secret should be masked:\n%s", masked)
+	}
+
+	if !strings.Contains(masked, "-      - GF_SMTP_PASSWORD="+maskPlaceholder) {
+		t.Fatalf("masked removed line not found:\n%s", masked)
 	}
 }

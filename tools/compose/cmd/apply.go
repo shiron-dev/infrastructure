@@ -14,7 +14,10 @@ func newApplyCmd(configPath *string) *cobra.Command {
 
 	var projectFilter []string
 
-	var autoApprove bool
+	var (
+		autoApprove           bool
+		refreshManifestOnNoop bool
+	)
 
 	var applyDependencies syncer.ApplyDependencies
 
@@ -36,12 +39,25 @@ func newApplyCmd(configPath *string) *cobra.Command {
 			return err
 		}
 
-		return syncer.ApplyWithDeps(cfg, plan, autoApprove, os.Stdout, applyDependencies)
+		return syncer.ApplyWithDeps(
+			cfg,
+			plan,
+			autoApprove,
+			refreshManifestOnNoop,
+			os.Stdout,
+			applyDependencies,
+		)
 	}
 
 	applyCommand.Flags().StringSliceVar(&hostFilter, "host", nil, "filter by host name (repeatable)")
 	applyCommand.Flags().StringSliceVar(&projectFilter, "project", nil, "filter by project name (repeatable)")
 	applyCommand.Flags().BoolVar(&autoApprove, "auto-approve", false, "skip confirmation prompt")
+	applyCommand.Flags().BoolVar(
+		&refreshManifestOnNoop,
+		"refresh-manifest-on-noop",
+		false,
+		"refresh .cmt-manifest.json even when no file changes are detected",
+	)
 
 	return applyCommand
 }

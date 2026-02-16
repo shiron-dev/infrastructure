@@ -36,7 +36,7 @@ func TestApplyWithDeps_Cancelled(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := ApplyWithDeps(&config.CmtConfig{}, plan, false, &out, ApplyDependencies{
+	err := ApplyWithDeps(&config.CmtConfig{}, plan, false, false, &out, ApplyDependencies{
 		ClientFactory: factory,
 		Input:         strings.NewReader("n\n"),
 	})
@@ -107,7 +107,7 @@ func TestApplyWithDeps_UsesInjectedClientFactory(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := ApplyWithDeps(&config.CmtConfig{}, plan, true, &out, ApplyDependencies{
+	err := ApplyWithDeps(&config.CmtConfig{}, plan, true, false, &out, ApplyDependencies{
 		ClientFactory: factory,
 	})
 	if err != nil {
@@ -116,5 +116,65 @@ func TestApplyWithDeps_UsesInjectedClientFactory(t *testing.T) {
 
 	if !strings.Contains(out.String(), "Apply complete!") {
 		t.Fatalf("expected complete output, got %q", out.String())
+	}
+}
+
+func TestApplyWithDeps_RefreshManifestOnNoop(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "server1"},
+				Projects: []ProjectPlan{
+					{
+						ProjectName: "grafana",
+						RemoteDir:   "/srv/grafana",
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								LocalPath:    "/tmp/compose.yml",
+								Action:       ActionUnchanged,
+								MaskHints: []MaskHint{
+									{Prefix: "      - GF_SMTP_PASSWORD=", Suffix: ""},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	factory := remote.NewMockClientFactory(ctrl)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	gomock.InOrder(
+		factory.EXPECT().
+			NewClient(config.HostEntry{Name: "server1"}).
+			Return(client, nil),
+		client.EXPECT().
+			WriteFile("/srv/grafana/.cmt-manifest.json", gomock.Any()).
+			Return(nil),
+		client.EXPECT().Close().Return(nil),
+	)
+
+	var out bytes.Buffer
+
+	err := ApplyWithDeps(&config.CmtConfig{}, plan, true, true, &out, ApplyDependencies{
+		ClientFactory: factory,
+	})
+	if err != nil {
+		t.Fatalf("ApplyWithDeps: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "No changes to apply.") {
+		t.Fatalf("expected noop output, got %q", output)
+	}
+
+	if !strings.Contains(output, "Manifest refreshed.") {
+		t.Fatalf("expected manifest refreshed output, got %q", output)
 	}
 }

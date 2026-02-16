@@ -22,13 +22,14 @@ type ApplyDependencies struct {
 func Apply(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, w io.Writer) error {
 	var dependencies ApplyDependencies
 
-	return ApplyWithDeps(cfg, plan, autoApprove, w, dependencies)
+	return ApplyWithDeps(cfg, plan, autoApprove, false, w, dependencies)
 }
 
 func ApplyWithDeps(
 	cfg *config.CmtConfig,
 	plan *SyncPlan,
 	autoApprove bool,
+	refreshManifestOnNoop bool,
 	writer io.Writer,
 	deps ApplyDependencies,
 ) error {
@@ -37,6 +38,17 @@ func ApplyWithDeps(
 
 	if !plan.HasChanges() {
 		_, _ = fmt.Fprintln(writer, style.muted("No changes to apply."))
+
+		if !refreshManifestOnNoop {
+			return nil
+		}
+
+		err := refreshManifestForAllHosts(plan, clientFactory, writer, style)
+		if err != nil {
+			return err
+		}
+
+		_, _ = fmt.Fprintln(writer, style.success("Manifest refreshed."))
 
 		return nil
 	}
@@ -57,6 +69,64 @@ func ApplyWithDeps(
 	}
 
 	printApplySummary(plan, writer, style)
+
+	return nil
+}
+
+func refreshManifestForAllHosts(
+	plan *SyncPlan,
+	clientFactory remote.ClientFactory,
+	writer io.Writer,
+	style outputStyle,
+) error {
+	for _, hostPlan := range plan.HostPlans {
+		_, _ = fmt.Fprintf(
+			writer,
+			"%s %s...\n",
+			style.key("Refreshing manifest on"),
+			style.projectName(hostPlan.Host.Name),
+		)
+
+		client, err := clientFactory.NewClient(hostPlan.Host)
+		if err != nil {
+			return fmt.Errorf("connecting to %s: %w", hostPlan.Host.Name, err)
+		}
+
+		refreshErr := refreshHostManifest(hostPlan, client, writer, style)
+		_ = client.Close()
+
+		if refreshErr != nil {
+			return refreshErr
+		}
+	}
+
+	return nil
+}
+
+func refreshHostManifest(
+	hostPlan HostPlan,
+	client remote.RemoteClient,
+	writer io.Writer,
+	style outputStyle,
+) error {
+	for _, projectPlan := range hostPlan.Projects {
+		localFiles, maskHints := collectManifestInputs(projectPlan)
+
+		_, _ = fmt.Fprintf(
+			writer,
+			"  %s... ",
+			style.projectName(projectPlan.ProjectName),
+		)
+
+		err := writeProjectManifest(projectPlan.RemoteDir, localFiles, maskHints, client)
+		if err != nil {
+			_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
+
+			return err
+		}
+
+		_, _ = fmt.Fprintln(writer, style.success("done"))
+	}
 
 	return nil
 }
@@ -174,12 +244,12 @@ func applyProjectPlan(
 		return err
 	}
 
-	localFiles, err := syncProjectFiles(projectPlan, client, writer, style)
+	localFiles, maskHints, err := syncProjectFiles(projectPlan, client, writer, style)
 	if err != nil {
 		return err
 	}
 
-	err = writeProjectManifest(projectPlan.RemoteDir, localFiles, client)
+	err = writeProjectManifest(projectPlan.RemoteDir, localFiles, maskHints, client)
 	if err != nil {
 		return err
 	}
@@ -218,8 +288,8 @@ func syncProjectFiles(
 	client remote.RemoteClient,
 	writer io.Writer,
 	style outputStyle,
-) (map[string]string, error) {
-	localFiles := make(map[string]string)
+) (map[string]string, map[string][]MaskHint, error) {
+	localFiles, maskHints := collectManifestInputs(projectPlan)
 
 	for _, filePlan := range projectPlan.Files {
 		switch filePlan.Action {
@@ -230,11 +300,11 @@ func syncProjectFiles(
 			if err != nil {
 				_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
-				return nil, fmt.Errorf("writing %s: %w", filePlan.RemotePath, err)
+				return nil, nil, fmt.Errorf("writing %s: %w", filePlan.RemotePath, err)
 			}
 
 			_, _ = fmt.Fprintln(writer, style.success("done"))
-			localFiles[filePlan.RelativePath] = filePlan.LocalPath
+
 		case ActionDelete:
 			_, _ = fmt.Fprintf(writer, "    %s %s... ", style.key("deleting"), filePlan.RelativePath)
 
@@ -242,20 +312,44 @@ func syncProjectFiles(
 			if err != nil {
 				_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
-				return nil, fmt.Errorf("deleting %s: %w", filePlan.RemotePath, err)
+				return nil, nil, fmt.Errorf("deleting %s: %w", filePlan.RemotePath, err)
 			}
 
 			_, _ = fmt.Fprintln(writer, style.success("done"))
 		case ActionUnchanged:
-			localFiles[filePlan.RelativePath] = filePlan.LocalPath
+			// Manifest inputs are collected before this loop.
 		}
 	}
 
-	return localFiles, nil
+	return localFiles, maskHints, nil
 }
 
-func writeProjectManifest(remoteDir string, localFiles map[string]string, client remote.RemoteClient) error {
-	manifest := BuildManifest(localFiles)
+func collectManifestInputs(projectPlan ProjectPlan) (map[string]string, map[string][]MaskHint) {
+	localFiles := make(map[string]string)
+	maskHints := make(map[string][]MaskHint)
+
+	for _, filePlan := range projectPlan.Files {
+		if filePlan.Action == ActionDelete {
+			continue
+		}
+
+		localFiles[filePlan.RelativePath] = filePlan.LocalPath
+
+		if len(filePlan.MaskHints) > 0 {
+			maskHints[filePlan.RelativePath] = append([]MaskHint(nil), filePlan.MaskHints...)
+		}
+	}
+
+	return localFiles, maskHints
+}
+
+func writeProjectManifest(
+	remoteDir string,
+	localFiles map[string]string,
+	maskHints map[string][]MaskHint,
+	client remote.RemoteClient,
+) error {
+	manifest := BuildManifestWithMaskHints(localFiles, maskHints)
 
 	manifestData, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
