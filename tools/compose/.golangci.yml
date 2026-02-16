@@ -1,0 +1,28 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    - depguard
+    - wrapcheck
+    - ireturn
+    - err113
+  exclusions:
+    rules:
+      - path: (.+)_test\.go
+        linters:
+          - dupl
+          - exhaustruct
+          - funlen
+          - testpackage
+          - cyclop
+
+  settings:
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true
+    varnamelen:
+      ignore-decls:
+        - i int
+      ignore-names:
+        - tt

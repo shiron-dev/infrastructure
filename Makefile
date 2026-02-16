@@ -52,6 +52,29 @@ ansible-check: ansible-init
 ansible-run: ansible-init
 	$(UV_ANSIBLE) bash -c "cd $(ANSIBLE_DIR) && ansible-playbook -i hosts.yml site.yml $(ANSIBLE_DEFAULT_OPT)"
 
+CMT_DIR := tools/compose
+CMT_BIN := $(CMT_DIR)/cmt
+CMT_CONFIG := compose/config.yml
+CMT_SCHEMA_DIR := $(CMT_DIR)/schemas
+
+# cmt ビルド + JSON Schema 生成
+.PHONY: cmt-init
+cmt-init: init
+	cd $(CMT_DIR) && go build -o cmt .
+	@mkdir -p $(CMT_SCHEMA_DIR)
+	$(CMT_BIN) schema cmt  > $(CMT_SCHEMA_DIR)/cmt-config.schema.json
+	$(CMT_BIN) schema host > $(CMT_SCHEMA_DIR)/host-config.schema.json
+
+# cmt plan（変更内容の確認）
+.PHONY: cmt-plan
+cmt-plan: cmt-init
+	$(CMT_BIN) --config $(CMT_CONFIG) plan
+
+# cmt apply（変更の適用）
+.PHONY: cmt-apply
+cmt-apply: cmt-init
+	$(CMT_BIN) --config $(CMT_CONFIG) apply
+
 .PHONY: terraform-init
 terraform-init: init
 	cd terraform && terraform init

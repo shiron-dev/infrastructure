@@ -1,0 +1,12 @@
+sshConfig: ../../ssh_config
+
+projects:
+  grafana:
+    remotePath: /var
+    postSyncCommand: docker compose up -d
+    dirs:
+      - grafana_storage
+      - grafana_conf/provisioning/datasources
+      - influxdb_data
+      - influxdb_config
+      - vmdata

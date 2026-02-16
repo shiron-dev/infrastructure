@@ -1,0 +1,81 @@
+package config
+
+type CmtConfig struct {
+	BasePath string        `json:"basePath"           yaml:"basePath"`
+	Defaults *SyncDefaults `json:"defaults,omitempty" yaml:"defaults,omitempty"`
+	Hosts    []HostEntry   `json:"hosts"              yaml:"hosts"`
+}
+
+type SyncDefaults struct {
+	RemotePath      string `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
+	PostSyncCommand string `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
+}
+
+type HostEntry struct {
+	Name       string `json:"name"                 yaml:"name"`
+	Host       string `json:"host"                 yaml:"host"`
+	Port       int    `json:"port,omitempty"       yaml:"port,omitempty"`
+	User       string `json:"user"                 yaml:"user"`
+	SSHKeyPath string `json:"sshKeyPath,omitempty" yaml:"sshKeyPath,omitempty"`
+	SSHAgent   bool   `json:"sshAgent,omitempty"   yaml:"sshAgent,omitempty"`
+
+	ProxyCommand  string   `json:"-" yaml:"-"`
+	IdentityFiles []string `json:"-" yaml:"-"`
+	IdentityAgent string   `json:"-" yaml:"-"`
+}
+
+type HostConfig struct {
+	SSHConfig       string                    `json:"sshConfig,omitempty"       yaml:"sshConfig,omitempty"`
+	RemotePath      string                    `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
+	PostSyncCommand string                    `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
+	Projects        map[string]*ProjectConfig `json:"projects,omitempty"        yaml:"projects,omitempty"`
+}
+
+type ProjectConfig struct {
+	RemotePath      string   `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
+	PostSyncCommand string   `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
+	Dirs            []string `json:"dirs,omitempty"            yaml:"dirs,omitempty"`
+}
+
+type ResolvedProjectConfig struct {
+	RemotePath      string
+	PostSyncCommand string
+	Dirs            []string
+}
+
+func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projectName string) ResolvedProjectConfig {
+	var resolved ResolvedProjectConfig
+
+	if cmtDefaults != nil {
+		resolved.RemotePath = cmtDefaults.RemotePath
+		resolved.PostSyncCommand = cmtDefaults.PostSyncCommand
+	}
+
+	if hostCfg == nil {
+		return resolved
+	}
+
+	if hostCfg.RemotePath != "" {
+		resolved.RemotePath = hostCfg.RemotePath
+	}
+
+	if hostCfg.PostSyncCommand != "" {
+		resolved.PostSyncCommand = hostCfg.PostSyncCommand
+	}
+
+	if projectConfig, ok := hostCfg.Projects[projectName]; ok && projectConfig != nil {
+		if projectConfig.RemotePath != "" {
+			resolved.RemotePath = projectConfig.RemotePath
+		}
+
+		if projectConfig.PostSyncCommand != "" {
+			resolved.PostSyncCommand = projectConfig.PostSyncCommand
+		}
+
+		if len(projectConfig.Dirs) > 0 {
+			resolved.Dirs = projectConfig.Dirs
+		}
+	}
+
+	return resolved
+}

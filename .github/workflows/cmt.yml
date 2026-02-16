@@ -1,0 +1,96 @@
+name: CMT CI
+
+on:
+  pull_request:
+    branches:
+      - "main"
+    paths:
+      - ".github/workflows/**"
+      - "tools/compose/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: tools/compose
+
+jobs:
+  go-test:
+    name: Go test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+        with:
+          go-version-file: tools/compose/go.mod
+          cache-dependency-path: tools/compose/go.sum
+      - uses: GoTestTools/gotestfmt-action@8b4478c7019be847373babde9300210e7de34bfb # v2.2.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run go test
+        run: |
+          set -euo pipefail
+          go test -json -v ./... 2>&1 | gotestfmt
+
+  fmt-lint:
+    name: fmt lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+        with:
+          go-version-file: tools/compose/go.mod
+          cache-dependency-path: tools/compose/go.sum
+      - name: Check go fmt
+        run: |
+          go fmt
+      - name: Run golangci-lint
+        run: |
+          set -euo pipefail
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+          "$(go env GOPATH)/bin/golangci-lint" run --config .golangci.yml ./...
+
+  go-generate-diff-check:
+    name: go generate diff check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+        with:
+          go-version-file: tools/compose/go.mod
+          cache-dependency-path: tools/compose/go.sum
+      - name: Run go generate
+        run: go generate ./...
+      - name: Verify generated files are up to date
+        run: git diff --exit-code -- .
+
+  go-vet:
+    name: go vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+        with:
+          go-version-file: tools/compose/go.mod
+          cache-dependency-path: tools/compose/go.sum
+      - name: Run go vet
+        run: go vet ./...
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+        with:
+          go-version-file: tools/compose/go.mod
+          cache-dependency-path: tools/compose/go.sum
+      - name: Build cmt
+        run: go build -o cmt .
