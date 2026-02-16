@@ -140,6 +140,8 @@ func TestParseSecretsYAML_EdgeCases(t *testing.T) {
 		{
 			name: "not exist",
 			setup: func(t *testing.T) string {
+				t.Helper()
+
 				return "/nonexistent/env.secrets.yml"
 			},
 			wantLen: 0,
@@ -148,6 +150,7 @@ func TestParseSecretsYAML_EdgeCases(t *testing.T) {
 		{
 			name: "invalid YAML",
 			setup: func(t *testing.T) string {
+				t.Helper()
 				dir := t.TempDir()
 				secretsPath := filepath.Join(dir, "env.secrets.yml")
 
@@ -242,6 +245,8 @@ func TestLoadTemplateVars_EdgeCases(t *testing.T) {
 		{
 			name: "no files",
 			setup: func(t *testing.T, base string) {
+				t.Helper()
+
 				err := os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0750)
 				if err != nil {
 					t.Fatal(err)
@@ -252,6 +257,8 @@ func TestLoadTemplateVars_EdgeCases(t *testing.T) {
 		{
 			name: "only secrets",
 			setup: func(t *testing.T, base string) {
+				t.Helper()
+
 				hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
 
 				err := os.MkdirAll(hostProjectDir, 0750)

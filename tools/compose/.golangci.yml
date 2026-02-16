@@ -14,6 +14,7 @@ linters:
           - exhaustruct
           - funlen
           - testpackage
+          - cyclop
 
   settings:
     revive:
@@ -23,3 +24,5 @@ linters:
     varnamelen:
       ignore-decls:
         - i int
+      ignore-names:
+        - tt

@@ -302,7 +302,6 @@ func printFileDiff(writer io.Writer, style outputStyle, diff string) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 func BuildPlan(cfg *config.CmtConfig, hostFilter, projectFilter []string) (*SyncPlan, error) {
 	var dependencies PlanDependencies
 
