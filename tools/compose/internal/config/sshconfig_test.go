@@ -225,8 +225,7 @@ func TestResolveSSHConfigWithRunner(t *testing.T) {
 		"identityagent /tmp/agent.sock\n"
 
 	runner.EXPECT().
-		Output(
-			"ssh",
+		SSHOutput(
 			"-G",
 			"-F",
 			filepath.Join(hostDir, sshConfigPath),

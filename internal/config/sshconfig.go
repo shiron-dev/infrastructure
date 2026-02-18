@@ -15,18 +15,13 @@ import (
 )
 
 type SSHConfigRunner interface {
-	SSHOutput(args ...string) ([]byte, error)
+	Output(name string, args ...string) ([]byte, error)
 }
 
 type ExecSSHConfigRunner struct{}
 
-func (ExecSSHConfigRunner) SSHOutput(args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(context.Background(), "ssh")
-	cmd.Args = make([]string, 1+len(args))
-	cmd.Args[0] = "ssh"
-	copy(cmd.Args[1:], args)
-
-	return cmd.Output()
+func (ExecSSHConfigRunner) Output(name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(context.Background(), name, args...).Output()
 }
 
 type SSHConfigResolver interface {
@@ -56,7 +51,7 @@ func ResolveSSHConfigWithRunner(entry *HostEntry, sshConfigPath, hostDir string,
 
 	slog.Debug("running ssh -G", "command", "ssh "+strings.Join(args, " "), "host", entry.Name)
 
-	out, err := runner.SSHOutput(args...)
+	out, err := runner.Output("ssh", args...)
 	if err != nil {
 		exitErr := new(exec.ExitError)
 		if errors.As(err, &exitErr) {

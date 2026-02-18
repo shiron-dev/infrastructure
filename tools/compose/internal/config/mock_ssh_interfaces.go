@@ -39,24 +39,23 @@ func (m *MockSSHConfigRunner) EXPECT() *MockSSHConfigRunnerMockRecorder {
 	return m.recorder
 }
 
-// Output mocks base method.
-func (m *MockSSHConfigRunner) Output(name string, args ...string) ([]byte, error) {
+// SSHOutput mocks base method.
+func (m *MockSSHConfigRunner) SSHOutput(args ...string) ([]byte, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{name}
+	varargs := []any{}
 	for _, a := range args {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "Output", varargs...)
+	ret := m.ctrl.Call(m, "SSHOutput", varargs...)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Output indicates an expected call of Output.
-func (mr *MockSSHConfigRunnerMockRecorder) Output(name any, args ...any) *gomock.Call {
+// SSHOutput indicates an expected call of SSHOutput.
+func (mr *MockSSHConfigRunnerMockRecorder) SSHOutput(args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{name}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Output", reflect.TypeOf((*MockSSHConfigRunner)(nil).Output), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SSHOutput", reflect.TypeOf((*MockSSHConfigRunner)(nil).SSHOutput), args...)
 }
 
 // MockSSHConfigResolver is a mock of SSHConfigResolver interface.

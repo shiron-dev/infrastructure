@@ -18,28 +18,13 @@ import (
 )
 
 type CommandRunner interface {
-	SSHCombinedOutput(args ...string) ([]byte, error)
-	SCPCombinedOutput(args ...string) ([]byte, error)
+	CombinedOutput(name string, args ...string) ([]byte, error)
 }
 
 type ExecCommandRunner struct{}
 
-func (ExecCommandRunner) SSHCombinedOutput(args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(context.Background(), "ssh")
-	cmd.Args = make([]string, 1+len(args))
-	cmd.Args[0] = "ssh"
-	copy(cmd.Args[1:], args)
-
-	return cmd.CombinedOutput()
-}
-
-func (ExecCommandRunner) SCPCombinedOutput(args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(context.Background(), "scp")
-	cmd.Args = make([]string, 1+len(args))
-	cmd.Args[0] = "scp"
-	copy(cmd.Args[1:], args)
-
-	return cmd.CombinedOutput()
+func (ExecCommandRunner) CombinedOutput(name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(context.Background(), name, args...).CombinedOutput()
 }
 
 type RemoteClient interface {
@@ -214,7 +199,7 @@ func (c *Client) runSSH(remoteCmd string) ([]byte, error) {
 
 	slog.Debug("running ssh", "command", "ssh "+strings.Join(args, " "))
 
-	out, err := c.runner.SSHCombinedOutput(args...)
+	out, err := c.runner.CombinedOutput("ssh", args...)
 	if err != nil {
 		return out, fmt.Errorf("ssh %s: %w\n%s", c.host.Name, err, out)
 	}
@@ -231,9 +216,9 @@ func (c *Client) runSCP(localPath, remotePath string) error {
 	args = append(args, c.scpArgs...)
 	args = append(args, localPath, dest)
 
-	slog.Debug("running scp")
+	slog.Debug("running scp", "command", "scp "+strings.Join(args, " "))
 
-	out, err := c.runner.SCPCombinedOutput(args...)
+	out, err := c.runner.CombinedOutput("scp", args...)
 	if err != nil {
 		return fmt.Errorf("scp to %s: %w\n%s", dest, err, out)
 	}
