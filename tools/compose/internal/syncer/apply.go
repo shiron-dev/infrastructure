@@ -442,6 +442,7 @@ func syncProjectFiles(
 			_, _ = fmt.Fprintln(writer, style.success("done"))
 		case ActionUnchanged:
 			// Manifest inputs are collected before this loop.
+			continue
 		}
 	}
 
