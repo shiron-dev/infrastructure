@@ -220,22 +220,40 @@ func (m *MockCommandRunner) EXPECT() *MockCommandRunnerMockRecorder {
 	return m.recorder
 }
 
-// CombinedOutput mocks base method.
-func (m *MockCommandRunner) CombinedOutput(name string, args ...string) ([]byte, error) {
+// SCPCombinedOutput mocks base method.
+func (m *MockCommandRunner) SCPCombinedOutput(args ...string) ([]byte, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{name}
+	varargs := []any{}
 	for _, a := range args {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "CombinedOutput", varargs...)
+	ret := m.ctrl.Call(m, "SCPCombinedOutput", varargs...)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// CombinedOutput indicates an expected call of CombinedOutput.
-func (mr *MockCommandRunnerMockRecorder) CombinedOutput(name any, args ...any) *gomock.Call {
+// SCPCombinedOutput indicates an expected call of SCPCombinedOutput.
+func (mr *MockCommandRunnerMockRecorder) SCPCombinedOutput(args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{name}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CombinedOutput", reflect.TypeOf((*MockCommandRunner)(nil).CombinedOutput), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SCPCombinedOutput", reflect.TypeOf((*MockCommandRunner)(nil).SCPCombinedOutput), args...)
+}
+
+// SSHCombinedOutput mocks base method.
+func (m *MockCommandRunner) SSHCombinedOutput(args ...string) ([]byte, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SSHCombinedOutput", varargs...)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SSHCombinedOutput indicates an expected call of SSHCombinedOutput.
+func (mr *MockCommandRunnerMockRecorder) SSHCombinedOutput(args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SSHCombinedOutput", reflect.TypeOf((*MockCommandRunner)(nil).SSHCombinedOutput), args...)
 }

@@ -49,15 +49,7 @@ func shouldUseColor(writer io.Writer) bool {
 		return false
 	}
 
-	fileDescriptor := fdWriter.Fd()
-
-	maxIntValue := ^uintptr(0) >> 1
-
-	if fileDescriptor > maxIntValue {
-		return false
-	}
-
-	return term.IsTerminal(int(fileDescriptor))
+	return term.IsTerminal(int(fdWriter.Fd()))
 }
 
 func (s outputStyle) wrap(text, ansiCode string) string {

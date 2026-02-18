@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -95,10 +96,17 @@ type FilePlan struct {
 	LocalData    []byte
 	RemoteData   []byte
 	Diff         string
+	MaskHints    []MaskHint
 }
 
 type Manifest struct {
-	ManagedFiles []string `json:"managedFiles"`
+	ManagedFiles []string              `json:"managedFiles"`
+	MaskHints    map[string][]MaskHint `json:"maskHints,omitempty"`
+}
+
+type MaskHint struct {
+	Prefix string `json:"prefix"`
+	Suffix string `json:"suffix,omitempty"`
 }
 
 const manifestFile = ".cmt-manifest.json"
@@ -503,7 +511,14 @@ func buildFilePlans(
 	for relPath, localPath := range localFiles {
 		localSet[relPath] = true
 
-		filePlan, err := buildLocalFilePlan(relPath, localPath, remoteDir, client, templateVars)
+		filePlan, err := buildLocalFilePlan(
+			relPath,
+			localPath,
+			remoteDir,
+			client,
+			templateVars,
+			maskHintsFromManifest(manifest, relPath),
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -526,18 +541,22 @@ func buildLocalFilePlan(
 	remoteDir string,
 	client remote.RemoteClient,
 	templateVars map[string]any,
+	manifestMaskHints []MaskHint,
 ) (FilePlan, error) {
 	cleanLocalPath := filepath.Clean(localPath)
 
-	localData, err := os.ReadFile(cleanLocalPath)
+	rawData, err := os.ReadFile(cleanLocalPath)
 	if err != nil {
 		return FilePlan{}, fmt.Errorf("reading %s: %w", cleanLocalPath, err)
 	}
 
-	localData, err = RenderTemplate(localData, templateVars)
+	localData, err := RenderTemplate(rawData, templateVars)
 	if err != nil {
 		return FilePlan{}, fmt.Errorf("rendering template %s: %w", cleanLocalPath, err)
 	}
+
+	patterns := buildDiffMaskPatterns(rawData, localData, templateVars)
+	allPatterns := mergeMaskPatterns(patterns, patternsFromMaskHints(manifestMaskHints))
 
 	remotePath := path.Join(remoteDir, relPath)
 	remoteData, readErr := client.ReadFile(remotePath)
@@ -550,6 +569,7 @@ func buildLocalFilePlan(
 		LocalData:    localData,
 		RemoteData:   nil,
 		Diff:         "",
+		MaskHints:    maskHintsFromPatterns(allPatterns),
 	}
 
 	if readErr == nil {
@@ -560,7 +580,10 @@ func buildLocalFilePlan(
 
 		filePlan.Action = ActionModify
 		if !isBinary(localData) && !isBinary(remoteData) {
-			filePlan.Diff = computeDiff(relPath, remoteData, localData)
+			filePlan.Diff = maskDiffWithPatterns(
+				computeDiff(relPath, remoteData, localData),
+				allPatterns,
+			)
 		}
 
 		return filePlan, nil
@@ -598,6 +621,7 @@ func buildDeleteFilePlans(
 			LocalData:    nil,
 			RemoteData:   remoteData,
 			Diff:         "",
+			MaskHints:    nil,
 		})
 	}
 
@@ -650,6 +674,10 @@ func readManifest(client remote.RemoteClient, remoteDir string) *Manifest {
 }
 
 func BuildManifest(localFiles map[string]string) Manifest {
+	return BuildManifestWithMaskHints(localFiles, nil)
+}
+
+func BuildManifestWithMaskHints(localFiles map[string]string, maskHints map[string][]MaskHint) Manifest {
 	var manifest Manifest
 	for rel := range localFiles {
 		manifest.ManagedFiles = append(manifest.ManagedFiles, rel)
@@ -657,7 +685,39 @@ func BuildManifest(localFiles map[string]string) Manifest {
 
 	sort.Strings(manifest.ManagedFiles)
 
+	if len(maskHints) > 0 {
+		manifest.MaskHints = make(map[string][]MaskHint, len(maskHints))
+		for relPath, hints := range maskHints {
+			if !containsString(manifest.ManagedFiles, relPath) || len(hints) == 0 {
+				continue
+			}
+
+			manifest.MaskHints[relPath] = append([]MaskHint(nil), hints...)
+		}
+
+		if len(manifest.MaskHints) == 0 {
+			manifest.MaskHints = nil
+		}
+	}
+
 	return manifest
+}
+
+func containsString(values []string, target string) bool {
+	return slices.Contains(values, target)
+}
+
+func maskHintsFromManifest(manifest *Manifest, relPath string) []MaskHint {
+	if manifest == nil || len(manifest.MaskHints) == 0 {
+		return nil
+	}
+
+	hints, ok := manifest.MaskHints[relPath]
+	if !ok {
+		return nil
+	}
+
+	return append([]MaskHint(nil), hints...)
 }
 
 func computeDiff(name string, remote, local []byte) string {
@@ -732,4 +792,217 @@ func humanSize(byteCount int) string {
 	default:
 		return fmt.Sprintf("%d B", byteCount)
 	}
+}
+
+const maskPlaceholder = "***"
+
+type maskPattern struct {
+	prefix string
+	suffix string
+}
+
+func patternsFromMaskHints(hints []MaskHint) []maskPattern {
+	if len(hints) == 0 {
+		return nil
+	}
+
+	patterns := make([]maskPattern, 0, len(hints))
+
+	for _, hint := range hints {
+		if hint.Prefix == "" && hint.Suffix == "" {
+			continue
+		}
+
+		patterns = append(patterns, maskPattern{
+			prefix: hint.Prefix,
+			suffix: hint.Suffix,
+		})
+	}
+
+	return patterns
+}
+
+func maskHintsFromPatterns(patterns []maskPattern) []MaskHint {
+	if len(patterns) == 0 {
+		return nil
+	}
+
+	hints := make([]MaskHint, 0, len(patterns))
+	for _, pattern := range patterns {
+		hints = append(hints, MaskHint{
+			Prefix: pattern.prefix,
+			Suffix: pattern.suffix,
+		})
+	}
+
+	return hints
+}
+
+func mergeMaskPatterns(primary []maskPattern, secondary []maskPattern) []maskPattern {
+	if len(primary) == 0 {
+		return append([]maskPattern(nil), secondary...)
+	}
+
+	merged := append([]maskPattern(nil), primary...)
+	seen := make(map[string]struct{}, len(primary)+len(secondary))
+
+	for _, pattern := range primary {
+		seen[pattern.prefix+"\x00"+pattern.suffix] = struct{}{}
+	}
+
+	for _, pattern := range secondary {
+		key := pattern.prefix + "\x00" + pattern.suffix
+		if _, exists := seen[key]; exists {
+			continue
+		}
+
+		seen[key] = struct{}{}
+
+		merged = append(merged, pattern)
+	}
+
+	return merged
+}
+
+func buildDiffMaskPatterns(
+	rawData []byte,
+	renderedData []byte,
+	vars map[string]any,
+) []maskPattern {
+	if len(vars) == 0 {
+		return nil
+	}
+
+	maskedVars := buildMaskedVars(vars)
+
+	maskedData, err := RenderTemplate(rawData, maskedVars)
+	if err != nil {
+		return nil
+	}
+
+	return extractMaskPatterns(renderedData, maskedData)
+}
+
+func buildMaskedVars(vars map[string]any) map[string]any {
+	masked := make(map[string]any, len(vars))
+
+	for k := range vars {
+		masked[k] = maskPlaceholder
+	}
+
+	return masked
+}
+
+func extractMaskPatterns(rendered, masked []byte) []maskPattern {
+	renderedLines := strings.Split(string(rendered), "\n")
+	maskedLines := strings.Split(string(masked), "\n")
+
+	limit := min(len(renderedLines), len(maskedLines))
+	patterns := make([]maskPattern, 0, limit)
+
+	for i := range limit {
+		if renderedLines[i] == maskedLines[i] {
+			continue
+		}
+
+		prefix := longestCommonPrefix(renderedLines[i], maskedLines[i])
+
+		renderedRest := renderedLines[i][len(prefix):]
+		maskedRest := maskedLines[i][len(prefix):]
+		suffix := longestCommonSuffix(renderedRest, maskedRest)
+
+		patterns = append(patterns, maskPattern{
+			prefix: prefix,
+			suffix: suffix,
+		})
+	}
+
+	return patterns
+}
+
+func maskDiffWithPatterns(diff string, patterns []maskPattern) string {
+	if len(patterns) == 0 {
+		return diff
+	}
+
+	var builder strings.Builder
+
+	for line := range strings.SplitSeq(diff, "\n") {
+		builder.WriteString(applyMaskToLine(line, patterns))
+		builder.WriteByte('\n')
+	}
+
+	result := builder.String()
+	if len(result) > 0 && (len(diff) == 0 || diff[len(diff)-1] != '\n') {
+		result = result[:len(result)-1]
+	}
+
+	return result
+}
+
+func applyMaskToLine(line string, patterns []maskPattern) string {
+	if !isDiffContentLine(line) {
+		return line
+	}
+
+	diffPrefix := string(line[0])
+	content := line[1:]
+
+	for _, pat := range patterns {
+		if matchesPattern(content, pat) {
+			return diffPrefix + pat.prefix + maskPlaceholder + pat.suffix
+		}
+	}
+
+	return line
+}
+
+func isDiffContentLine(line string) bool {
+	if len(line) == 0 {
+		return false
+	}
+
+	if strings.HasPrefix(line, "---") ||
+		strings.HasPrefix(line, "+++") ||
+		strings.HasPrefix(line, "@@") {
+		return false
+	}
+
+	return line[0] == '+' || line[0] == '-' || line[0] == ' '
+}
+
+func matchesPattern(content string, pat maskPattern) bool {
+	if !strings.HasPrefix(content, pat.prefix) {
+		return false
+	}
+
+	if pat.suffix != "" && !strings.HasSuffix(content, pat.suffix) {
+		return false
+	}
+
+	return true
+}
+
+func longestCommonPrefix(first, second string) string {
+	i := 0
+
+	for i < len(first) && i < len(second) && first[i] == second[i] {
+		i++
+	}
+
+	return first[:i]
+}
+
+func longestCommonSuffix(first, second string) string {
+	i := 0
+
+	for i < len(first) && i < len(second) && first[len(first)-1-i] == second[len(second)-1-i] {
+		i++
+	}
+
+	if i == 0 {
+		return ""
+	}
+
+	return first[len(first)-i:]
 }
