@@ -39,6 +39,8 @@ func newApplyCmd(configPath *string) *cobra.Command {
 			return err
 		}
 
+		applyDependencies.ConfigPath = *configPath
+
 		return syncer.ApplyWithDeps(
 			cfg,
 			plan,

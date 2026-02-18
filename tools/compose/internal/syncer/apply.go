@@ -3,6 +3,7 @@ package syncer
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,6 +18,8 @@ import (
 type ApplyDependencies struct {
 	ClientFactory remote.ClientFactory
 	Input         io.Reader
+	HookRunner    HookRunner
+	ConfigPath    string
 }
 
 func Apply(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, w io.Writer) error {
@@ -34,36 +37,40 @@ func ApplyWithDeps(
 	deps ApplyDependencies,
 ) error {
 	style := newOutputStyle(writer)
-	clientFactory, input := resolveApplyDependencies(deps)
+	clientFactory, input, hookRunner := resolveApplyDependencies(deps)
 
-	if !plan.HasChanges() {
-		_, _ = fmt.Fprintln(writer, style.muted("No changes to apply."))
-
-		if !refreshManifestOnNoop {
-			return nil
-		}
-
-		err := refreshManifestForAllHosts(plan, clientFactory, writer, style)
-		if err != nil {
-			return err
-		}
-
-		_, _ = fmt.Fprintln(writer, style.success("Manifest refreshed."))
-
-		return nil
+	handled, err := handleNoChanges(plan, refreshManifestOnNoop, clientFactory, writer, style)
+	if handled || err != nil {
+		return err
 	}
 
 	plan.Print(writer)
 
-	if !autoApprove && !confirmApply(input, writer, style) {
-		_, _ = fmt.Fprintln(writer, style.warning("Apply cancelled."))
+	cancelled, hookErr := runBeforePromptApplyHook(cfg, plan, deps, hookRunner, writer, style)
+	if hookErr != nil {
+		return hookErr
+	}
 
+	if cancelled {
+		return nil
+	}
+
+	if confirmApplyOrCancel(autoApprove, input, writer, style) {
+		return nil
+	}
+
+	cancelled, hookErr = runAfterPromptApplyHook(cfg, plan, deps, hookRunner, writer, style)
+	if hookErr != nil {
+		return hookErr
+	}
+
+	if cancelled {
 		return nil
 	}
 
 	_, _ = fmt.Fprintln(writer)
 
-	err := applyAllHosts(cfg, plan, clientFactory, writer, style)
+	err = applyAllHosts(cfg, plan, clientFactory, writer, style)
 	if err != nil {
 		return err
 	}
@@ -71,6 +78,118 @@ func ApplyWithDeps(
 	printApplySummary(plan, writer, style)
 
 	return nil
+}
+
+func runBeforePromptApplyHook(
+	cfg *config.CmtConfig,
+	plan *SyncPlan,
+	deps ApplyDependencies,
+	hookRunner HookRunner,
+	writer io.Writer,
+	style outputStyle,
+) (bool, error) {
+	if cfg.BeforeApplyHooks == nil {
+		return false, nil
+	}
+
+	payload := buildBeforePromptPayload(plan, deps.ConfigPath, cfg.BasePath)
+
+	return executeApplyHook(
+		cfg.BeforeApplyHooks.BeforePrompt,
+		payload,
+		"beforePrompt",
+		hookRunner,
+		writer,
+		style,
+	)
+}
+
+func runAfterPromptApplyHook(
+	cfg *config.CmtConfig,
+	plan *SyncPlan,
+	deps ApplyDependencies,
+	hookRunner HookRunner,
+	writer io.Writer,
+	style outputStyle,
+) (bool, error) {
+	if cfg.BeforeApplyHooks == nil {
+		return false, nil
+	}
+
+	payload := buildAfterPromptPayload(plan, deps.ConfigPath, cfg.BasePath)
+
+	return executeApplyHook(
+		cfg.BeforeApplyHooks.AfterPrompt,
+		payload,
+		"afterPrompt",
+		hookRunner,
+		writer,
+		style,
+	)
+}
+
+func handleNoChanges(
+	plan *SyncPlan,
+	refreshManifestOnNoop bool,
+	clientFactory remote.ClientFactory,
+	writer io.Writer,
+	style outputStyle,
+) (bool, error) {
+	if plan.HasChanges() {
+		return false, nil
+	}
+
+	_, _ = fmt.Fprintln(writer, style.muted("No changes to apply."))
+
+	if !refreshManifestOnNoop {
+		return true, nil
+	}
+
+	err := refreshManifestForAllHosts(plan, clientFactory, writer, style)
+	if err != nil {
+		return true, err
+	}
+
+	_, _ = fmt.Fprintln(writer, style.success("Manifest refreshed."))
+
+	return true, nil
+}
+
+func executeApplyHook(
+	hookCmd *config.HookCommand,
+	payload any,
+	hookName string,
+	hookRunner HookRunner,
+	writer io.Writer,
+	style outputStyle,
+) (bool, error) {
+	result := runHook(hookCmd, payload, hookName, hookRunner, writer, style)
+	switch result {
+	case hookContinue:
+		return false, nil
+	case hookRejected:
+		_, _ = fmt.Fprintln(writer, style.warning("Apply cancelled by hook."))
+
+		return true, nil
+	case hookError:
+		return false, errors.New(hookName + " hook failed")
+	}
+
+	return false, errors.New("unknown hook result")
+}
+
+func confirmApplyOrCancel(autoApprove bool, input io.Reader, writer io.Writer, style outputStyle) bool {
+	if autoApprove {
+		return false
+	}
+
+	if confirmApply(input, writer, style) {
+		return false
+	}
+
+	_, _ = fmt.Fprintln(writer, style.warning("Apply cancelled."))
+
+	return true
 }
 
 func refreshManifestForAllHosts(
@@ -152,7 +271,7 @@ func applyHostPlan(cfg *config.CmtConfig, hostPlan HostPlan, client remote.Remot
 	return nil
 }
 
-func resolveApplyDependencies(deps ApplyDependencies) (remote.ClientFactory, io.Reader) {
+func resolveApplyDependencies(deps ApplyDependencies) (remote.ClientFactory, io.Reader, HookRunner) {
 	clientFactory := deps.ClientFactory
 	if clientFactory == nil {
 		defaultFactory := new(remote.DefaultClientFactory)
@@ -165,7 +284,12 @@ func resolveApplyDependencies(deps ApplyDependencies) (remote.ClientFactory, io.
 		input = os.Stdin
 	}
 
-	return clientFactory, input
+	hookRunner := deps.HookRunner
+	if hookRunner == nil {
+		hookRunner = defaultHookRunner
+	}
+
+	return clientFactory, input, hookRunner
 }
 
 func confirmApply(input io.Reader, writer io.Writer, style outputStyle) bool {
@@ -318,6 +442,7 @@ func syncProjectFiles(
 			_, _ = fmt.Fprintln(writer, style.success("done"))
 		case ActionUnchanged:
 			// Manifest inputs are collected before this loop.
+			continue
 		}
 	}
 

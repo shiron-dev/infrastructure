@@ -118,6 +118,55 @@ projects:
 
 `cmt plan` では各ディレクトリの状態（`create` / `exists`）が表示されます。
 
+### `beforeApplyHooks` — apply 前フック
+
+`cmt apply` の実行中に、任意のコマンドを実行できるフックを設定できます。
+フックは cmt 設定（`config.yml`）で定義します。
+
+```yaml
+beforeApplyHooks:
+  beforePrompt:
+    command: ./scripts/check-policy.sh
+  afterPrompt:
+    command: ./scripts/final-gate.sh
+```
+
+#### フックの実行タイミング
+
+- **`beforePrompt`** — plan 出力後、ユーザー確認プロンプトの**前**に実行
+- **`afterPrompt`** — ユーザーが `y` で承認した後（`--auto-approve` の場合はプロンプト省略後）、実際の apply の**前**に実行
+
+#### 終了コード
+
+| 終了コード | 動作 |
+|-----------|------|
+| `0` | 続行 |
+| `1` | apply を中止（正常終了） |
+| その他 | エラーとして異常終了 |
+
+#### stdin JSON
+
+各フックにはコマンドの stdin に JSON が渡されます。
+スキーマは `cmt schema hook-before-prompt` / `cmt schema hook-after-prompt` で生成できます。
+
+```json
+{
+  "hosts": ["server1", "server2"],
+  "pwd": "/path/to/working/directory",
+  "paths": {
+    "configPath": "config.yml",
+    "basePath": "/absolute/path/to/compose"
+  }
+}
+```
+
+- `hosts` — 今回の apply 対象ホスト名（`--host` フィルタ適用後）
+- `pwd` — cmt 実行時のカレントディレクトリ
+- `paths.configPath` — `--config` で指定された設定ファイルパス
+- `paths.basePath` — 解決済みの compose ルート絶対パス
+
+フックの stdout / stderr は cmt の出力にそのまま表示されます。
+
 ### デフォルト値の解決順序
 
 1. cmt 設定の `defaults`
@@ -147,8 +196,10 @@ apply フラグ:
   --auto-approve  確認プロンプトをスキップ
 
 schema:
-  cmt schema cmt    cmt 設定の JSON Schema を出力
-  cmt schema host   host.yml の JSON Schema を出力
+  cmt schema cmt                 cmt 設定の JSON Schema を出力
+  cmt schema host                host.yml の JSON Schema を出力
+  cmt schema hook-before-prompt  beforePrompt フックの stdin JSON Schema を出力
+  cmt schema hook-after-prompt   afterPrompt フックの stdin JSON Schema を出力
 ```
 
 ## JSON Schema
@@ -156,8 +207,10 @@ schema:
 スキーマは Go の構造体から自動生成されるため、コードとの乖離がありません:
 
 ```bash
-cmt schema cmt  > schemas/cmt-config.schema.json
-cmt schema host > schemas/host-config.schema.json
+cmt schema cmt                 > schemas/cmt-config.schema.json
+cmt schema host                > schemas/host-config.schema.json
+cmt schema hook-before-prompt  > schemas/hook-before-prompt.schema.json
+cmt schema hook-after-prompt   > schemas/hook-after-prompt.schema.json
 ```
 
 エディタでのバリデーションや補完に利用できます

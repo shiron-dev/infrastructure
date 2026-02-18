@@ -21,3 +21,9 @@ hosts:
     user: deploy
     sshKeyPath: ~/.ssh/id_ed25519
     sshAgent: true
+
+# beforeApplyHooks:
+#   beforePrompt:                          # runs after plan output, before user confirmation
+#     command: ./scripts/check-policy.sh
+#   afterPrompt:                           # runs after user confirmation, before actual apply
+#     command: ./scripts/final-gate.sh

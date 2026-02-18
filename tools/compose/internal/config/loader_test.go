@@ -72,6 +72,62 @@ defaults:
 	}
 }
 
+func TestLoadCmtConfig_WithBeforeApplyHooks(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	cfgContent := `
+basePath: ./compose
+hosts:
+  - name: server1
+    host: 192.168.1.1
+    user: deploy
+beforeApplyHooks:
+  beforePrompt:
+    command: ./scripts/check-policy.sh
+  afterPrompt:
+    command: ./scripts/final-gate.sh
+`
+
+	cfgPath := filepath.Join(dir, "config.yml")
+
+	err := os.WriteFile(cfgPath, []byte(cfgContent), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.MkdirAll(filepath.Join(dir, "compose"), 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadCmtConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadCmtConfig: %v", err)
+	}
+
+	if cfg.BeforeApplyHooks == nil {
+		t.Fatal("beforeApplyHooks should not be nil")
+	}
+
+	if cfg.BeforeApplyHooks.BeforePrompt == nil {
+		t.Fatal("beforePrompt should not be nil")
+	}
+
+	if cfg.BeforeApplyHooks.BeforePrompt.Command != "./scripts/check-policy.sh" {
+		t.Errorf("beforePrompt.command = %q", cfg.BeforeApplyHooks.BeforePrompt.Command)
+	}
+
+	if cfg.BeforeApplyHooks.AfterPrompt == nil {
+		t.Fatal("afterPrompt should not be nil")
+	}
+
+	if cfg.BeforeApplyHooks.AfterPrompt.Command != "./scripts/final-gate.sh" {
+		t.Errorf("afterPrompt.command = %q", cfg.BeforeApplyHooks.AfterPrompt.Command)
+	}
+}
+
 func TestLoadCmtConfig_Errors(t *testing.T) {
 	t.Parallel()
 
