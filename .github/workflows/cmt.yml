@@ -17,6 +17,33 @@ defaults:
     working-directory: tools/compose
 
 jobs:
+  cmt-status-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - go-test
+      - fmt-lint
+      - go-generate-diff-check
+      - go-vet
+      - build
+    if: ${{ always() }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Check cmt-status-check
+        run: |
+          diff \
+            <(yq ".jobs | del(.cmt-status-check) | keys.[]" .github/workflows/cmt.yml) \
+            <(yq ".jobs.cmt-status-check.needs.[]" .github/workflows/cmt.yml)
+      - name: Fail if any needed job failed
+        env:
+          JOBS: ${{ toJson(needs) }}
+        run: |
+          for result in $(jq -r '.[].result' <<<"$JOBS"); do
+            if [[ ! "$result" =~ ^(success|skipped)$ ]]; then
+              exit 1
+            fi
+          done
+
   go-test:
     name: Go test
     runs-on: ubuntu-latest
