@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs:
+      - go-version-sync-check
       - ansible-lint
       - check-symlinks
       # - dockerfile-lint
@@ -37,6 +38,56 @@ jobs:
               exit 1
             fi
           done
+
+  go-version-sync-check:
+    name: Go version sync check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Compare all go.mod and mise.toml Go versions
+        run: |
+          set -euo pipefail
+
+          mise_go_version="$(sed -nE 's/^go[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' mise.toml | head -n1)"
+
+          if [[ -z "${mise_go_version}" ]]; then
+            echo "Failed to read Go version from mise.toml"
+            exit 1
+          fi
+
+          mismatch=0
+          found=0
+
+          while IFS= read -r go_mod_file; do
+            found=1
+            go_mod_version="$(awk '/^go / {print $2; exit}' "${go_mod_file}")"
+
+            if [[ -z "${go_mod_version}" ]]; then
+              echo "Failed to read Go version from ${go_mod_file}"
+              mismatch=1
+              continue
+            fi
+
+            if [[ "${go_mod_version}" != "${mise_go_version}" ]]; then
+              echo "Go version mismatch detected:"
+              echo "  file:      ${go_mod_file}"
+              echo "  go.mod:    ${go_mod_version}"
+              echo "  mise.toml: ${mise_go_version}"
+              mismatch=1
+            fi
+          done < <(find . -type f -name "go.mod" | sort)
+
+          if [[ "${found}" -eq 0 ]]; then
+            echo "No go.mod files found"
+            exit 1
+          fi
+
+          if [[ "${mismatch}" -ne 0 ]]; then
+            exit 1
+          fi
+
+          echo "All go.mod files are in sync with mise.toml: ${mise_go_version}"
 
   ansible-lint:
     runs-on: ubuntu-latest
