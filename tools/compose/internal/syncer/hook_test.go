@@ -3,6 +3,7 @@ package syncer
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"cmt/internal/config"
@@ -12,6 +13,7 @@ func TestRunHook_NilCommand(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
+
 	style := newOutputStyle(&out)
 
 	result := runHook(nil, nil, "test", defaultHookRunner, &out, style)
@@ -24,6 +26,7 @@ func TestRunHook_EmptyCommand(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
+
 	style := newOutputStyle(&out)
 	cmd := &config.HookCommand{Command: ""}
 
@@ -37,9 +40,10 @@ func TestRunHook_ExitZero(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
+
 	style := newOutputStyle(&out)
 	cmd := &config.HookCommand{Command: "true"}
-	payload := config.BeforePromptHookPayload{Hosts: []string{"server1"}, Pwd: "/tmp"}
+	payload := config.BeforePromptHookPayload{Hosts: []string{"server1"}, WorkingDir: "/tmp"}
 
 	result := runHook(cmd, payload, "beforePrompt", defaultHookRunner, &out, style)
 	if result != hookContinue {
@@ -51,6 +55,7 @@ func TestRunHook_ExitOne(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
+
 	style := newOutputStyle(&out)
 	cmd := &config.HookCommand{Command: "exit 1"}
 
@@ -64,6 +69,7 @@ func TestRunHook_ExitTwo(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
+
 	style := newOutputStyle(&out)
 	cmd := &config.HookCommand{Command: "exit 2"}
 
@@ -77,6 +83,7 @@ func TestRunHook_ReceivesStdinJSON(t *testing.T) {
 	t.Parallel()
 
 	var captured []byte
+
 	mockRunner := func(command string, stdinData []byte) (int, string, error) {
 		captured = stdinData
 
@@ -84,12 +91,13 @@ func TestRunHook_ReceivesStdinJSON(t *testing.T) {
 	}
 
 	var out bytes.Buffer
+
 	style := newOutputStyle(&out)
 	cmd := &config.HookCommand{Command: "cat"}
 
 	payload := config.BeforePromptHookPayload{
-		Hosts: []string{"server1", "server2"},
-		Pwd:   "/work",
+		Hosts:      []string{"server1", "server2"},
+		WorkingDir: "/work",
 		Paths: config.HookConfigPaths{
 			ConfigPath: "config.yml",
 			BasePath:   "/work/compose",
@@ -112,8 +120,8 @@ func TestRunHook_ReceivesStdinJSON(t *testing.T) {
 		t.Errorf("hosts = %v, want [server1 server2]", got.Hosts)
 	}
 
-	if got.Pwd != "/work" {
-		t.Errorf("pwd = %q, want /work", got.Pwd)
+	if got.WorkingDir != "/work" {
+		t.Errorf("workingDir = %q, want /work", got.WorkingDir)
 	}
 
 	if got.Paths.ConfigPath != "config.yml" {
@@ -125,6 +133,7 @@ func TestRunHook_OutputForwarded(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
+
 	style := newOutputStyle(&out)
 	cmd := &config.HookCommand{Command: "echo hello-hook"}
 
@@ -134,7 +143,7 @@ func TestRunHook_OutputForwarded(t *testing.T) {
 	}
 
 	output := out.String()
-	if !bytes.Contains([]byte(output), []byte("hello-hook")) {
+	if !strings.Contains(output, "hello-hook") {
 		t.Errorf("expected hook output in writer, got %q", output)
 	}
 }

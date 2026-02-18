@@ -34,13 +34,13 @@ func TestGenerateSchemaJSON(t *testing.T) {
 			name:       "hook-before-prompt schema",
 			schemaType: "hook-before-prompt",
 			wantErr:    false,
-			wantFields: []string{"hosts", "pwd", "paths"},
+			wantFields: []string{"hosts", "workingDir", "paths"},
 		},
 		{
 			name:       "hook-after-prompt schema",
 			schemaType: "hook-after-prompt",
 			wantErr:    false,
-			wantFields: []string{"hosts", "pwd", "paths"},
+			wantFields: []string{"hosts", "workingDir", "paths"},
 		},
 		{
 			name:       "unknown schema type",

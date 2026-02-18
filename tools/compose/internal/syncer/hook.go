@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,16 +19,19 @@ type HookRunner func(command string, stdinData []byte) (exitCode int, combinedOu
 type hookResult int
 
 const (
-	hookContinue  hookResult = iota
+	hookContinue hookResult = iota
 	hookRejected
 	hookError
 )
 
 func defaultHookRunner(command string, stdinData []byte) (int, string, error) {
-	cmd := exec.Command("sh", "-c", command)
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", "eval \"$CMT_HOOK_COMMAND\"")
+
+	cmd.Env = append(os.Environ(), "CMT_HOOK_COMMAND="+command)
 	cmd.Stdin = bytes.NewReader(stdinData)
 
 	var output bytes.Buffer
+
 	cmd.Stdout = &output
 	cmd.Stderr = &output
 
@@ -103,7 +107,6 @@ func printHookOutput(output string, writer io.Writer) {
 }
 
 func buildHookPayloadData(
-	plan *SyncPlan,
 	configPath string,
 	basePath string,
 ) config.HookConfigPaths {
@@ -118,9 +121,9 @@ func buildBeforePromptPayload(plan *SyncPlan, configPath, basePath string) confi
 	pwd, _ := os.Getwd()
 
 	return config.BeforePromptHookPayload{
-		Hosts: hosts,
-		Pwd:   pwd,
-		Paths: buildHookPayloadData(plan, configPath, basePath),
+		Hosts:      hosts,
+		WorkingDir: pwd,
+		Paths:      buildHookPayloadData(configPath, basePath),
 	}
 }
 
@@ -129,9 +132,9 @@ func buildAfterPromptPayload(plan *SyncPlan, configPath, basePath string) config
 	pwd, _ := os.Getwd()
 
 	return config.AfterPromptHookPayload{
-		Hosts: hosts,
-		Pwd:   pwd,
-		Paths: buildHookPayloadData(plan, configPath, basePath),
+		Hosts:      hosts,
+		WorkingDir: pwd,
+		Paths:      buildHookPayloadData(configPath, basePath),
 	}
 }
 

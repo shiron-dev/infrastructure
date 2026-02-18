@@ -7,7 +7,9 @@ import (
 	"github.com/invopop/jsonschema"
 )
 
-var SchemaKinds = []string{"cmt", "host", "hook-before-prompt", "hook-after-prompt"}
+func SchemaKinds() []string {
+	return []string{"cmt", "host", "hook-before-prompt", "hook-after-prompt"}
+}
 
 func GenerateSchemaJSON(kind string) ([]byte, error) {
 	var target any
@@ -32,7 +34,7 @@ func GenerateSchemaJSON(kind string) ([]byte, error) {
 	case "hook-after-prompt":
 		target = new(AfterPromptHookPayload)
 	default:
-		return nil, fmt.Errorf("unknown schema type %q (valid: %v)", kind, SchemaKinds)
+		return nil, fmt.Errorf("unknown schema type %q (valid: %v)", kind, SchemaKinds())
 	}
 
 	r := new(jsonschema.Reflector)
