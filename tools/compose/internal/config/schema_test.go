@@ -22,13 +22,25 @@ func TestGenerateSchemaJSON(t *testing.T) {
 			schemaType:     "cmt",
 			wantErr:        false,
 			wantJSONFields: []string{"$schema", "$defs"},
-			wantFields:     []string{"basePath", "hosts"},
+			wantFields:     []string{"basePath", "hosts", "beforeApplyHooks"},
 		},
 		{
 			name:       "host schema",
 			schemaType: "host",
 			wantErr:    false,
 			wantFields: []string{"remotePath", "projects"},
+		},
+		{
+			name:       "hook-before-prompt schema",
+			schemaType: "hook-before-prompt",
+			wantErr:    false,
+			wantFields: []string{"hosts", "pwd", "paths"},
+		},
+		{
+			name:       "hook-after-prompt schema",
+			schemaType: "hook-after-prompt",
+			wantErr:    false,
+			wantFields: []string{"hosts", "pwd", "paths"},
 		},
 		{
 			name:       "unknown schema type",

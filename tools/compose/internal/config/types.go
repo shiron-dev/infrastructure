@@ -1,9 +1,19 @@
 package config
 
 type CmtConfig struct {
-	BasePath string        `json:"basePath"           yaml:"basePath"`
-	Defaults *SyncDefaults `json:"defaults,omitempty" yaml:"defaults,omitempty"`
-	Hosts    []HostEntry   `json:"hosts"              yaml:"hosts"`
+	BasePath         string            `json:"basePath"                    yaml:"basePath"`
+	Defaults         *SyncDefaults     `json:"defaults,omitempty"          yaml:"defaults,omitempty"`
+	Hosts            []HostEntry       `json:"hosts"                       yaml:"hosts"`
+	BeforeApplyHooks *BeforeApplyHooks `json:"beforeApplyHooks,omitempty"  yaml:"beforeApplyHooks,omitempty"`
+}
+
+type BeforeApplyHooks struct {
+	BeforePrompt *HookCommand `json:"beforePrompt,omitempty" yaml:"beforePrompt,omitempty"`
+	AfterPrompt  *HookCommand `json:"afterPrompt,omitempty"  yaml:"afterPrompt,omitempty"`
+}
+
+type HookCommand struct {
+	Command string `json:"command" yaml:"command"`
 }
 
 type SyncDefaults struct {
@@ -41,6 +51,23 @@ type ResolvedProjectConfig struct {
 	RemotePath      string
 	PostSyncCommand string
 	Dirs            []string
+}
+
+type HookConfigPaths struct {
+	ConfigPath string `json:"configPath"`
+	BasePath   string `json:"basePath"`
+}
+
+type BeforePromptHookPayload struct {
+	Hosts []string        `json:"hosts"`
+	Pwd   string          `json:"pwd"`
+	Paths HookConfigPaths `json:"paths"`
+}
+
+type AfterPromptHookPayload struct {
+	Hosts []string        `json:"hosts"`
+	Pwd   string          `json:"pwd"`
+	Paths HookConfigPaths `json:"paths"`
 }
 
 func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projectName string) ResolvedProjectConfig {

@@ -17,6 +17,8 @@ import (
 type ApplyDependencies struct {
 	ClientFactory remote.ClientFactory
 	Input         io.Reader
+	HookRunner    HookRunner
+	ConfigPath    string
 }
 
 func Apply(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, w io.Writer) error {
@@ -34,7 +36,7 @@ func ApplyWithDeps(
 	deps ApplyDependencies,
 ) error {
 	style := newOutputStyle(writer)
-	clientFactory, input := resolveApplyDependencies(deps)
+	clientFactory, input, hookRunner := resolveApplyDependencies(deps)
 
 	if !plan.HasChanges() {
 		_, _ = fmt.Fprintln(writer, style.muted("No changes to apply."))
@@ -55,10 +57,40 @@ func ApplyWithDeps(
 
 	plan.Print(writer)
 
+	if cfg.BeforeApplyHooks != nil && cfg.BeforeApplyHooks.BeforePrompt != nil {
+		payload := buildBeforePromptPayload(plan, deps.ConfigPath, cfg.BasePath)
+
+		result := runHook(cfg.BeforeApplyHooks.BeforePrompt, payload, "beforePrompt", hookRunner, writer, style)
+		if result == hookRejected {
+			_, _ = fmt.Fprintln(writer, style.warning("Apply cancelled by hook."))
+
+			return nil
+		}
+
+		if result == hookError {
+			return fmt.Errorf("beforePrompt hook failed")
+		}
+	}
+
 	if !autoApprove && !confirmApply(input, writer, style) {
 		_, _ = fmt.Fprintln(writer, style.warning("Apply cancelled."))
 
 		return nil
+	}
+
+	if cfg.BeforeApplyHooks != nil && cfg.BeforeApplyHooks.AfterPrompt != nil {
+		payload := buildAfterPromptPayload(plan, deps.ConfigPath, cfg.BasePath)
+
+		result := runHook(cfg.BeforeApplyHooks.AfterPrompt, payload, "afterPrompt", hookRunner, writer, style)
+		if result == hookRejected {
+			_, _ = fmt.Fprintln(writer, style.warning("Apply cancelled by hook."))
+
+			return nil
+		}
+
+		if result == hookError {
+			return fmt.Errorf("afterPrompt hook failed")
+		}
 	}
 
 	_, _ = fmt.Fprintln(writer)
@@ -152,7 +184,7 @@ func applyHostPlan(cfg *config.CmtConfig, hostPlan HostPlan, client remote.Remot
 	return nil
 }
 
-func resolveApplyDependencies(deps ApplyDependencies) (remote.ClientFactory, io.Reader) {
+func resolveApplyDependencies(deps ApplyDependencies) (remote.ClientFactory, io.Reader, HookRunner) {
 	clientFactory := deps.ClientFactory
 	if clientFactory == nil {
 		defaultFactory := new(remote.DefaultClientFactory)
@@ -165,7 +197,12 @@ func resolveApplyDependencies(deps ApplyDependencies) (remote.ClientFactory, io.
 		input = os.Stdin
 	}
 
-	return clientFactory, input
+	hookRunner := deps.HookRunner
+	if hookRunner == nil {
+		hookRunner = defaultHookRunner
+	}
+
+	return clientFactory, input, hookRunner
 }
 
 func confirmApply(input io.Reader, writer io.Writer, style outputStyle) bool {

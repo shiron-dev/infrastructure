@@ -1,0 +1,146 @@
+package syncer
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+
+	"cmt/internal/config"
+)
+
+type HookRunner func(command string, stdinData []byte) (exitCode int, combinedOutput string, err error)
+
+type hookResult int
+
+const (
+	hookContinue  hookResult = iota
+	hookRejected
+	hookError
+)
+
+func defaultHookRunner(command string, stdinData []byte) (int, string, error) {
+	cmd := exec.Command("sh", "-c", command)
+	cmd.Stdin = bytes.NewReader(stdinData)
+
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+
+	err := cmd.Run()
+	if err == nil {
+		return 0, output.String(), nil
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode(), output.String(), nil
+	}
+
+	return -1, output.String(), fmt.Errorf("executing hook command: %w", err)
+}
+
+func runHook(
+	hookCmd *config.HookCommand,
+	payload any,
+	hookName string,
+	runner HookRunner,
+	writer io.Writer,
+	style outputStyle,
+) hookResult {
+	if hookCmd == nil || hookCmd.Command == "" {
+		return hookContinue
+	}
+
+	stdinData, err := json.Marshal(payload)
+	if err != nil {
+		_, _ = fmt.Fprintf(writer, "%s %s: %v\n", style.danger("Hook error"), hookName, err)
+
+		return hookError
+	}
+
+	_, _ = fmt.Fprintf(writer, "\n%s %s...\n", style.key("Running hook"), hookName)
+
+	exitCode, output, err := runner(hookCmd.Command, stdinData)
+	if err != nil {
+		_, _ = fmt.Fprintf(writer, "%s %s: %v\n", style.danger("Hook error"), hookName, err)
+		printHookOutput(output, writer)
+
+		return hookError
+	}
+
+	printHookOutput(output, writer)
+
+	switch exitCode {
+	case 0:
+		_, _ = fmt.Fprintf(writer, "%s %s passed.\n", style.success("Hook"), hookName)
+
+		return hookContinue
+	case 1:
+		_, _ = fmt.Fprintf(writer, "%s %s rejected apply.\n", style.warning("Hook"), hookName)
+
+		return hookRejected
+	default:
+		_, _ = fmt.Fprintf(writer, "%s %s exited with code %d.\n", style.danger("Hook error"), hookName, exitCode)
+
+		return hookError
+	}
+}
+
+func printHookOutput(output string, writer io.Writer) {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return
+	}
+
+	for line := range strings.SplitSeq(trimmed, "\n") {
+		_, _ = fmt.Fprintf(writer, "  %s\n", line)
+	}
+}
+
+func buildHookPayloadData(
+	plan *SyncPlan,
+	configPath string,
+	basePath string,
+) config.HookConfigPaths {
+	return config.HookConfigPaths{
+		ConfigPath: configPath,
+		BasePath:   basePath,
+	}
+}
+
+func buildBeforePromptPayload(plan *SyncPlan, configPath, basePath string) config.BeforePromptHookPayload {
+	hosts := collectHostNames(plan)
+	pwd, _ := os.Getwd()
+
+	return config.BeforePromptHookPayload{
+		Hosts: hosts,
+		Pwd:   pwd,
+		Paths: buildHookPayloadData(plan, configPath, basePath),
+	}
+}
+
+func buildAfterPromptPayload(plan *SyncPlan, configPath, basePath string) config.AfterPromptHookPayload {
+	hosts := collectHostNames(plan)
+	pwd, _ := os.Getwd()
+
+	return config.AfterPromptHookPayload{
+		Hosts: hosts,
+		Pwd:   pwd,
+		Paths: buildHookPayloadData(plan, configPath, basePath),
+	}
+}
+
+func collectHostNames(plan *SyncPlan) []string {
+	names := make([]string, 0, len(plan.HostPlans))
+
+	for _, hp := range plan.HostPlans {
+		names = append(names, hp.Host.Name)
+	}
+
+	return names
+}
