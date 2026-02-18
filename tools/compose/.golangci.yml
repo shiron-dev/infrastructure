@@ -1,11 +1,14 @@
 version: "2"
 linters:
   default: all
+  enable:
+    - wsl_v5
   disable:
     - depguard
     - wrapcheck
     - ireturn
     - err113
+    - wsl
   exclusions:
     rules:
       - path: (.+)_test\.go
