@@ -60,7 +60,7 @@ basePath: ../compose            # compose ルートへのパス（設定ファ�
 defaults:                       # 最低優先度のデフォルト値
   remotePath: /opt/compose
   postSyncCommand: docker compose up -d
-  composeAction: up             # up|down（未指定時は up）
+  composeAction: up             # up|down|ignore（未指定時は up）
 
 hosts:
   - name: server1               # hosts/<hostname>/ ディレクトリ名と一致させる
@@ -77,7 +77,7 @@ sshConfig: ../../ssh_config     # SSH config ファイルのパス（host.yml �
 
 remotePath: /srv/compose        # cmt デフォルトをこのホスト用に上書き
 postSyncCommand: docker compose up -d
-composeAction: up               # up|down（未指定時は up）
+composeAction: up               # up|down|ignore（未指定時は up）
 
 projects:                       # プロジェクト別の上書き
   grafana:
@@ -132,14 +132,18 @@ projects:
     composeAction: up          # サービスが起動している状態を理想とする
   legacy-app:
     composeAction: down        # サービスが停止している状態を理想とする
+  static-app:
+    composeAction: ignore      # up/down の状態差分は無視する
 ```
 
 `cmt plan` ではリモートの現在の Compose サービス状態と理想状態を比較し、差分を表示します:
 
 - `up` の場合: 停止中/未起動のサービスを「起動予定」として表示
 - `down` の場合: 現在起動中のサービスを「停止予定」として表示
+- `ignore` の場合: up/down の状態差分を確認・表示しない
 
 `cmt apply` では差分に基づいて `docker compose up -d` または `docker compose down` を実行します。
+`ignore` の場合は Compose の up/down 実行自体をスキップします。
 ファイル差分がなくても Compose 状態に差分があれば apply の対象になります。
 
 ### `beforeApplyHooks` — apply 前フック

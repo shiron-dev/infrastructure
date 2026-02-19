@@ -522,7 +522,7 @@ func TestApplyWithDeps_ComposeDown(t *testing.T) {
 func TestProjectHasChanges_ComposeOnly(t *testing.T) {
 	t.Parallel()
 
-	pp := ProjectPlan{
+	projectPlan := ProjectPlan{
 		Files: []FilePlan{
 			{Action: ActionUnchanged},
 		},
@@ -532,7 +532,7 @@ func TestProjectHasChanges_ComposeOnly(t *testing.T) {
 		},
 	}
 
-	if !projectHasChanges(pp) {
+	if !projectHasChanges(projectPlan) {
 		t.Error("projectHasChanges should return true when compose has changes")
 	}
 }
@@ -540,14 +540,33 @@ func TestProjectHasChanges_ComposeOnly(t *testing.T) {
 func TestProjectHasChanges_NoCompose(t *testing.T) {
 	t.Parallel()
 
-	pp := ProjectPlan{
+	projectPlan := ProjectPlan{
 		Files: []FilePlan{
 			{Action: ActionUnchanged},
 		},
 		Compose: nil,
 	}
 
-	if projectHasChanges(pp) {
+	if projectHasChanges(projectPlan) {
 		t.Error("projectHasChanges should return false when no changes")
+	}
+}
+
+func TestProjectHasChanges_ComposeIgnore(t *testing.T) {
+	t.Parallel()
+
+	projectPlan := ProjectPlan{
+		Files: []FilePlan{
+			{Action: ActionUnchanged},
+		},
+		ComposeAction: config.ComposeActionIgnore,
+		Compose: &ComposePlan{
+			DesiredAction: config.ComposeActionIgnore,
+			ActionType:    ComposeNoChange,
+		},
+	}
+
+	if projectHasChanges(projectPlan) {
+		t.Error("projectHasChanges should return false for composeAction=ignore")
 	}
 }

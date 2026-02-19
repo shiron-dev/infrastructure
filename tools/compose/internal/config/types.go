@@ -1,8 +1,9 @@
 package config
 
 const (
-	ComposeActionUp   = "up"
-	ComposeActionDown = "down"
+	ComposeActionUp     = "up"
+	ComposeActionDown   = "down"
+	ComposeActionIgnore = "ignore"
 )
 
 type CmtConfig struct {
@@ -80,20 +81,39 @@ type AfterPromptHookPayload struct {
 }
 
 func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projectName string) ResolvedProjectConfig {
-	var resolved ResolvedProjectConfig
-
-	if cmtDefaults != nil {
-		resolved.RemotePath = cmtDefaults.RemotePath
-		resolved.PostSyncCommand = cmtDefaults.PostSyncCommand
-		resolved.ComposeAction = cmtDefaults.ComposeAction
-	}
-
+	resolved := resolveFromDefaults(cmtDefaults)
 	if hostCfg == nil {
 		resolved.ComposeAction = normalizeComposeAction(resolved.ComposeAction)
 
 		return resolved
 	}
 
+	applyHostOverrides(&resolved, hostCfg)
+	applyProjectOverrides(&resolved, hostCfg, projectName)
+	resolved.ComposeAction = normalizeComposeAction(resolved.ComposeAction)
+
+	return resolved
+}
+
+func resolveFromDefaults(defaults *SyncDefaults) ResolvedProjectConfig {
+	if defaults == nil {
+		return ResolvedProjectConfig{
+			RemotePath:      "",
+			PostSyncCommand: "",
+			ComposeAction:   "",
+			Dirs:            nil,
+		}
+	}
+
+	return ResolvedProjectConfig{
+		RemotePath:      defaults.RemotePath,
+		PostSyncCommand: defaults.PostSyncCommand,
+		ComposeAction:   defaults.ComposeAction,
+		Dirs:            nil,
+	}
+}
+
+func applyHostOverrides(resolved *ResolvedProjectConfig, hostCfg *HostConfig) {
 	if hostCfg.RemotePath != "" {
 		resolved.RemotePath = hostCfg.RemotePath
 	}
@@ -105,28 +125,29 @@ func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projec
 	if hostCfg.ComposeAction != "" {
 		resolved.ComposeAction = hostCfg.ComposeAction
 	}
+}
 
-	if projectConfig, ok := hostCfg.Projects[projectName]; ok && projectConfig != nil {
-		if projectConfig.RemotePath != "" {
-			resolved.RemotePath = projectConfig.RemotePath
-		}
-
-		if projectConfig.PostSyncCommand != "" {
-			resolved.PostSyncCommand = projectConfig.PostSyncCommand
-		}
-
-		if projectConfig.ComposeAction != "" {
-			resolved.ComposeAction = projectConfig.ComposeAction
-		}
-
-		if len(projectConfig.Dirs) > 0 {
-			resolved.Dirs = projectConfig.Dirs
-		}
+func applyProjectOverrides(resolved *ResolvedProjectConfig, hostCfg *HostConfig, projectName string) {
+	projectConfig, ok := hostCfg.Projects[projectName]
+	if !ok || projectConfig == nil {
+		return
 	}
 
-	resolved.ComposeAction = normalizeComposeAction(resolved.ComposeAction)
+	if projectConfig.RemotePath != "" {
+		resolved.RemotePath = projectConfig.RemotePath
+	}
 
-	return resolved
+	if projectConfig.PostSyncCommand != "" {
+		resolved.PostSyncCommand = projectConfig.PostSyncCommand
+	}
+
+	if projectConfig.ComposeAction != "" {
+		resolved.ComposeAction = projectConfig.ComposeAction
+	}
+
+	if len(projectConfig.Dirs) > 0 {
+		resolved.Dirs = projectConfig.Dirs
+	}
 }
 
 func normalizeComposeAction(action string) string {

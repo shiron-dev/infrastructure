@@ -362,11 +362,7 @@ func projectHasChanges(projectPlan ProjectPlan) bool {
 		}
 	}
 
-	if projectPlan.Compose.HasChanges() {
-		return true
-	}
-
-	return false
+	return projectPlan.Compose.HasChanges()
 }
 
 func applyProjectPlan(
@@ -560,6 +556,8 @@ func runComposeAction(
 	var cmd string
 
 	switch projectPlan.Compose.ActionType {
+	case ComposeNoChange:
+		return nil
 	case ComposeStartServices:
 		cmd = "docker compose up -d"
 	case ComposeStopServices:

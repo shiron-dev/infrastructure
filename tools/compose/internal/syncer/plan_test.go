@@ -1073,6 +1073,14 @@ func TestComposePlan_HasChanges(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "ignore action keeps no changes",
+			plan: &ComposePlan{
+				DesiredAction: config.ComposeActionIgnore,
+				ActionType:    ComposeNoChange,
+			},
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1083,6 +1091,26 @@ func TestComposePlan_HasChanges(t *testing.T) {
 				t.Errorf("HasChanges() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildComposePlan_IgnoreAction(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	composePlan := buildComposePlan(config.ComposeActionIgnore, "/srv/compose/grafana", client)
+	if composePlan == nil {
+		t.Fatal("compose plan should not be nil")
+	}
+
+	if composePlan.DesiredAction != config.ComposeActionIgnore {
+		t.Fatalf("DesiredAction = %q, want %q", composePlan.DesiredAction, config.ComposeActionIgnore)
+	}
+
+	if composePlan.HasChanges() {
+		t.Fatal("ignore action should not produce compose state changes")
 	}
 }
 

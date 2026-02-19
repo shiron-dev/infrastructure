@@ -191,6 +191,8 @@ func (p *SyncPlan) ComposeStats() (int, int) {
 			}
 
 			switch projectPlan.Compose.ActionType {
+			case ComposeNoChange:
+				continue
 			case ComposeStartServices:
 				startCount += len(projectPlan.Compose.Services)
 			case ComposeStopServices:
@@ -330,6 +332,8 @@ func printComposePlan(writer io.Writer, style outputStyle, compose *ComposePlan)
 
 	for _, svc := range compose.Services {
 		switch compose.ActionType {
+		case ComposeNoChange:
+			continue
 		case ComposeStartServices:
 			_, _ = fmt.Fprintf(writer, "      %s %s %s\n",
 				style.actionSymbol(ActionAdd), svc, style.success("(start)"))
@@ -534,65 +538,90 @@ func buildHostPlan(
 	projects []string,
 	client remote.RemoteClient,
 ) (*HostPlan, error) {
-	hostPlan := new(HostPlan)
-	hostPlan.Host = host
-	hostPlan.Projects = nil
+	hostPlan := &HostPlan{
+		Host:     host,
+		Projects: nil,
+	}
 
 	for _, project := range projects {
-		resolved := config.ResolveProjectConfig(cfg.Defaults, hostCfg, project)
-		if resolved.RemotePath == "" {
-			return nil, fmt.Errorf("remotePath is not set for host %q, project %q", host.Name, project)
-		}
-
-		remoteDir := path.Join(resolved.RemotePath, project)
-
-		dirPlans := make([]DirPlan, 0, len(resolved.Dirs))
-
-		for _, d := range resolved.Dirs {
-			absDir := path.Join(remoteDir, d)
-			_, statErr := client.Stat(absDir)
-			dirPlans = append(dirPlans, DirPlan{
-				RelativePath: d,
-				RemotePath:   absDir,
-				Exists:       statErr == nil,
-			})
-		}
-
-		templateVars, err := LoadTemplateVars(cfg.BasePath, host.Name, project)
+		projectPlan, err := buildProjectPlanForHost(cfg, host, hostCfg, project, client)
 		if err != nil {
-			return nil, fmt.Errorf("loading template vars for %s/%s: %w", host.Name, project, err)
+			return nil, err
 		}
 
-		localFiles, err := CollectLocalFiles(cfg.BasePath, host.Name, project)
-		if err != nil {
-			return nil, fmt.Errorf("collecting files for %s/%s: %w", host.Name, project, err)
-		}
-
-		manifest := readManifest(client, remoteDir)
-
-		filePlans, err := buildFilePlans(localFiles, remoteDir, manifest, client, templateVars)
-		if err != nil {
-			return nil, fmt.Errorf("building file plan for %s/%s: %w", host.Name, project, err)
-		}
-
-		composePlan := buildComposePlan(resolved.ComposeAction, remoteDir, client)
-
-		hostPlan.Projects = append(hostPlan.Projects, ProjectPlan{
-			ProjectName:     project,
-			RemoteDir:       remoteDir,
-			PostSyncCommand: resolved.PostSyncCommand,
-			ComposeAction:   resolved.ComposeAction,
-			Compose:         composePlan,
-			Dirs:            dirPlans,
-			Files:           filePlans,
-		})
+		hostPlan.Projects = append(hostPlan.Projects, projectPlan)
 	}
 
 	return hostPlan, nil
 }
 
+func buildProjectPlanForHost(
+	cfg *config.CmtConfig,
+	host config.HostEntry,
+	hostCfg *config.HostConfig,
+	project string,
+	client remote.RemoteClient,
+) (ProjectPlan, error) {
+	resolved := config.ResolveProjectConfig(cfg.Defaults, hostCfg, project)
+	if resolved.RemotePath == "" {
+		return ProjectPlan{}, fmt.Errorf("remotePath is not set for host %q, project %q", host.Name, project)
+	}
+
+	remoteDir := path.Join(resolved.RemotePath, project)
+	dirPlans := buildDirPlans(resolved.Dirs, remoteDir, client)
+
+	templateVars, err := LoadTemplateVars(cfg.BasePath, host.Name, project)
+	if err != nil {
+		return ProjectPlan{}, fmt.Errorf("loading template vars for %s/%s: %w", host.Name, project, err)
+	}
+
+	localFiles, err := CollectLocalFiles(cfg.BasePath, host.Name, project)
+	if err != nil {
+		return ProjectPlan{}, fmt.Errorf("collecting files for %s/%s: %w", host.Name, project, err)
+	}
+
+	manifest := readManifest(client, remoteDir)
+
+	filePlans, err := buildFilePlans(localFiles, remoteDir, manifest, client, templateVars)
+	if err != nil {
+		return ProjectPlan{}, fmt.Errorf("building file plan for %s/%s: %w", host.Name, project, err)
+	}
+
+	composePlan := buildComposePlan(resolved.ComposeAction, remoteDir, client)
+
+	return ProjectPlan{
+		ProjectName:     project,
+		RemoteDir:       remoteDir,
+		PostSyncCommand: resolved.PostSyncCommand,
+		ComposeAction:   resolved.ComposeAction,
+		Compose:         composePlan,
+		Dirs:            dirPlans,
+		Files:           filePlans,
+	}, nil
+}
+
+func buildDirPlans(directories []string, remoteDir string, client remote.RemoteClient) []DirPlan {
+	dirPlans := make([]DirPlan, 0, len(directories))
+
+	for _, directory := range directories {
+		absDir := path.Join(remoteDir, directory)
+		_, statErr := client.Stat(absDir)
+		dirPlans = append(dirPlans, DirPlan{
+			RelativePath: directory,
+			RemotePath:   absDir,
+			Exists:       statErr == nil,
+		})
+	}
+
+	return dirPlans
+}
+
 func buildComposePlan(action string, remoteDir string, client remote.RemoteClient) *ComposePlan {
-	plan := &ComposePlan{DesiredAction: action}
+	plan := &ComposePlan{
+		DesiredAction: action,
+		ActionType:    ComposeNoChange,
+		Services:      nil,
+	}
 
 	switch action {
 	case config.ComposeActionUp:
@@ -610,6 +639,9 @@ func buildComposePlan(action string, remoteDir string, client remote.RemoteClien
 			plan.ActionType = ComposeStopServices
 			plan.Services = running
 		}
+	case config.ComposeActionIgnore:
+		// Explicitly ignore runtime up/down state drift for this project.
+		return plan
 	}
 
 	return plan
@@ -636,7 +668,7 @@ func queryRunningServices(client remote.RemoteClient, remoteDir string) []string
 func parseServiceLines(output string) []string {
 	var services []string
 
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			services = append(services, line)

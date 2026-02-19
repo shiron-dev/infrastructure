@@ -411,6 +411,17 @@ func TestResolveProjectConfig_ComposeAction(t *testing.T) {
 			project:    "grafana",
 			wantAction: ComposeActionDown,
 		},
+		{
+			name:     "project can ignore compose runtime state",
+			defaults: &SyncDefaults{RemotePath: "/opt", ComposeAction: ComposeActionUp},
+			hostCfg: &HostConfig{
+				Projects: map[string]*ProjectConfig{
+					"grafana": {ComposeAction: ComposeActionIgnore},
+				},
+			},
+			project:    "grafana",
+			wantAction: ComposeActionIgnore,
+		},
 	}
 
 	for _, tt := range tests {
@@ -443,6 +454,7 @@ projects:
   grafana:
     composeAction: up
 `
+
 	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
 	if err != nil {
 		t.Fatal(err)
