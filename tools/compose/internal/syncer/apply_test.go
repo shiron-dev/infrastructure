@@ -396,3 +396,177 @@ func TestApplyWithDeps_RefreshManifestOnNoop(t *testing.T) {
 		t.Fatalf("expected manifest refreshed output, got %q", output)
 	}
 }
+
+func TestApplyWithDeps_ComposeUp(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "server1"},
+				Projects: []ProjectPlan{
+					{
+						ProjectName:   "grafana",
+						RemoteDir:     "/srv/grafana",
+						ComposeAction: "up",
+						Compose: &ComposePlan{
+							DesiredAction: "up",
+							ActionType:    ComposeStartServices,
+							Services:      []string{"grafana", "influxdb"},
+						},
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								LocalPath:    "/tmp/compose.yml",
+								RemotePath:   "/srv/grafana/compose.yml",
+								Action:       ActionUnchanged,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	factory := remote.NewMockClientFactory(ctrl)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	gomock.InOrder(
+		factory.EXPECT().
+			NewClient(config.HostEntry{Name: "server1"}).
+			Return(client, nil),
+		client.EXPECT().WriteFile("/srv/grafana/.cmt-manifest.json", gomock.Any()).Return(nil),
+		client.EXPECT().RunCommand("/srv/grafana", "docker compose up -d").Return("ok", nil),
+		client.EXPECT().Close().Return(nil),
+	)
+
+	var out bytes.Buffer
+
+	err := ApplyWithDeps(&config.CmtConfig{}, plan, true, false, &out, ApplyDependencies{
+		ClientFactory: factory,
+	})
+	if err != nil {
+		t.Fatalf("ApplyWithDeps: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "Apply complete!") {
+		t.Fatalf("expected complete output, got %q", output)
+	}
+
+	if !strings.Contains(output, "compose") {
+		t.Fatalf("expected compose output, got %q", output)
+	}
+}
+
+func TestApplyWithDeps_ComposeDown(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "server1"},
+				Projects: []ProjectPlan{
+					{
+						ProjectName:   "grafana",
+						RemoteDir:     "/srv/grafana",
+						ComposeAction: "down",
+						Compose: &ComposePlan{
+							DesiredAction: "down",
+							ActionType:    ComposeStopServices,
+							Services:      []string{"grafana"},
+						},
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								LocalPath:    "/tmp/compose.yml",
+								RemotePath:   "/srv/grafana/compose.yml",
+								Action:       ActionUnchanged,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	factory := remote.NewMockClientFactory(ctrl)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	gomock.InOrder(
+		factory.EXPECT().
+			NewClient(config.HostEntry{Name: "server1"}).
+			Return(client, nil),
+		client.EXPECT().WriteFile("/srv/grafana/.cmt-manifest.json", gomock.Any()).Return(nil),
+		client.EXPECT().RunCommand("/srv/grafana", "docker compose down").Return("", nil),
+		client.EXPECT().Close().Return(nil),
+	)
+
+	var out bytes.Buffer
+
+	err := ApplyWithDeps(&config.CmtConfig{}, plan, true, false, &out, ApplyDependencies{
+		ClientFactory: factory,
+	})
+	if err != nil {
+		t.Fatalf("ApplyWithDeps: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "Apply complete!") {
+		t.Fatalf("expected complete output, got %q", output)
+	}
+}
+
+func TestProjectHasChanges_ComposeOnly(t *testing.T) {
+	t.Parallel()
+
+	projectPlan := ProjectPlan{
+		Files: []FilePlan{
+			{Action: ActionUnchanged},
+		},
+		Compose: &ComposePlan{
+			ActionType: ComposeStartServices,
+			Services:   []string{"web"},
+		},
+	}
+
+	if !projectHasChanges(projectPlan) {
+		t.Error("projectHasChanges should return true when compose has changes")
+	}
+}
+
+func TestProjectHasChanges_NoCompose(t *testing.T) {
+	t.Parallel()
+
+	projectPlan := ProjectPlan{
+		Files: []FilePlan{
+			{Action: ActionUnchanged},
+		},
+		Compose: nil,
+	}
+
+	if projectHasChanges(projectPlan) {
+		t.Error("projectHasChanges should return false when no changes")
+	}
+}
+
+func TestProjectHasChanges_ComposeIgnore(t *testing.T) {
+	t.Parallel()
+
+	projectPlan := ProjectPlan{
+		Files: []FilePlan{
+			{Action: ActionUnchanged},
+		},
+		ComposeAction: config.ComposeActionIgnore,
+		Compose: &ComposePlan{
+			DesiredAction: config.ComposeActionIgnore,
+			ActionType:    ComposeNoChange,
+		},
+	}
+
+	if projectHasChanges(projectPlan) {
+		t.Error("projectHasChanges should return false for composeAction=ignore")
+	}
+}

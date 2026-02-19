@@ -1,5 +1,11 @@
 package config
 
+const (
+	ComposeActionUp     = "up"
+	ComposeActionDown   = "down"
+	ComposeActionIgnore = "ignore"
+)
+
 type CmtConfig struct {
 	BasePath         string            `json:"basePath"                   yaml:"basePath"`
 	Defaults         *SyncDefaults     `json:"defaults,omitempty"         yaml:"defaults,omitempty"`
@@ -19,6 +25,7 @@ type HookCommand struct {
 type SyncDefaults struct {
 	RemotePath      string `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
 	PostSyncCommand string `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
+	ComposeAction   string `json:"composeAction,omitempty"   yaml:"composeAction,omitempty"`
 }
 
 type HostEntry struct {
@@ -38,18 +45,21 @@ type HostConfig struct {
 	SSHConfig       string                    `json:"sshConfig,omitempty"       yaml:"sshConfig,omitempty"`
 	RemotePath      string                    `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
 	PostSyncCommand string                    `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
+	ComposeAction   string                    `json:"composeAction,omitempty"   yaml:"composeAction,omitempty"`
 	Projects        map[string]*ProjectConfig `json:"projects,omitempty"        yaml:"projects,omitempty"`
 }
 
 type ProjectConfig struct {
 	RemotePath      string   `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
 	PostSyncCommand string   `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
+	ComposeAction   string   `json:"composeAction,omitempty"   yaml:"composeAction,omitempty"`
 	Dirs            []string `json:"dirs,omitempty"            yaml:"dirs,omitempty"`
 }
 
 type ResolvedProjectConfig struct {
 	RemotePath      string
 	PostSyncCommand string
+	ComposeAction   string
 	Dirs            []string
 }
 
@@ -71,17 +81,39 @@ type AfterPromptHookPayload struct {
 }
 
 func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projectName string) ResolvedProjectConfig {
-	var resolved ResolvedProjectConfig
-
-	if cmtDefaults != nil {
-		resolved.RemotePath = cmtDefaults.RemotePath
-		resolved.PostSyncCommand = cmtDefaults.PostSyncCommand
-	}
-
+	resolved := resolveFromDefaults(cmtDefaults)
 	if hostCfg == nil {
+		resolved.ComposeAction = normalizeComposeAction(resolved.ComposeAction)
+
 		return resolved
 	}
 
+	applyHostOverrides(&resolved, hostCfg)
+	applyProjectOverrides(&resolved, hostCfg, projectName)
+	resolved.ComposeAction = normalizeComposeAction(resolved.ComposeAction)
+
+	return resolved
+}
+
+func resolveFromDefaults(defaults *SyncDefaults) ResolvedProjectConfig {
+	if defaults == nil {
+		return ResolvedProjectConfig{
+			RemotePath:      "",
+			PostSyncCommand: "",
+			ComposeAction:   "",
+			Dirs:            nil,
+		}
+	}
+
+	return ResolvedProjectConfig{
+		RemotePath:      defaults.RemotePath,
+		PostSyncCommand: defaults.PostSyncCommand,
+		ComposeAction:   defaults.ComposeAction,
+		Dirs:            nil,
+	}
+}
+
+func applyHostOverrides(resolved *ResolvedProjectConfig, hostCfg *HostConfig) {
 	if hostCfg.RemotePath != "" {
 		resolved.RemotePath = hostCfg.RemotePath
 	}
@@ -90,19 +122,38 @@ func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projec
 		resolved.PostSyncCommand = hostCfg.PostSyncCommand
 	}
 
-	if projectConfig, ok := hostCfg.Projects[projectName]; ok && projectConfig != nil {
-		if projectConfig.RemotePath != "" {
-			resolved.RemotePath = projectConfig.RemotePath
-		}
+	if hostCfg.ComposeAction != "" {
+		resolved.ComposeAction = hostCfg.ComposeAction
+	}
+}
 
-		if projectConfig.PostSyncCommand != "" {
-			resolved.PostSyncCommand = projectConfig.PostSyncCommand
-		}
-
-		if len(projectConfig.Dirs) > 0 {
-			resolved.Dirs = projectConfig.Dirs
-		}
+func applyProjectOverrides(resolved *ResolvedProjectConfig, hostCfg *HostConfig, projectName string) {
+	projectConfig, ok := hostCfg.Projects[projectName]
+	if !ok || projectConfig == nil {
+		return
 	}
 
-	return resolved
+	if projectConfig.RemotePath != "" {
+		resolved.RemotePath = projectConfig.RemotePath
+	}
+
+	if projectConfig.PostSyncCommand != "" {
+		resolved.PostSyncCommand = projectConfig.PostSyncCommand
+	}
+
+	if projectConfig.ComposeAction != "" {
+		resolved.ComposeAction = projectConfig.ComposeAction
+	}
+
+	if len(projectConfig.Dirs) > 0 {
+		resolved.Dirs = projectConfig.Dirs
+	}
+}
+
+func normalizeComposeAction(action string) string {
+	if action == "" {
+		return ComposeActionUp
+	}
+
+	return action
 }
