@@ -7,6 +7,7 @@ basePath: ../compose   # relative to this config file's directory
 defaults:
   remotePath: /opt/compose
   postSyncCommand: docker compose up -d
+  composeAction: up              # up|down (default: up)
 
 hosts:
   - name: server1

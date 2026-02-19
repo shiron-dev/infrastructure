@@ -1,5 +1,10 @@
 package config
 
+const (
+	ComposeActionUp   = "up"
+	ComposeActionDown = "down"
+)
+
 type CmtConfig struct {
 	BasePath         string            `json:"basePath"                   yaml:"basePath"`
 	Defaults         *SyncDefaults     `json:"defaults,omitempty"         yaml:"defaults,omitempty"`
@@ -19,6 +24,7 @@ type HookCommand struct {
 type SyncDefaults struct {
 	RemotePath      string `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
 	PostSyncCommand string `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
+	ComposeAction   string `json:"composeAction,omitempty"   yaml:"composeAction,omitempty"`
 }
 
 type HostEntry struct {
@@ -38,18 +44,21 @@ type HostConfig struct {
 	SSHConfig       string                    `json:"sshConfig,omitempty"       yaml:"sshConfig,omitempty"`
 	RemotePath      string                    `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
 	PostSyncCommand string                    `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
+	ComposeAction   string                    `json:"composeAction,omitempty"   yaml:"composeAction,omitempty"`
 	Projects        map[string]*ProjectConfig `json:"projects,omitempty"        yaml:"projects,omitempty"`
 }
 
 type ProjectConfig struct {
 	RemotePath      string   `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
 	PostSyncCommand string   `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
+	ComposeAction   string   `json:"composeAction,omitempty"   yaml:"composeAction,omitempty"`
 	Dirs            []string `json:"dirs,omitempty"            yaml:"dirs,omitempty"`
 }
 
 type ResolvedProjectConfig struct {
 	RemotePath      string
 	PostSyncCommand string
+	ComposeAction   string
 	Dirs            []string
 }
 
@@ -76,9 +85,12 @@ func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projec
 	if cmtDefaults != nil {
 		resolved.RemotePath = cmtDefaults.RemotePath
 		resolved.PostSyncCommand = cmtDefaults.PostSyncCommand
+		resolved.ComposeAction = cmtDefaults.ComposeAction
 	}
 
 	if hostCfg == nil {
+		resolved.ComposeAction = normalizeComposeAction(resolved.ComposeAction)
+
 		return resolved
 	}
 
@@ -90,6 +102,10 @@ func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projec
 		resolved.PostSyncCommand = hostCfg.PostSyncCommand
 	}
 
+	if hostCfg.ComposeAction != "" {
+		resolved.ComposeAction = hostCfg.ComposeAction
+	}
+
 	if projectConfig, ok := hostCfg.Projects[projectName]; ok && projectConfig != nil {
 		if projectConfig.RemotePath != "" {
 			resolved.RemotePath = projectConfig.RemotePath
@@ -99,10 +115,24 @@ func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projec
 			resolved.PostSyncCommand = projectConfig.PostSyncCommand
 		}
 
+		if projectConfig.ComposeAction != "" {
+			resolved.ComposeAction = projectConfig.ComposeAction
+		}
+
 		if len(projectConfig.Dirs) > 0 {
 			resolved.Dirs = projectConfig.Dirs
 		}
 	}
 
+	resolved.ComposeAction = normalizeComposeAction(resolved.ComposeAction)
+
 	return resolved
+}
+
+func normalizeComposeAction(action string) string {
+	if action == "" {
+		return ComposeActionUp
+	}
+
+	return action
 }

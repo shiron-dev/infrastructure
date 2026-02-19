@@ -354,6 +354,114 @@ func TestResolveProjectConfig(t *testing.T) {
 	}
 }
 
+func TestResolveProjectConfig_ComposeAction(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		defaults   *SyncDefaults
+		hostCfg    *HostConfig
+		project    string
+		wantAction string
+	}{
+		{
+			name:       "defaults to up when unset",
+			defaults:   &SyncDefaults{RemotePath: "/opt"},
+			hostCfg:    nil,
+			project:    "grafana",
+			wantAction: ComposeActionUp,
+		},
+		{
+			name:       "defaults level sets action",
+			defaults:   &SyncDefaults{RemotePath: "/opt", ComposeAction: ComposeActionDown},
+			hostCfg:    nil,
+			project:    "grafana",
+			wantAction: ComposeActionDown,
+		},
+		{
+			name:     "host level overrides defaults",
+			defaults: &SyncDefaults{RemotePath: "/opt", ComposeAction: ComposeActionUp},
+			hostCfg: &HostConfig{
+				ComposeAction: ComposeActionDown,
+			},
+			project:    "grafana",
+			wantAction: ComposeActionDown,
+		},
+		{
+			name:     "project level overrides host",
+			defaults: &SyncDefaults{RemotePath: "/opt"},
+			hostCfg: &HostConfig{
+				ComposeAction: ComposeActionUp,
+				Projects: map[string]*ProjectConfig{
+					"grafana": {ComposeAction: ComposeActionDown},
+				},
+			},
+			project:    "grafana",
+			wantAction: ComposeActionDown,
+		},
+		{
+			name:     "unset project inherits host",
+			defaults: &SyncDefaults{RemotePath: "/opt"},
+			hostCfg: &HostConfig{
+				ComposeAction: ComposeActionDown,
+				Projects: map[string]*ProjectConfig{
+					"grafana": {},
+				},
+			},
+			project:    "grafana",
+			wantAction: ComposeActionDown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			resolved := ResolveProjectConfig(tt.defaults, tt.hostCfg, tt.project)
+			if resolved.ComposeAction != tt.wantAction {
+				t.Errorf("ComposeAction = %q, want %q", resolved.ComposeAction, tt.wantAction)
+			}
+		})
+	}
+}
+
+func TestLoadHostConfig_ComposeAction(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	hostDir := filepath.Join(dir, "hosts", "server1")
+
+	err := os.MkdirAll(hostDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := `
+remotePath: /srv/compose
+composeAction: down
+projects:
+  grafana:
+    composeAction: up
+`
+	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hostConfig, err := LoadHostConfig(dir, "server1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if hostConfig.ComposeAction != "down" {
+		t.Errorf("host composeAction = %q, want %q", hostConfig.ComposeAction, "down")
+	}
+
+	if hostConfig.Projects["grafana"].ComposeAction != "up" {
+		t.Errorf("grafana composeAction = %q, want %q", hostConfig.Projects["grafana"].ComposeAction, "up")
+	}
+}
+
 func TestLoadHostConfig(t *testing.T) {
 	t.Parallel()
 

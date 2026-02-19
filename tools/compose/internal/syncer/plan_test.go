@@ -609,6 +609,12 @@ func TestBuildPlanWithDeps_UsesInjectedDependencies(t *testing.T) {
 	client.EXPECT().
 		ReadFile("/srv/compose/grafana/compose.yml").
 		Return(nil, errors.New("remote file missing"))
+	client.EXPECT().
+		RunCommand("/srv/compose/grafana", "docker compose config --services 2>/dev/null").
+		Return("", errors.New("not found"))
+	client.EXPECT().
+		RunCommand("/srv/compose/grafana", "docker compose ps --services --filter status=running 2>/dev/null").
+		Return("", errors.New("not found"))
 	client.EXPECT().Close().Return(nil)
 
 	plan, err := BuildPlanWithDeps(cfg, nil, nil, PlanDependencies{
@@ -1018,5 +1024,289 @@ func TestMaskDiffWithPatterns_UsesManifestHintsForRemovedSecrets(t *testing.T) {
 
 	if !strings.Contains(masked, "-      - GF_SMTP_PASSWORD="+maskPlaceholder) {
 		t.Fatalf("masked removed line not found:\n%s", masked)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ComposePlan
+// ---------------------------------------------------------------------------
+
+func TestComposePlan_HasChanges(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		plan *ComposePlan
+		want bool
+	}{
+		{
+			name: "nil plan",
+			plan: nil,
+			want: false,
+		},
+		{
+			name: "no change",
+			plan: &ComposePlan{ActionType: ComposeNoChange},
+			want: false,
+		},
+		{
+			name: "start with services",
+			plan: &ComposePlan{
+				ActionType: ComposeStartServices,
+				Services:   []string{"web", "db"},
+			},
+			want: true,
+		},
+		{
+			name: "stop with services",
+			plan: &ComposePlan{
+				ActionType: ComposeStopServices,
+				Services:   []string{"web"},
+			},
+			want: true,
+		},
+		{
+			name: "start but empty services",
+			plan: &ComposePlan{
+				ActionType: ComposeStartServices,
+				Services:   nil,
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tt.plan.HasChanges(); got != tt.want {
+				t.Errorf("HasChanges() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHasChanges_ComposeOnly(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Projects: []ProjectPlan{
+					{
+						Files: []FilePlan{
+							{Action: ActionUnchanged},
+						},
+						Dirs: []DirPlan{
+							{Exists: true},
+						},
+						Compose: &ComposePlan{
+							ActionType: ComposeStartServices,
+							Services:   []string{"web"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if !plan.HasChanges() {
+		t.Error("HasChanges() should return true when compose has changes")
+	}
+}
+
+func TestComposeStats(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Projects: []ProjectPlan{
+					{
+						Compose: &ComposePlan{
+							ActionType: ComposeStartServices,
+							Services:   []string{"web", "db"},
+						},
+					},
+					{
+						Compose: &ComposePlan{
+							ActionType: ComposeStopServices,
+							Services:   []string{"redis"},
+						},
+					},
+					{
+						Compose: nil,
+					},
+				},
+			},
+		},
+	}
+
+	start, stop := plan.ComposeStats()
+	if start != 2 {
+		t.Errorf("start = %d, want 2", start)
+	}
+
+	if stop != 1 {
+		t.Errorf("stop = %d, want 1", stop)
+	}
+}
+
+func TestParseServiceLines(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		output string
+		want   []string
+	}{
+		{
+			name:   "normal output",
+			output: "web\ndb\nredis\n",
+			want:   []string{"db", "redis", "web"},
+		},
+		{
+			name:   "empty output",
+			output: "",
+			want:   nil,
+		},
+		{
+			name:   "whitespace only",
+			output: "  \n  \n",
+			want:   nil,
+		},
+		{
+			name:   "with trailing whitespace",
+			output: "web \n db\n",
+			want:   []string{"db", "web"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := parseServiceLines(tt.output)
+			if len(got) != len(tt.want) {
+				t.Fatalf("len = %d, want %d; got = %v", len(got), len(tt.want), got)
+			}
+
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("got[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestDiffServices(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		all     []string
+		running []string
+		want    []string
+	}{
+		{
+			name:    "some stopped",
+			all:     []string{"db", "redis", "web"},
+			running: []string{"web"},
+			want:    []string{"db", "redis"},
+		},
+		{
+			name:    "all running",
+			all:     []string{"db", "web"},
+			running: []string{"db", "web"},
+			want:    nil,
+		},
+		{
+			name:    "none running",
+			all:     []string{"db", "web"},
+			running: nil,
+			want:    []string{"db", "web"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := diffServices(tt.all, tt.running)
+			if len(got) != len(tt.want) {
+				t.Fatalf("len = %d, want %d; got = %v", len(got), len(tt.want), got)
+			}
+
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("got[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestSyncPlan_Print_ComposeServices(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{
+					Name: "server1",
+					User: "deploy",
+					Host: "192.168.1.1",
+					Port: 22,
+				},
+				Projects: []ProjectPlan{
+					{
+						ProjectName:   "grafana",
+						RemoteDir:     "/opt/compose/grafana",
+						ComposeAction: "up",
+						Compose: &ComposePlan{
+							DesiredAction: "up",
+							ActionType:    ComposeStartServices,
+							Services:      []string{"grafana", "influxdb"},
+						},
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								Action:       ActionUnchanged,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+
+	plan.Print(&buf)
+	output := buf.String()
+
+	if !strings.Contains(output, "Compose: up") {
+		t.Error("output should contain compose action")
+	}
+
+	if !strings.Contains(output, "Compose services:") {
+		t.Error("output should contain compose services header")
+	}
+
+	if !strings.Contains(output, "grafana") {
+		t.Error("output should list grafana service")
+	}
+
+	if !strings.Contains(output, "influxdb") {
+		t.Error("output should list influxdb service")
+	}
+
+	if !strings.Contains(output, "(start)") {
+		t.Error("output should show (start) for up action")
+	}
+
+	if !strings.Contains(output, "service(s) to start") {
+		t.Error("summary should mention services to start")
 	}
 }

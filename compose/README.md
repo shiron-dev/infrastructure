@@ -42,10 +42,12 @@ hosts/
 ```yaml
 remotePath: /opt/compose
 postSyncCommand: docker compose up -d
+composeAction: up                # up|down (default: up)
 
 projects:
   grafana:
     postSyncCommand: docker compose -f compose.yml -f compose.override.yml up -d
+    composeAction: up            # per-project override
 ```
 
 ## Go Template support

@@ -4,6 +4,7 @@ projects:
   grafana:
     remotePath: /var
     postSyncCommand: docker compose up -d
+    composeAction: up
     dirs:
       - grafana_storage
       - grafana_conf/provisioning/datasources

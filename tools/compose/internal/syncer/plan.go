@@ -74,10 +74,30 @@ type HostPlan struct {
 	Projects []ProjectPlan
 }
 
+type ComposeActionType int
+
+const (
+	ComposeNoChange ComposeActionType = iota
+	ComposeStartServices
+	ComposeStopServices
+)
+
+type ComposePlan struct {
+	DesiredAction string
+	ActionType    ComposeActionType
+	Services      []string
+}
+
+func (c *ComposePlan) HasChanges() bool {
+	return c != nil && c.ActionType != ComposeNoChange && len(c.Services) > 0
+}
+
 type ProjectPlan struct {
 	ProjectName     string
 	RemoteDir       string
 	PostSyncCommand string
+	ComposeAction   string
+	Compose         *ComposePlan
 	Dirs            []DirPlan
 	Files           []FilePlan
 }
@@ -160,6 +180,28 @@ func (p *SyncPlan) DirStats() (int, int) {
 	return toCreateCount, existingCount
 }
 
+func (p *SyncPlan) ComposeStats() (int, int) {
+	startCount := 0
+	stopCount := 0
+
+	for _, hostPlan := range p.HostPlans {
+		for _, projectPlan := range hostPlan.Projects {
+			if projectPlan.Compose == nil {
+				continue
+			}
+
+			switch projectPlan.Compose.ActionType {
+			case ComposeStartServices:
+				startCount += len(projectPlan.Compose.Services)
+			case ComposeStopServices:
+				stopCount += len(projectPlan.Compose.Services)
+			}
+		}
+	}
+
+	return startCount, stopCount
+}
+
 func (p *SyncPlan) HasChanges() bool {
 	hostCount, projectCount, add, mod, del, unchangedCount := p.Stats()
 	_ = hostCount
@@ -167,7 +209,19 @@ func (p *SyncPlan) HasChanges() bool {
 	_ = unchangedCount
 	dirCreate, _ := p.DirStats()
 
-	return add+mod+del+dirCreate > 0
+	if add+mod+del+dirCreate > 0 {
+		return true
+	}
+
+	for _, hostPlan := range p.HostPlans {
+		for _, projectPlan := range hostPlan.Projects {
+			if projectPlan.Compose.HasChanges() {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (p *SyncPlan) Print(writer io.Writer) {
@@ -197,6 +251,15 @@ func (p *SyncPlan) Print(writer io.Writer) {
 
 	if dirCreate > 0 {
 		_, _ = fmt.Fprintf(writer, ", %s dir(s) to create", style.success(strconv.Itoa(dirCreate)))
+	}
+
+	composeStart, composeStop := p.ComposeStats()
+	if composeStart > 0 {
+		_, _ = fmt.Fprintf(writer, ", %s service(s) to start", style.success(strconv.Itoa(composeStart)))
+	}
+
+	if composeStop > 0 {
+		_, _ = fmt.Fprintf(writer, ", %s service(s) to stop", style.danger(strconv.Itoa(composeStop)))
 	}
 
 	_, _ = fmt.Fprintln(writer)
@@ -231,7 +294,12 @@ func printProjectPlan(writer io.Writer, style outputStyle, projectPlan ProjectPl
 		_, _ = fmt.Fprintf(writer, "    %s %s\n", style.key("Post-sync:"), projectPlan.PostSyncCommand)
 	}
 
+	if projectPlan.ComposeAction != "" {
+		_, _ = fmt.Fprintf(writer, "    %s %s\n", style.key("Compose:"), projectPlan.ComposeAction)
+	}
+
 	_, _ = fmt.Fprintln(writer)
+	printComposePlan(writer, style, projectPlan.Compose)
 	printProjectDirPlans(writer, style, projectPlan.Dirs)
 
 	if len(projectPlan.Files) == 0 && len(projectPlan.Dirs) == 0 {
@@ -251,6 +319,27 @@ func printProjectPlan(writer io.Writer, style outputStyle, projectPlan ProjectPl
 
 		printFileDiff(writer, style, filePlan.Diff)
 	}
+}
+
+func printComposePlan(writer io.Writer, style outputStyle, compose *ComposePlan) {
+	if compose == nil || compose.ActionType == ComposeNoChange || len(compose.Services) == 0 {
+		return
+	}
+
+	_, _ = fmt.Fprintln(writer, "    "+style.key("Compose services:"))
+
+	for _, svc := range compose.Services {
+		switch compose.ActionType {
+		case ComposeStartServices:
+			_, _ = fmt.Fprintf(writer, "      %s %s %s\n",
+				style.actionSymbol(ActionAdd), svc, style.success("(start)"))
+		case ComposeStopServices:
+			_, _ = fmt.Fprintf(writer, "      %s %s %s\n",
+				style.actionSymbol(ActionDelete), svc, style.danger("(stop)"))
+		}
+	}
+
+	_, _ = fmt.Fprintln(writer)
 }
 
 func printProjectDirPlans(writer io.Writer, style outputStyle, dirPlans []DirPlan) {
@@ -486,16 +575,94 @@ func buildHostPlan(
 			return nil, fmt.Errorf("building file plan for %s/%s: %w", host.Name, project, err)
 		}
 
+		composePlan := buildComposePlan(resolved.ComposeAction, remoteDir, client)
+
 		hostPlan.Projects = append(hostPlan.Projects, ProjectPlan{
 			ProjectName:     project,
 			RemoteDir:       remoteDir,
 			PostSyncCommand: resolved.PostSyncCommand,
+			ComposeAction:   resolved.ComposeAction,
+			Compose:         composePlan,
 			Dirs:            dirPlans,
 			Files:           filePlans,
 		})
 	}
 
 	return hostPlan, nil
+}
+
+func buildComposePlan(action string, remoteDir string, client remote.RemoteClient) *ComposePlan {
+	plan := &ComposePlan{DesiredAction: action}
+
+	switch action {
+	case config.ComposeActionUp:
+		defined := queryComposeServices(client, remoteDir)
+		running := queryRunningServices(client, remoteDir)
+
+		stopped := diffServices(defined, running)
+		if len(stopped) > 0 {
+			plan.ActionType = ComposeStartServices
+			plan.Services = stopped
+		}
+	case config.ComposeActionDown:
+		running := queryRunningServices(client, remoteDir)
+		if len(running) > 0 {
+			plan.ActionType = ComposeStopServices
+			plan.Services = running
+		}
+	}
+
+	return plan
+}
+
+func queryComposeServices(client remote.RemoteClient, remoteDir string) []string {
+	output, err := client.RunCommand(remoteDir, "docker compose config --services 2>/dev/null")
+	if err != nil {
+		return nil
+	}
+
+	return parseServiceLines(output)
+}
+
+func queryRunningServices(client remote.RemoteClient, remoteDir string) []string {
+	output, err := client.RunCommand(remoteDir, "docker compose ps --services --filter status=running 2>/dev/null")
+	if err != nil {
+		return nil
+	}
+
+	return parseServiceLines(output)
+}
+
+func parseServiceLines(output string) []string {
+	var services []string
+
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			services = append(services, line)
+		}
+	}
+
+	sort.Strings(services)
+
+	return services
+}
+
+func diffServices(all, running []string) []string {
+	runningSet := make(map[string]bool, len(running))
+	for _, s := range running {
+		runningSet[s] = true
+	}
+
+	var stopped []string
+
+	for _, s := range all {
+		if !runningSet[s] {
+			stopped = append(stopped, s)
+		}
+	}
+
+	return stopped
 }
 
 func buildFilePlans(

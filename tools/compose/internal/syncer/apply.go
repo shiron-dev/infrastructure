@@ -336,13 +336,23 @@ func printApplySummary(plan *SyncPlan, writer io.Writer, style outputStyle) {
 
 	_, _ = fmt.Fprintf(
 		writer,
-		"\n%s %d file(s) synced (%s added, %s modified, %s deleted)\n",
+		"\n%s %d file(s) synced (%s added, %s modified, %s deleted)",
 		style.success("Apply complete!"),
 		addCount+modifyCount+deleteCount,
 		style.success(strconv.Itoa(addCount)),
 		style.warning(strconv.Itoa(modifyCount)),
 		style.danger(strconv.Itoa(deleteCount)),
 	)
+
+	composeStart, composeStop := plan.ComposeStats()
+	if composeStart > 0 || composeStop > 0 {
+		_, _ = fmt.Fprintf(writer, ", compose: %s started, %s stopped",
+			style.success(strconv.Itoa(composeStart)),
+			style.danger(strconv.Itoa(composeStop)),
+		)
+	}
+
+	_, _ = fmt.Fprintln(writer)
 }
 
 func projectHasChanges(projectPlan ProjectPlan) bool {
@@ -350,6 +360,10 @@ func projectHasChanges(projectPlan ProjectPlan) bool {
 		if filePlan.Action != ActionUnchanged {
 			return true
 		}
+	}
+
+	if projectPlan.Compose.HasChanges() {
+		return true
 	}
 
 	return false
@@ -379,6 +393,11 @@ func applyProjectPlan(
 	}
 
 	err = runPostSyncCommand(hostPlan, projectPlan, client, writer, style)
+	if err != nil {
+		return err
+	}
+
+	err = runComposeAction(hostPlan, projectPlan, client, writer, style)
 	if err != nil {
 		return err
 	}
@@ -512,6 +531,53 @@ func runPostSyncCommand(
 		}
 
 		return fmt.Errorf("post-sync command on %s/%s: %w", hostPlan.Host.Name, projectPlan.ProjectName, err)
+	}
+
+	_, _ = fmt.Fprintln(writer, style.success("done"))
+
+	if output == "" {
+		return nil
+	}
+
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
+		_, _ = fmt.Fprintf(writer, "      %s\n", line)
+	}
+
+	return nil
+}
+
+func runComposeAction(
+	hostPlan HostPlan,
+	projectPlan ProjectPlan,
+	client remote.RemoteClient,
+	writer io.Writer,
+	style outputStyle,
+) error {
+	if !projectPlan.Compose.HasChanges() {
+		return nil
+	}
+
+	var cmd string
+
+	switch projectPlan.Compose.ActionType {
+	case ComposeStartServices:
+		cmd = "docker compose up -d"
+	case ComposeStopServices:
+		cmd = "docker compose down"
+	default:
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(writer, "    %s %s... ", style.key("compose"), cmd)
+
+	output, err := client.RunCommand(projectPlan.RemoteDir, cmd)
+	if err != nil {
+		_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
+		if output != "" {
+			_, _ = fmt.Fprintf(writer, "    %s %s\n", style.key("output:"), output)
+		}
+
+		return fmt.Errorf("compose %s on %s/%s: %w", cmd, hostPlan.Host.Name, projectPlan.ProjectName, err)
 	}
 
 	_, _ = fmt.Fprintln(writer, style.success("done"))
