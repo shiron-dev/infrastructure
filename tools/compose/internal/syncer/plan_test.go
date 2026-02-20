@@ -14,6 +14,14 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+type mockLocalCommandRunner struct {
+	run func(name string, args []string, workdir string) (string, error)
+}
+
+func (m mockLocalCommandRunner) Run(name string, args []string, workdir string) (string, error) {
+	return m.run(name, args, workdir)
+}
+
 func TestCollectLocalFiles(t *testing.T) {
 	t.Parallel()
 
@@ -617,9 +625,31 @@ func TestBuildPlanWithDeps_UsesInjectedDependencies(t *testing.T) {
 		Return("", errors.New("not found"))
 	client.EXPECT().Close().Return(nil)
 
+	runner := mockLocalCommandRunner{
+		run: func(name string, args []string, _ string) (string, error) {
+			if name != "docker" {
+				t.Fatalf("name = %q, want docker", name)
+			}
+
+			wantArgs := []string{"compose", "-f", "compose.yml", "config"}
+			if len(args) != len(wantArgs) {
+				t.Fatalf("args len = %d, want %d; args = %v", len(args), len(wantArgs), args)
+			}
+
+			for i := range wantArgs {
+				if args[i] != wantArgs[i] {
+					t.Fatalf("args[%d] = %q, want %q", i, args[i], wantArgs[i])
+				}
+			}
+
+			return "ok", nil
+		},
+	}
+
 	plan, err := BuildPlanWithDeps(cfg, nil, nil, PlanDependencies{
 		ClientFactory: factory,
 		SSHResolver:   resolver,
+		LocalRunner:   runner,
 	})
 	if err != nil {
 		t.Fatalf("BuildPlanWithDeps: %v", err)
@@ -640,6 +670,71 @@ func TestBuildPlanWithDeps_UsesInjectedDependencies(t *testing.T) {
 
 	if files[0].Action != ActionAdd {
 		t.Fatalf("file action = %v, want %v", files[0].Action, ActionAdd)
+	}
+}
+
+func TestBuildPlanWithDeps_ComposeValidationFails(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	projectDir := filepath.Join(base, "projects", "grafana")
+
+	err := os.MkdirAll(projectDir, 0o750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(projectDir, "compose.yml"), []byte("services: {}"), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0o750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.CmtConfig{
+		BasePath: base,
+		Defaults: &config.SyncDefaults{RemotePath: "/srv/compose"},
+		Hosts: []config.HostEntry{
+			{Name: "server1", Host: "server1-alias", User: "deploy"},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	resolver := config.NewMockSSHConfigResolver(ctrl)
+	factory := remote.NewMockClientFactory(ctrl)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	hostDir := filepath.Join(base, "hosts", "server1")
+	gomock.InOrder(
+		resolver.EXPECT().Resolve(gomock.Any(), "", hostDir).Return(nil),
+		factory.EXPECT().NewClient(gomock.AssignableToTypeOf(config.HostEntry{})).Return(client, nil),
+	)
+	client.EXPECT().
+		ReadFile("/srv/compose/grafana/.cmt-manifest.json").
+		Return(nil, errors.New("manifest not found"))
+	client.EXPECT().
+		ReadFile("/srv/compose/grafana/compose.yml").
+		Return(nil, errors.New("remote file missing"))
+	client.EXPECT().Close().Return(nil)
+
+	_, err = BuildPlanWithDeps(cfg, nil, nil, PlanDependencies{
+		ClientFactory: factory,
+		SSHResolver:   resolver,
+		LocalRunner: mockLocalCommandRunner{
+			run: func(string, []string, string) (string, error) {
+				return "compose is invalid", errors.New("exit status 1")
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if !strings.Contains(err.Error(), "validating docker compose config for server1/grafana failed") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
