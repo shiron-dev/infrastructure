@@ -121,6 +121,7 @@ type ProjectPlan struct {
 	RemoteDir       string
 	PostSyncCommand string
 	ComposeAction   string
+	RemoveOrphans   bool
 	Compose         *ComposePlan
 	Dirs            []DirPlan
 	Files           []FilePlan
@@ -633,6 +634,7 @@ func buildProjectPlanForHost(
 		RemoteDir:       remoteDir,
 		PostSyncCommand: resolved.PostSyncCommand,
 		ComposeAction:   resolved.ComposeAction,
+		RemoveOrphans:   resolved.RemoveOrphans,
 		Compose:         composePlan,
 		Dirs:            dirPlans,
 		Files:           filePlans,

@@ -562,6 +562,9 @@ func runComposeAction(
 		cmd = "docker compose up -d"
 	case ComposeStopServices:
 		cmd = "docker compose down"
+		if projectPlan.RemoveOrphans {
+			cmd += " --remove-orphans"
+		}
 	default:
 		return nil
 	}
