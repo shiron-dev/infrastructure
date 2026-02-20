@@ -645,14 +645,7 @@ func validateComposeConfigForPlan(
 	filePlans []FilePlan,
 	localRunner LocalCommandRunner,
 ) error {
-	filesToValidate := make(map[string][]byte)
-	for _, plan := range filePlans {
-		if plan.Action == ActionDelete || len(plan.LocalData) == 0 {
-			continue
-		}
-
-		filesToValidate[plan.RelativePath] = plan.LocalData
-	}
+	filesToValidate := collectComposeValidationFiles(filePlans)
 
 	if _, hasCompose := filesToValidate["compose.yml"]; !hasCompose {
 		return nil
@@ -667,28 +660,13 @@ func validateComposeConfigForPlan(
 		_ = os.RemoveAll(tempDir)
 	}()
 
-	for relPath, data := range filesToValidate {
-		targetPath := filepath.Join(tempDir, relPath)
-		targetDir := filepath.Dir(targetPath)
-		if mkdirErr := os.MkdirAll(targetDir, 0o750); mkdirErr != nil {
-			return fmt.Errorf("preparing compose validation file %s: %w", relPath, mkdirErr)
-		}
-
-		if writeErr := os.WriteFile(targetPath, data, 0o600); writeErr != nil {
-			return fmt.Errorf("writing compose validation file %s: %w", relPath, writeErr)
-		}
+	err = writeComposeValidationFiles(tempDir, filesToValidate)
+	if err != nil {
+		return err
 	}
 
-	args := []string{"compose", "-f", "compose.yml"}
-	if _, hasOverride := filesToValidate["compose.override.yml"]; hasOverride {
-		args = append(args, "-f", "compose.override.yml")
-	}
+	args := buildComposeConfigArgs(filesToValidate)
 
-	if _, hasEnv := filesToValidate[".env"]; hasEnv {
-		args = append(args, "--env-file", ".env")
-	}
-
-	args = append(args, "config")
 	output, runErr := localRunner.Run("docker", args, tempDir)
 	if runErr != nil {
 		return fmt.Errorf(
@@ -701,6 +679,58 @@ func validateComposeConfigForPlan(
 	}
 
 	return nil
+}
+
+const (
+	composeValidationDirPerm  fs.FileMode = 0o750
+	composeValidationFilePerm fs.FileMode = 0o600
+)
+
+func collectComposeValidationFiles(filePlans []FilePlan) map[string][]byte {
+	filesToValidate := make(map[string][]byte)
+
+	for _, plan := range filePlans {
+		if plan.Action == ActionDelete || len(plan.LocalData) == 0 {
+			continue
+		}
+
+		filesToValidate[plan.RelativePath] = plan.LocalData
+	}
+
+	return filesToValidate
+}
+
+func writeComposeValidationFiles(baseDir string, files map[string][]byte) error {
+	for relPath, data := range files {
+		targetPath := filepath.Join(baseDir, relPath)
+
+		targetDir := filepath.Dir(targetPath)
+
+		mkdirErr := os.MkdirAll(targetDir, composeValidationDirPerm)
+		if mkdirErr != nil {
+			return fmt.Errorf("preparing compose validation file %s: %w", relPath, mkdirErr)
+		}
+
+		writeErr := os.WriteFile(targetPath, data, composeValidationFilePerm)
+		if writeErr != nil {
+			return fmt.Errorf("writing compose validation file %s: %w", relPath, writeErr)
+		}
+	}
+
+	return nil
+}
+
+func buildComposeConfigArgs(filesToValidate map[string][]byte) []string {
+	args := []string{"compose", "-f", "compose.yml"}
+	if _, hasOverride := filesToValidate["compose.override.yml"]; hasOverride {
+		args = append(args, "-f", "compose.override.yml")
+	}
+
+	if _, hasEnv := filesToValidate[".env"]; hasEnv {
+		args = append(args, "--env-file", ".env")
+	}
+
+	return append(args, "config")
 }
 
 func buildDirPlans(directories []string, remoteDir string, client remote.RemoteClient) []DirPlan {
