@@ -10,7 +10,7 @@ SSH/SFTP 経由でリモートホストにプッシュします。
 Terraform と同様の **plan / apply** ワークフローに従います。
 
 ```
-cmt plan   — 変更内容を表示（読み取り専用）
+cmt plan   — 変更内容を表示（読み取り専用、`docker compose config` で構成検証）
 cmt apply  — 変更を適用（確認あり、--auto-approve で省略可）
 ```
 

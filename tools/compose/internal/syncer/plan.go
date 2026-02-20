@@ -2,12 +2,14 @@ package syncer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -24,6 +26,28 @@ import (
 type PlanDependencies struct {
 	ClientFactory remote.ClientFactory
 	SSHResolver   config.SSHConfigResolver
+	LocalRunner   LocalCommandRunner
+}
+
+type LocalCommandRunner interface {
+	Run(name string, args []string, workdir string) (string, error)
+}
+
+type ExecLocalCommandRunner struct{}
+
+func (ExecLocalCommandRunner) Run(name string, args []string, workdir string) (string, error) {
+	cmd := exec.CommandContext(context.Background(), name)
+	cmd.Args = make([]string, 1+len(args))
+	cmd.Args[0] = name
+	copy(cmd.Args[1:], args)
+	cmd.Dir = workdir
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), fmt.Errorf("%w", err)
+	}
+
+	return string(output), nil
 }
 
 type ActionType int
@@ -414,7 +438,7 @@ func BuildPlanWithDeps(
 	hostFilter, projectFilter []string,
 	deps PlanDependencies,
 ) (*SyncPlan, error) {
-	clientFactory, sshResolver := resolvePlanDependencies(deps)
+	clientFactory, sshResolver, localRunner := resolvePlanDependencies(deps)
 
 	allProjects, err := config.DiscoverProjects(cfg.BasePath)
 	if err != nil {
@@ -435,7 +459,7 @@ func BuildPlanWithDeps(
 	plan.HostPlans = nil
 
 	for _, host := range hosts {
-		hostPlan, err := buildHostPlanForTarget(cfg, host, projects, clientFactory, sshResolver)
+		hostPlan, err := buildHostPlanForTarget(cfg, host, projects, clientFactory, sshResolver, localRunner)
 		if err != nil {
 			return nil, err
 		}
@@ -446,7 +470,9 @@ func BuildPlanWithDeps(
 	return plan, nil
 }
 
-func resolvePlanDependencies(deps PlanDependencies) (remote.ClientFactory, config.SSHConfigResolver) {
+func resolvePlanDependencies(
+	deps PlanDependencies,
+) (remote.ClientFactory, config.SSHConfigResolver, LocalCommandRunner) {
 	clientFactory := deps.ClientFactory
 	if clientFactory == nil {
 		defaultFactory := new(remote.DefaultClientFactory)
@@ -461,7 +487,12 @@ func resolvePlanDependencies(deps PlanDependencies) (remote.ClientFactory, confi
 		sshResolver = *defaultResolver
 	}
 
-	return clientFactory, sshResolver
+	localRunner := deps.LocalRunner
+	if localRunner == nil {
+		localRunner = ExecLocalCommandRunner{}
+	}
+
+	return clientFactory, sshResolver, localRunner
 }
 
 func buildHostPlanForTarget(
@@ -470,6 +501,7 @@ func buildHostPlanForTarget(
 	projects []string,
 	clientFactory remote.ClientFactory,
 	sshResolver config.SSHConfigResolver,
+	localRunner LocalCommandRunner,
 ) (*HostPlan, error) {
 	hostCfg, found, err := loadHostConfig(cfg.BasePath, host.Name)
 	if err != nil {
@@ -494,7 +526,7 @@ func buildHostPlanForTarget(
 		_ = client.Close()
 	}()
 
-	hostPlan, err := buildHostPlan(cfg, host, hostCfg, projects, client)
+	hostPlan, err := buildHostPlan(cfg, host, hostCfg, projects, client, localRunner)
 	if err != nil {
 		return nil, err
 	}
@@ -537,6 +569,7 @@ func buildHostPlan(
 	hostCfg *config.HostConfig,
 	projects []string,
 	client remote.RemoteClient,
+	localRunner LocalCommandRunner,
 ) (*HostPlan, error) {
 	hostPlan := &HostPlan{
 		Host:     host,
@@ -544,7 +577,7 @@ func buildHostPlan(
 	}
 
 	for _, project := range projects {
-		projectPlan, err := buildProjectPlanForHost(cfg, host, hostCfg, project, client)
+		projectPlan, err := buildProjectPlanForHost(cfg, host, hostCfg, project, client, localRunner)
 		if err != nil {
 			return nil, err
 		}
@@ -561,6 +594,7 @@ func buildProjectPlanForHost(
 	hostCfg *config.HostConfig,
 	project string,
 	client remote.RemoteClient,
+	localRunner LocalCommandRunner,
 ) (ProjectPlan, error) {
 	resolved := config.ResolveProjectConfig(cfg.Defaults, hostCfg, project)
 	if resolved.RemotePath == "" {
@@ -587,6 +621,11 @@ func buildProjectPlanForHost(
 		return ProjectPlan{}, fmt.Errorf("building file plan for %s/%s: %w", host.Name, project, err)
 	}
 
+	err = validateComposeConfigForPlan(host.Name, project, filePlans, localRunner)
+	if err != nil {
+		return ProjectPlan{}, err
+	}
+
 	composePlan := buildComposePlan(resolved.ComposeAction, remoteDir, client)
 
 	return ProjectPlan{
@@ -598,6 +637,100 @@ func buildProjectPlanForHost(
 		Dirs:            dirPlans,
 		Files:           filePlans,
 	}, nil
+}
+
+func validateComposeConfigForPlan(
+	hostName string,
+	projectName string,
+	filePlans []FilePlan,
+	localRunner LocalCommandRunner,
+) error {
+	filesToValidate := collectComposeValidationFiles(filePlans)
+
+	if _, hasCompose := filesToValidate["compose.yml"]; !hasCompose {
+		return nil
+	}
+
+	tempDir, err := os.MkdirTemp("", "cmt-compose-validate-*")
+	if err != nil {
+		return fmt.Errorf("creating temporary directory for compose validation: %w", err)
+	}
+
+	defer func() {
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	err = writeComposeValidationFiles(tempDir, filesToValidate)
+	if err != nil {
+		return err
+	}
+
+	args := buildComposeConfigArgs(filesToValidate)
+
+	output, runErr := localRunner.Run("docker", args, tempDir)
+	if runErr != nil {
+		return fmt.Errorf(
+			"validating docker compose config for %s/%s failed: %w\n%s",
+			hostName,
+			projectName,
+			runErr,
+			strings.TrimSpace(output),
+		)
+	}
+
+	return nil
+}
+
+const (
+	composeValidationDirPerm  fs.FileMode = 0o750
+	composeValidationFilePerm fs.FileMode = 0o600
+)
+
+func collectComposeValidationFiles(filePlans []FilePlan) map[string][]byte {
+	filesToValidate := make(map[string][]byte)
+
+	for _, plan := range filePlans {
+		if plan.Action == ActionDelete || len(plan.LocalData) == 0 {
+			continue
+		}
+
+		filesToValidate[plan.RelativePath] = plan.LocalData
+	}
+
+	return filesToValidate
+}
+
+func writeComposeValidationFiles(baseDir string, files map[string][]byte) error {
+	for relPath, data := range files {
+		targetPath := filepath.Join(baseDir, relPath)
+
+		targetDir := filepath.Dir(targetPath)
+
+		mkdirErr := os.MkdirAll(targetDir, composeValidationDirPerm)
+		if mkdirErr != nil {
+			return fmt.Errorf("preparing compose validation file %s: %w", relPath, mkdirErr)
+		}
+
+		writeErr := os.WriteFile(targetPath, data, composeValidationFilePerm)
+		if writeErr != nil {
+			return fmt.Errorf("writing compose validation file %s: %w", relPath, writeErr)
+		}
+	}
+
+	return nil
+}
+
+func buildComposeConfigArgs(filesToValidate map[string][]byte) []string {
+	args := []string{"compose", "-f", "compose.yml"}
+	if _, hasOverride := filesToValidate["compose.override.yml"]; hasOverride {
+		args = append(args, "-f", "compose.override.yml")
+	}
+
+	if _, hasEnv := filesToValidate[".env"]; hasEnv {
+		args = append(args, "--env-file", ".env")
+	}
+
+	return append(args, "config")
 }
 
 func buildDirPlans(directories []string, remoteDir string, client remote.RemoteClient) []DirPlan {
