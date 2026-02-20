@@ -549,10 +549,6 @@ func runComposeAction(
 	writer io.Writer,
 	style outputStyle,
 ) error {
-	if !projectPlan.Compose.HasChanges() {
-		return nil
-	}
-
 	var cmd string
 
 	switch projectPlan.Compose.ActionType {

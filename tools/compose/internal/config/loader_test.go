@@ -440,11 +440,11 @@ func TestResolveProjectConfig_RemoveOrphans(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name               string
-		defaults           *SyncDefaults
-		hostCfg            *HostConfig
-		project            string
-		wantRemoveOrphans  bool
+		name              string
+		defaults          *SyncDefaults
+		hostCfg           *HostConfig
+		project           string
+		wantRemoveOrphans bool
 	}{
 		{
 			name:              "defaults to false when unset",

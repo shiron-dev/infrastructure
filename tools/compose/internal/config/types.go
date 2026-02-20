@@ -103,6 +103,7 @@ func resolveFromDefaults(defaults *SyncDefaults) ResolvedProjectConfig {
 			RemotePath:      "",
 			PostSyncCommand: "",
 			ComposeAction:   "",
+			RemoveOrphans:   false,
 			Dirs:            nil,
 		}
 	}
@@ -111,6 +112,7 @@ func resolveFromDefaults(defaults *SyncDefaults) ResolvedProjectConfig {
 		RemotePath:      defaults.RemotePath,
 		PostSyncCommand: defaults.PostSyncCommand,
 		ComposeAction:   defaults.ComposeAction,
+		RemoveOrphans:   false,
 		Dirs:            nil,
 	}
 }
