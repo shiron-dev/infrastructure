@@ -551,6 +551,10 @@ func runComposeAction(
 ) error {
 	var cmd string
 
+	if projectPlan.Compose == nil {
+		return nil
+	}
+
 	switch projectPlan.Compose.ActionType {
 	case ComposeNoChange:
 		return nil
