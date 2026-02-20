@@ -84,6 +84,7 @@ projects:                       # プロジェクト別の上書き
     postSyncCommand: >-
       docker compose -f compose.yml -f compose.override.yml up -d
     composeAction: up           # プロジェクト単位で上書き可能
+    removeOrphans: true         # composeAction=down 時に --remove-orphans を付与
     dirs:                       # Docker ボリューム用ディレクトリの事前作成
       - grafana_storage
       - grafana_conf
@@ -145,6 +146,9 @@ projects:
 `cmt apply` では差分に基づいて `docker compose up -d` または `docker compose down` を実行します。
 `ignore` の場合は Compose の up/down 実行自体をスキップします。
 ファイル差分がなくても Compose 状態に差分があれば apply の対象になります。
+
+`projects.<name>.removeOrphans: true` を指定すると、`composeAction: down` の実行時に
+`docker compose down --remove-orphans` を使います。
 
 ### `beforeApplyHooks` — apply 前フック
 

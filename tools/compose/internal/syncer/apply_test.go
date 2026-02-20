@@ -519,6 +519,66 @@ func TestApplyWithDeps_ComposeDown(t *testing.T) {
 	}
 }
 
+func TestApplyWithDeps_ComposeDownWithRemoveOrphans(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "server1"},
+				Projects: []ProjectPlan{
+					{
+						ProjectName:   "grafana",
+						RemoteDir:     "/srv/grafana",
+						ComposeAction: "down",
+						RemoveOrphans: true,
+						Compose: &ComposePlan{
+							DesiredAction: "down",
+							ActionType:    ComposeStopServices,
+							Services:      []string{"grafana"},
+						},
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								LocalPath:    "/tmp/compose.yml",
+								RemotePath:   "/srv/grafana/compose.yml",
+								Action:       ActionUnchanged,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	factory := remote.NewMockClientFactory(ctrl)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	gomock.InOrder(
+		factory.EXPECT().
+			NewClient(config.HostEntry{Name: "server1"}).
+			Return(client, nil),
+		client.EXPECT().WriteFile("/srv/grafana/.cmt-manifest.json", gomock.Any()).Return(nil),
+		client.EXPECT().RunCommand("/srv/grafana", "docker compose down --remove-orphans").Return("", nil),
+		client.EXPECT().Close().Return(nil),
+	)
+
+	var out bytes.Buffer
+
+	err := ApplyWithDeps(&config.CmtConfig{}, plan, true, false, &out, ApplyDependencies{
+		ClientFactory: factory,
+	})
+	if err != nil {
+		t.Fatalf("ApplyWithDeps: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "Apply complete!") {
+		t.Fatalf("expected complete output, got %q", output)
+	}
+}
+
 func TestProjectHasChanges_ComposeOnly(t *testing.T) {
 	t.Parallel()
 

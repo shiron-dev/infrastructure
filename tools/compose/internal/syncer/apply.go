@@ -549,20 +549,8 @@ func runComposeAction(
 	writer io.Writer,
 	style outputStyle,
 ) error {
-	if !projectPlan.Compose.HasChanges() {
-		return nil
-	}
-
-	var cmd string
-
-	switch projectPlan.Compose.ActionType {
-	case ComposeNoChange:
-		return nil
-	case ComposeStartServices:
-		cmd = "docker compose up -d"
-	case ComposeStopServices:
-		cmd = "docker compose down"
-	default:
+	cmd, shouldRun := composeCommand(projectPlan)
+	if !shouldRun {
 		return nil
 	}
 
@@ -589,4 +577,26 @@ func runComposeAction(
 	}
 
 	return nil
+}
+
+func composeCommand(projectPlan ProjectPlan) (string, bool) {
+	if projectPlan.Compose == nil {
+		return "", false
+	}
+
+	switch projectPlan.Compose.ActionType {
+	case ComposeNoChange:
+		return "", false
+	case ComposeStartServices:
+		return "docker compose up -d", true
+	case ComposeStopServices:
+		cmd := "docker compose down"
+		if projectPlan.RemoveOrphans {
+			cmd += " --remove-orphans"
+		}
+
+		return cmd, true
+	default:
+		return "", false
+	}
 }

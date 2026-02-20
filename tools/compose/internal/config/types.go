@@ -53,6 +53,7 @@ type ProjectConfig struct {
 	RemotePath      string   `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
 	PostSyncCommand string   `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
 	ComposeAction   string   `json:"composeAction,omitempty"   yaml:"composeAction,omitempty"`
+	RemoveOrphans   bool     `json:"removeOrphans,omitempty"   yaml:"removeOrphans,omitempty"`
 	Dirs            []string `json:"dirs,omitempty"            yaml:"dirs,omitempty"`
 }
 
@@ -60,6 +61,7 @@ type ResolvedProjectConfig struct {
 	RemotePath      string
 	PostSyncCommand string
 	ComposeAction   string
+	RemoveOrphans   bool
 	Dirs            []string
 }
 
@@ -101,6 +103,7 @@ func resolveFromDefaults(defaults *SyncDefaults) ResolvedProjectConfig {
 			RemotePath:      "",
 			PostSyncCommand: "",
 			ComposeAction:   "",
+			RemoveOrphans:   false,
 			Dirs:            nil,
 		}
 	}
@@ -109,6 +112,7 @@ func resolveFromDefaults(defaults *SyncDefaults) ResolvedProjectConfig {
 		RemotePath:      defaults.RemotePath,
 		PostSyncCommand: defaults.PostSyncCommand,
 		ComposeAction:   defaults.ComposeAction,
+		RemoveOrphans:   false,
 		Dirs:            nil,
 	}
 }
@@ -144,6 +148,8 @@ func applyProjectOverrides(resolved *ResolvedProjectConfig, hostCfg *HostConfig,
 	if projectConfig.ComposeAction != "" {
 		resolved.ComposeAction = projectConfig.ComposeAction
 	}
+
+	resolved.RemoveOrphans = projectConfig.RemoveOrphans
 
 	if len(projectConfig.Dirs) > 0 {
 		resolved.Dirs = projectConfig.Dirs

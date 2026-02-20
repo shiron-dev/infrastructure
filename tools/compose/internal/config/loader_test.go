@@ -436,6 +436,59 @@ func TestResolveProjectConfig_ComposeAction(t *testing.T) {
 	}
 }
 
+func TestResolveProjectConfig_RemoveOrphans(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		defaults          *SyncDefaults
+		hostCfg           *HostConfig
+		project           string
+		wantRemoveOrphans bool
+	}{
+		{
+			name:              "defaults to false when unset",
+			defaults:          &SyncDefaults{RemotePath: "/opt"},
+			hostCfg:           nil,
+			project:           "grafana",
+			wantRemoveOrphans: false,
+		},
+		{
+			name:     "project level enables remove-orphans",
+			defaults: &SyncDefaults{RemotePath: "/opt"},
+			hostCfg: &HostConfig{
+				Projects: map[string]*ProjectConfig{
+					"grafana": {RemoveOrphans: true},
+				},
+			},
+			project:           "grafana",
+			wantRemoveOrphans: true,
+		},
+		{
+			name:     "missing project keeps false",
+			defaults: &SyncDefaults{RemotePath: "/opt"},
+			hostCfg: &HostConfig{
+				Projects: map[string]*ProjectConfig{
+					"prometheus": {RemoveOrphans: true},
+				},
+			},
+			project:           "grafana",
+			wantRemoveOrphans: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			resolved := ResolveProjectConfig(tt.defaults, tt.hostCfg, tt.project)
+			if resolved.RemoveOrphans != tt.wantRemoveOrphans {
+				t.Errorf("RemoveOrphans = %v, want %v", resolved.RemoveOrphans, tt.wantRemoveOrphans)
+			}
+		})
+	}
+}
+
 func TestLoadHostConfig_ComposeAction(t *testing.T) {
 	t.Parallel()
 
@@ -453,6 +506,7 @@ composeAction: down
 projects:
   grafana:
     composeAction: up
+    removeOrphans: true
 `
 
 	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
@@ -471,6 +525,10 @@ projects:
 
 	if hostConfig.Projects["grafana"].ComposeAction != "up" {
 		t.Errorf("grafana composeAction = %q, want %q", hostConfig.Projects["grafana"].ComposeAction, "up")
+	}
+
+	if !hostConfig.Projects["grafana"].RemoveOrphans {
+		t.Error("grafana removeOrphans should be true")
 	}
 }
 
