@@ -64,7 +64,7 @@ jobs:
     if: ${{ needs.changes.outputs.should_run == 'true' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
         with:
           go-version-file: tools/compose/go.mod
           cache-dependency-path: tools/compose/go.sum
@@ -84,7 +84,7 @@ jobs:
     if: ${{ needs.changes.outputs.should_run == 'true' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
         with:
           go-version-file: tools/compose/go.mod
           cache-dependency-path: tools/compose/go.sum
@@ -105,7 +105,7 @@ jobs:
     if: ${{ needs.changes.outputs.should_run == 'true' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
         with:
           go-version-file: tools/compose/go.mod
           cache-dependency-path: tools/compose/go.sum
@@ -122,7 +122,7 @@ jobs:
     if: ${{ needs.changes.outputs.should_run == 'true' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
         with:
           go-version-file: tools/compose/go.mod
           cache-dependency-path: tools/compose/go.sum
@@ -137,7 +137,7 @@ jobs:
     if: ${{ needs.changes.outputs.should_run == 'true' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
         with:
           go-version-file: tools/compose/go.mod
           cache-dependency-path: tools/compose/go.sum
