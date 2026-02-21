@@ -182,7 +182,9 @@ beforeApplyHooks:
 #### stdin JSON
 
 各フックにはコマンドの stdin に JSON が渡されます。
-スキーマは `cmt schema hook-before-plan` / `cmt schema hook-before-apply-prompt` / `cmt schema hook-before-apply` で生成できます。
+スキーマは `cmt schema hook-before-plan` /
+`cmt schema hook-before-apply-prompt` /
+`cmt schema hook-before-apply` で生成できます。
 
 ```json
 {
