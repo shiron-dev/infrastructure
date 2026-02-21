@@ -116,22 +116,33 @@ func buildHookPayloadData(
 	}
 }
 
-func buildBeforePromptPayload(plan *SyncPlan, configPath, basePath string) config.BeforePromptHookPayload {
+func buildBeforePlanPayload(plan *SyncPlan, configPath, basePath string) config.BeforePlanHookPayload {
 	hosts := collectHostNames(plan)
 	pwd, _ := os.Getwd()
 
-	return config.BeforePromptHookPayload{
+	return config.BeforePlanHookPayload{
 		Hosts:      hosts,
 		WorkingDir: pwd,
 		Paths:      buildHookPayloadData(configPath, basePath),
 	}
 }
 
-func buildAfterPromptPayload(plan *SyncPlan, configPath, basePath string) config.AfterPromptHookPayload {
+func buildBeforeApplyPromptPayload(plan *SyncPlan, configPath, basePath string) config.BeforeApplyPromptHookPayload {
 	hosts := collectHostNames(plan)
 	pwd, _ := os.Getwd()
 
-	return config.AfterPromptHookPayload{
+	return config.BeforeApplyPromptHookPayload{
+		Hosts:      hosts,
+		WorkingDir: pwd,
+		Paths:      buildHookPayloadData(configPath, basePath),
+	}
+}
+
+func buildBeforeApplyPayload(plan *SyncPlan, configPath, basePath string) config.BeforeApplyHookPayload {
+	hosts := collectHostNames(plan)
+	pwd, _ := os.Getwd()
+
+	return config.BeforeApplyHookPayload{
 		Hosts:      hosts,
 		WorkingDir: pwd,
 		Paths:      buildHookPayloadData(configPath, basePath),

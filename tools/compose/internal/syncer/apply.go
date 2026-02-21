@@ -44,9 +44,18 @@ func ApplyWithDeps(
 		return err
 	}
 
+	cancelled, hookErr := runBeforePlanApplyHook(cfg, plan, deps, hookRunner, writer, style)
+	if hookErr != nil {
+		return hookErr
+	}
+
+	if cancelled {
+		return nil
+	}
+
 	plan.Print(writer)
 
-	cancelled, hookErr := runBeforePromptApplyHook(cfg, plan, deps, hookRunner, writer, style)
+	cancelled, hookErr = runBeforeApplyPromptHook(cfg, plan, deps, hookRunner, writer, style)
 	if hookErr != nil {
 		return hookErr
 	}
@@ -59,7 +68,7 @@ func ApplyWithDeps(
 		return nil
 	}
 
-	cancelled, hookErr = runAfterPromptApplyHook(cfg, plan, deps, hookRunner, writer, style)
+	cancelled, hookErr = runBeforeApplyHook(cfg, plan, deps, hookRunner, writer, style)
 	if hookErr != nil {
 		return hookErr
 	}
@@ -80,7 +89,7 @@ func ApplyWithDeps(
 	return nil
 }
 
-func runBeforePromptApplyHook(
+func runBeforePlanApplyHook(
 	cfg *config.CmtConfig,
 	plan *SyncPlan,
 	deps ApplyDependencies,
@@ -92,19 +101,19 @@ func runBeforePromptApplyHook(
 		return false, nil
 	}
 
-	payload := buildBeforePromptPayload(plan, deps.ConfigPath, cfg.BasePath)
+	payload := buildBeforePlanPayload(plan, deps.ConfigPath, cfg.BasePath)
 
 	return executeApplyHook(
-		cfg.BeforeApplyHooks.BeforePrompt,
+		cfg.BeforeApplyHooks.BeforePlan,
 		payload,
-		"beforePrompt",
+		"beforePlan",
 		hookRunner,
 		writer,
 		style,
 	)
 }
 
-func runAfterPromptApplyHook(
+func runBeforeApplyPromptHook(
 	cfg *config.CmtConfig,
 	plan *SyncPlan,
 	deps ApplyDependencies,
@@ -116,12 +125,36 @@ func runAfterPromptApplyHook(
 		return false, nil
 	}
 
-	payload := buildAfterPromptPayload(plan, deps.ConfigPath, cfg.BasePath)
+	payload := buildBeforeApplyPromptPayload(plan, deps.ConfigPath, cfg.BasePath)
 
 	return executeApplyHook(
-		cfg.BeforeApplyHooks.AfterPrompt,
+		cfg.BeforeApplyHooks.BeforeApplyPrompt,
 		payload,
-		"afterPrompt",
+		"beforeApplyPrompt",
+		hookRunner,
+		writer,
+		style,
+	)
+}
+
+func runBeforeApplyHook(
+	cfg *config.CmtConfig,
+	plan *SyncPlan,
+	deps ApplyDependencies,
+	hookRunner HookRunner,
+	writer io.Writer,
+	style outputStyle,
+) (bool, error) {
+	if cfg.BeforeApplyHooks == nil {
+		return false, nil
+	}
+
+	payload := buildBeforeApplyPayload(plan, deps.ConfigPath, cfg.BasePath)
+
+	return executeApplyHook(
+		cfg.BeforeApplyHooks.BeforeApply,
+		payload,
+		"beforeApply",
 		hookRunner,
 		writer,
 		style,

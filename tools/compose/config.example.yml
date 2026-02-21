@@ -24,7 +24,9 @@ hosts:
     sshAgent: true
 
 # beforeApplyHooks:
-#   beforePrompt:                          # runs after plan output, before user confirmation
+#   beforePlan:                            # runs before plan output
+#     command: ./scripts/prepare-context.sh
+#   beforeApplyPrompt:                     # runs after plan output, before user confirmation
 #     command: ./scripts/check-policy.sh
-#   afterPrompt:                           # runs after user confirmation, before actual apply
+#   beforeApply:                           # runs after user confirmation, before actual apply
 #     command: ./scripts/final-gate.sh

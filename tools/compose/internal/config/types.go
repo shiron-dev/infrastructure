@@ -14,8 +14,9 @@ type CmtConfig struct {
 }
 
 type BeforeApplyHooks struct {
-	BeforePrompt *HookCommand `json:"beforePrompt,omitempty" yaml:"beforePrompt,omitempty"`
-	AfterPrompt  *HookCommand `json:"afterPrompt,omitempty"  yaml:"afterPrompt,omitempty"`
+	BeforePlan        *HookCommand `json:"beforePlan,omitempty"        yaml:"beforePlan,omitempty"`
+	BeforeApplyPrompt *HookCommand `json:"beforeApplyPrompt,omitempty" yaml:"beforeApplyPrompt,omitempty"`
+	BeforeApply       *HookCommand `json:"beforeApply,omitempty"       yaml:"beforeApply,omitempty"`
 }
 
 type HookCommand struct {
@@ -70,13 +71,19 @@ type HookConfigPaths struct {
 	BasePath   string `json:"basePath"`
 }
 
-type BeforePromptHookPayload struct {
+type BeforePlanHookPayload struct {
 	Hosts      []string        `json:"hosts"`
 	WorkingDir string          `json:"workingDir"`
 	Paths      HookConfigPaths `json:"paths"`
 }
 
-type AfterPromptHookPayload struct {
+type BeforeApplyPromptHookPayload struct {
+	Hosts      []string        `json:"hosts"`
+	WorkingDir string          `json:"workingDir"`
+	Paths      HookConfigPaths `json:"paths"`
+}
+
+type BeforeApplyHookPayload struct {
 	Hosts      []string        `json:"hosts"`
 	WorkingDir string          `json:"workingDir"`
 	Paths      HookConfigPaths `json:"paths"`

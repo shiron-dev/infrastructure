@@ -9,7 +9,7 @@ import (
 
 func newSchemaCmd() *cobra.Command {
 	schemaCommand := new(cobra.Command)
-	schemaCommand.Use = "schema [cmt|host|hook-before-prompt|hook-after-prompt]"
+	schemaCommand.Use = "schema [cmt|host|hook-before-plan|hook-before-apply-prompt|hook-before-apply]"
 	schemaCommand.Short = "Generate JSON Schema for cmt config, host.yml, or hook stdin payloads"
 	schemaCommand.Args = cobra.ExactArgs(1)
 	schemaCommand.ValidArgs = config.SchemaKinds()

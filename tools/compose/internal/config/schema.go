@@ -8,7 +8,7 @@ import (
 )
 
 func SchemaKinds() []string {
-	return []string{"cmt", "host", "hook-before-prompt", "hook-after-prompt"}
+	return []string{"cmt", "host", "hook-before-plan", "hook-before-apply-prompt", "hook-before-apply"}
 }
 
 func GenerateSchemaJSON(kind string) ([]byte, error) {
@@ -29,10 +29,12 @@ func GenerateSchemaJSON(kind string) ([]byte, error) {
 		targetHostConfig.PostSyncCommand = ""
 		targetHostConfig.Projects = nil
 		target = targetHostConfig
-	case "hook-before-prompt":
-		target = new(BeforePromptHookPayload)
-	case "hook-after-prompt":
-		target = new(AfterPromptHookPayload)
+	case "hook-before-plan":
+		target = new(BeforePlanHookPayload)
+	case "hook-before-apply-prompt":
+		target = new(BeforeApplyPromptHookPayload)
+	case "hook-before-apply":
+		target = new(BeforeApplyHookPayload)
 	default:
 		return nil, fmt.Errorf("unknown schema type %q (valid: %v)", kind, SchemaKinds())
 	}
