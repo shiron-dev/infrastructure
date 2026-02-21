@@ -1,0 +1,8 @@
+services:
+  discord-webhook:
+    image: ghcr.io/shiron-dev/discord-webhook:latest
+    container_name: discord-webhook
+    restart: unless-stopped
+    environment:
+      - DISCORD_BOT_TOKEN={{ .discord_bot_token }}
+      - WEBHOOK_URLS={{ .webhook_urls }}
