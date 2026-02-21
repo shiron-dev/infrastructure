@@ -39,41 +39,23 @@ func ApplyWithDeps(
 	style := newOutputStyle(writer)
 	clientFactory, input, hookRunner := resolveApplyDependencies(deps)
 
-	handled, err := handleNoChanges(plan, refreshManifestOnNoop, clientFactory, writer, style)
-	if handled || err != nil {
+	shouldContinue, err := runApplyPreflight(
+		cfg,
+		plan,
+		autoApprove,
+		refreshManifestOnNoop,
+		clientFactory,
+		input,
+		hookRunner,
+		writer,
+		style,
+		deps,
+	)
+	if err != nil {
 		return err
 	}
 
-	cancelled, hookErr := runBeforePlanApplyHook(cfg, plan, deps, hookRunner, writer, style)
-	if hookErr != nil {
-		return hookErr
-	}
-
-	if cancelled {
-		return nil
-	}
-
-	plan.Print(writer)
-
-	cancelled, hookErr = runBeforeApplyPromptHook(cfg, plan, deps, hookRunner, writer, style)
-	if hookErr != nil {
-		return hookErr
-	}
-
-	if cancelled {
-		return nil
-	}
-
-	if confirmApplyOrCancel(autoApprove, input, writer, style) {
-		return nil
-	}
-
-	cancelled, hookErr = runBeforeApplyHook(cfg, plan, deps, hookRunner, writer, style)
-	if hookErr != nil {
-		return hookErr
-	}
-
-	if cancelled {
+	if !shouldContinue {
 		return nil
 	}
 
@@ -87,6 +69,47 @@ func ApplyWithDeps(
 	printApplySummary(plan, writer, style)
 
 	return nil
+}
+
+func runApplyPreflight(
+	cfg *config.CmtConfig,
+	plan *SyncPlan,
+	autoApprove bool,
+	refreshManifestOnNoop bool,
+	clientFactory remote.ClientFactory,
+	input io.Reader,
+	hookRunner HookRunner,
+	writer io.Writer,
+	style outputStyle,
+	deps ApplyDependencies,
+) (bool, error) {
+	handled, err := handleNoChanges(plan, refreshManifestOnNoop, clientFactory, writer, style)
+	if handled || err != nil {
+		return false, err
+	}
+
+	cancelled, hookErr := runBeforePlanApplyHook(cfg, plan, deps, hookRunner, writer, style)
+	if hookErr != nil || cancelled {
+		return false, hookErr
+	}
+
+	plan.Print(writer)
+
+	cancelled, hookErr = runBeforeApplyPromptHook(cfg, plan, deps, hookRunner, writer, style)
+	if hookErr != nil || cancelled {
+		return false, hookErr
+	}
+
+	if confirmApplyOrCancel(autoApprove, input, writer, style) {
+		return false, nil
+	}
+
+	cancelled, hookErr = runBeforeApplyHook(cfg, plan, deps, hookRunner, writer, style)
+	if hookErr != nil || cancelled {
+		return false, hookErr
+	}
+
+	return true, nil
 }
 
 func runBeforePlanApplyHook(
