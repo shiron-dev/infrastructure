@@ -39,32 +39,23 @@ func ApplyWithDeps(
 	style := newOutputStyle(writer)
 	clientFactory, input, hookRunner := resolveApplyDependencies(deps)
 
-	handled, err := handleNoChanges(plan, refreshManifestOnNoop, clientFactory, writer, style)
-	if handled || err != nil {
+	shouldContinue, err := runApplyPreflight(
+		cfg,
+		plan,
+		autoApprove,
+		refreshManifestOnNoop,
+		clientFactory,
+		input,
+		hookRunner,
+		writer,
+		style,
+		deps,
+	)
+	if err != nil {
 		return err
 	}
 
-	plan.Print(writer)
-
-	cancelled, hookErr := runBeforePromptApplyHook(cfg, plan, deps, hookRunner, writer, style)
-	if hookErr != nil {
-		return hookErr
-	}
-
-	if cancelled {
-		return nil
-	}
-
-	if confirmApplyOrCancel(autoApprove, input, writer, style) {
-		return nil
-	}
-
-	cancelled, hookErr = runAfterPromptApplyHook(cfg, plan, deps, hookRunner, writer, style)
-	if hookErr != nil {
-		return hookErr
-	}
-
-	if cancelled {
+	if !shouldContinue {
 		return nil
 	}
 
@@ -80,7 +71,48 @@ func ApplyWithDeps(
 	return nil
 }
 
-func runBeforePromptApplyHook(
+func runApplyPreflight(
+	cfg *config.CmtConfig,
+	plan *SyncPlan,
+	autoApprove bool,
+	refreshManifestOnNoop bool,
+	clientFactory remote.ClientFactory,
+	input io.Reader,
+	hookRunner HookRunner,
+	writer io.Writer,
+	style outputStyle,
+	deps ApplyDependencies,
+) (bool, error) {
+	handled, err := handleNoChanges(plan, refreshManifestOnNoop, clientFactory, writer, style)
+	if handled || err != nil {
+		return false, err
+	}
+
+	cancelled, hookErr := runBeforePlanApplyHook(cfg, plan, deps, hookRunner, writer, style)
+	if hookErr != nil || cancelled {
+		return false, hookErr
+	}
+
+	plan.Print(writer)
+
+	cancelled, hookErr = runBeforeApplyPromptHook(cfg, plan, deps, hookRunner, writer, style)
+	if hookErr != nil || cancelled {
+		return false, hookErr
+	}
+
+	if confirmApplyOrCancel(autoApprove, input, writer, style) {
+		return false, nil
+	}
+
+	cancelled, hookErr = runBeforeApplyHook(cfg, plan, deps, hookRunner, writer, style)
+	if hookErr != nil || cancelled {
+		return false, hookErr
+	}
+
+	return true, nil
+}
+
+func runBeforePlanApplyHook(
 	cfg *config.CmtConfig,
 	plan *SyncPlan,
 	deps ApplyDependencies,
@@ -92,19 +124,19 @@ func runBeforePromptApplyHook(
 		return false, nil
 	}
 
-	payload := buildBeforePromptPayload(plan, deps.ConfigPath, cfg.BasePath)
+	payload := buildBeforePlanPayload(plan, deps.ConfigPath, cfg.BasePath)
 
 	return executeApplyHook(
-		cfg.BeforeApplyHooks.BeforePrompt,
+		cfg.BeforeApplyHooks.BeforePlan,
 		payload,
-		"beforePrompt",
+		"beforePlan",
 		hookRunner,
 		writer,
 		style,
 	)
 }
 
-func runAfterPromptApplyHook(
+func runBeforeApplyPromptHook(
 	cfg *config.CmtConfig,
 	plan *SyncPlan,
 	deps ApplyDependencies,
@@ -116,12 +148,36 @@ func runAfterPromptApplyHook(
 		return false, nil
 	}
 
-	payload := buildAfterPromptPayload(plan, deps.ConfigPath, cfg.BasePath)
+	payload := buildBeforeApplyPromptPayload(plan, deps.ConfigPath, cfg.BasePath)
 
 	return executeApplyHook(
-		cfg.BeforeApplyHooks.AfterPrompt,
+		cfg.BeforeApplyHooks.BeforeApplyPrompt,
 		payload,
-		"afterPrompt",
+		"beforeApplyPrompt",
+		hookRunner,
+		writer,
+		style,
+	)
+}
+
+func runBeforeApplyHook(
+	cfg *config.CmtConfig,
+	plan *SyncPlan,
+	deps ApplyDependencies,
+	hookRunner HookRunner,
+	writer io.Writer,
+	style outputStyle,
+) (bool, error) {
+	if cfg.BeforeApplyHooks == nil {
+		return false, nil
+	}
+
+	payload := buildBeforeApplyPayload(plan, deps.ConfigPath, cfg.BasePath)
+
+	return executeApplyHook(
+		cfg.BeforeApplyHooks.BeforeApply,
+		payload,
+		"beforeApply",
 		hookRunner,
 		writer,
 		style,

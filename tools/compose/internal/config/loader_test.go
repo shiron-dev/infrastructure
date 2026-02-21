@@ -84,9 +84,11 @@ hosts:
     host: 192.168.1.1
     user: deploy
 beforeApplyHooks:
-  beforePrompt:
+  beforePlan:
+    command: ./scripts/prepare-context.sh
+  beforeApplyPrompt:
     command: ./scripts/check-policy.sh
-  afterPrompt:
+  beforeApply:
     command: ./scripts/final-gate.sh
 `
 
@@ -111,20 +113,28 @@ beforeApplyHooks:
 		t.Fatal("beforeApplyHooks should not be nil")
 	}
 
-	if cfg.BeforeApplyHooks.BeforePrompt == nil {
-		t.Fatal("beforePrompt should not be nil")
+	if cfg.BeforeApplyHooks.BeforePlan == nil {
+		t.Fatal("beforePlan should not be nil")
 	}
 
-	if cfg.BeforeApplyHooks.BeforePrompt.Command != "./scripts/check-policy.sh" {
-		t.Errorf("beforePrompt.command = %q", cfg.BeforeApplyHooks.BeforePrompt.Command)
+	if cfg.BeforeApplyHooks.BeforePlan.Command != "./scripts/prepare-context.sh" {
+		t.Errorf("beforePlan.command = %q", cfg.BeforeApplyHooks.BeforePlan.Command)
 	}
 
-	if cfg.BeforeApplyHooks.AfterPrompt == nil {
-		t.Fatal("afterPrompt should not be nil")
+	if cfg.BeforeApplyHooks.BeforeApplyPrompt == nil {
+		t.Fatal("beforeApplyPrompt should not be nil")
 	}
 
-	if cfg.BeforeApplyHooks.AfterPrompt.Command != "./scripts/final-gate.sh" {
-		t.Errorf("afterPrompt.command = %q", cfg.BeforeApplyHooks.AfterPrompt.Command)
+	if cfg.BeforeApplyHooks.BeforeApplyPrompt.Command != "./scripts/check-policy.sh" {
+		t.Errorf("beforeApplyPrompt.command = %q", cfg.BeforeApplyHooks.BeforeApplyPrompt.Command)
+	}
+
+	if cfg.BeforeApplyHooks.BeforeApply == nil {
+		t.Fatal("beforeApply should not be nil")
+	}
+
+	if cfg.BeforeApplyHooks.BeforeApply.Command != "./scripts/final-gate.sh" {
+		t.Errorf("beforeApply.command = %q", cfg.BeforeApplyHooks.BeforeApply.Command)
 	}
 }
 

@@ -119,7 +119,7 @@ func TestApplyWithDeps_UsesInjectedClientFactory(t *testing.T) {
 	}
 }
 
-func TestApplyWithDeps_BeforePromptHook_Rejected(t *testing.T) {
+func TestApplyWithDeps_BeforeApplyPromptHook_Rejected(t *testing.T) {
 	t.Parallel()
 
 	plan := &SyncPlan{
@@ -144,7 +144,7 @@ func TestApplyWithDeps_BeforePromptHook_Rejected(t *testing.T) {
 
 	cfg := &config.CmtConfig{
 		BeforeApplyHooks: &config.BeforeApplyHooks{
-			BeforePrompt: &config.HookCommand{Command: "reject"},
+			BeforeApplyPrompt: &config.HookCommand{Command: "reject"},
 		},
 	}
 
@@ -168,7 +168,7 @@ func TestApplyWithDeps_BeforePromptHook_Rejected(t *testing.T) {
 	}
 }
 
-func TestApplyWithDeps_AfterPromptHook_Rejected(t *testing.T) {
+func TestApplyWithDeps_BeforeApplyHook_Rejected(t *testing.T) {
 	t.Parallel()
 
 	plan := &SyncPlan{
@@ -193,7 +193,7 @@ func TestApplyWithDeps_AfterPromptHook_Rejected(t *testing.T) {
 
 	cfg := &config.CmtConfig{
 		BeforeApplyHooks: &config.BeforeApplyHooks{
-			AfterPrompt: &config.HookCommand{Command: "reject"},
+			BeforeApply: &config.HookCommand{Command: "reject"},
 		},
 	}
 
@@ -217,7 +217,7 @@ func TestApplyWithDeps_AfterPromptHook_Rejected(t *testing.T) {
 	}
 }
 
-func TestApplyWithDeps_BeforePromptHook_ErrorExitCode(t *testing.T) {
+func TestApplyWithDeps_BeforeApplyPromptHook_ErrorExitCode(t *testing.T) {
 	t.Parallel()
 
 	plan := &SyncPlan{
@@ -242,7 +242,7 @@ func TestApplyWithDeps_BeforePromptHook_ErrorExitCode(t *testing.T) {
 
 	cfg := &config.CmtConfig{
 		BeforeApplyHooks: &config.BeforeApplyHooks{
-			BeforePrompt: &config.HookCommand{Command: "fail"},
+			BeforeApplyPrompt: &config.HookCommand{Command: "fail"},
 		},
 	}
 
@@ -260,12 +260,12 @@ func TestApplyWithDeps_BeforePromptHook_ErrorExitCode(t *testing.T) {
 		t.Fatal("expected error from hook exit code 2")
 	}
 
-	if !strings.Contains(err.Error(), "beforePrompt hook failed") {
+	if !strings.Contains(err.Error(), "beforeApplyPrompt hook failed") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestApplyWithDeps_BothHooks_Pass(t *testing.T) {
+func TestApplyWithDeps_AllHooks_Pass(t *testing.T) {
 	t.Parallel()
 
 	plan := &SyncPlan{
@@ -306,8 +306,9 @@ func TestApplyWithDeps_BothHooks_Pass(t *testing.T) {
 
 	cfg := &config.CmtConfig{
 		BeforeApplyHooks: &config.BeforeApplyHooks{
-			BeforePrompt: &config.HookCommand{Command: "check-policy"},
-			AfterPrompt:  &config.HookCommand{Command: "final-gate"},
+			BeforePlan:        &config.HookCommand{Command: "prepare-context"},
+			BeforeApplyPrompt: &config.HookCommand{Command: "check-policy"},
+			BeforeApply:       &config.HookCommand{Command: "final-gate"},
 		},
 	}
 
@@ -328,8 +329,8 @@ func TestApplyWithDeps_BothHooks_Pass(t *testing.T) {
 		t.Fatalf("ApplyWithDeps: %v", err)
 	}
 
-	if hookCalls != 2 {
-		t.Fatalf("expected 2 hook calls, got %d", hookCalls)
+	if hookCalls != 3 {
+		t.Fatalf("expected 3 hook calls, got %d", hookCalls)
 	}
 
 	if !strings.Contains(out.String(), "Apply complete!") {

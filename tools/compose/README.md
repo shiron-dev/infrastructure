@@ -157,16 +157,19 @@ projects:
 
 ```yaml
 beforeApplyHooks:
-  beforePrompt:
+  beforePlan:
+    command: ./scripts/prepare-context.sh
+  beforeApplyPrompt:
     command: ./scripts/check-policy.sh
-  afterPrompt:
+  beforeApply:
     command: ./scripts/final-gate.sh
 ```
 
 #### フックの実行タイミング
 
-- **`beforePrompt`** — plan 出力後、ユーザー確認プロンプトの**前**に実行
-- **`afterPrompt`** — ユーザーが `y` で承認した後（`--auto-approve` の場合はプロンプト省略後）、実際の apply の**前**に実行
+- **`beforePlan`** — plan 出力の**前**に実行
+- **`beforeApplyPrompt`** — plan 出力後、ユーザー確認プロンプトの**前**に実行
+- **`beforeApply`** — ユーザーが `y` で承認した後（`--auto-approve` の場合はプロンプト省略後）、実際の apply の**前**に実行
 
 #### 終了コード
 
@@ -179,7 +182,9 @@ beforeApplyHooks:
 #### stdin JSON
 
 各フックにはコマンドの stdin に JSON が渡されます。
-スキーマは `cmt schema hook-before-prompt` / `cmt schema hook-after-prompt` で生成できます。
+スキーマは `cmt schema hook-before-plan` /
+`cmt schema hook-before-apply-prompt` /
+`cmt schema hook-before-apply` で生成できます。
 
 ```json
 {
@@ -230,8 +235,9 @@ apply フラグ:
 schema:
   cmt schema cmt                 cmt 設定の JSON Schema を出力
   cmt schema host                host.yml の JSON Schema を出力
-  cmt schema hook-before-prompt  beforePrompt フックの stdin JSON Schema を出力
-  cmt schema hook-after-prompt   afterPrompt フックの stdin JSON Schema を出力
+  cmt schema hook-before-plan          beforePlan フックの stdin JSON Schema を出力
+  cmt schema hook-before-apply-prompt  beforeApplyPrompt フックの stdin JSON Schema を出力
+  cmt schema hook-before-apply         beforeApply フックの stdin JSON Schema を出力
 ```
 
 ## JSON Schema
@@ -241,8 +247,9 @@ schema:
 ```bash
 cmt schema cmt                 > schemas/cmt-config.schema.json
 cmt schema host                > schemas/host-config.schema.json
-cmt schema hook-before-prompt  > schemas/hook-before-prompt.schema.json
-cmt schema hook-after-prompt   > schemas/hook-after-prompt.schema.json
+cmt schema hook-before-plan          > schemas/hook-before-plan.schema.json
+cmt schema hook-before-apply-prompt  > schemas/hook-before-apply-prompt.schema.json
+cmt schema hook-before-apply         > schemas/hook-before-apply.schema.json
 ```
 
 エディタでのバリデーションや補完に利用できます

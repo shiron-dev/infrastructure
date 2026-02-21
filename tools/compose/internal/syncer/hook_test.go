@@ -43,9 +43,9 @@ func TestRunHook_ExitZero(t *testing.T) {
 
 	style := newOutputStyle(&out)
 	cmd := &config.HookCommand{Command: "true"}
-	payload := config.BeforePromptHookPayload{Hosts: []string{"server1"}, WorkingDir: "/tmp"}
+	payload := config.BeforePlanHookPayload{Hosts: []string{"server1"}, WorkingDir: "/tmp"}
 
-	result := runHook(cmd, payload, "beforePrompt", defaultHookRunner, &out, style)
+	result := runHook(cmd, payload, "beforePlan", defaultHookRunner, &out, style)
 	if result != hookContinue {
 		t.Fatalf("expected hookContinue, got %v; output: %s", result, out.String())
 	}
@@ -59,7 +59,7 @@ func TestRunHook_ExitOne(t *testing.T) {
 	style := newOutputStyle(&out)
 	cmd := &config.HookCommand{Command: "exit 1"}
 
-	result := runHook(cmd, "payload", "beforePrompt", defaultHookRunner, &out, style)
+	result := runHook(cmd, "payload", "beforePlan", defaultHookRunner, &out, style)
 	if result != hookRejected {
 		t.Fatalf("expected hookRejected, got %v; output: %s", result, out.String())
 	}
@@ -95,7 +95,7 @@ func TestRunHook_ReceivesStdinJSON(t *testing.T) {
 	style := newOutputStyle(&out)
 	cmd := &config.HookCommand{Command: "cat"}
 
-	payload := config.BeforePromptHookPayload{
+	payload := config.BeforePlanHookPayload{
 		Hosts:      []string{"server1", "server2"},
 		WorkingDir: "/work",
 		Paths: config.HookConfigPaths{
@@ -104,12 +104,12 @@ func TestRunHook_ReceivesStdinJSON(t *testing.T) {
 		},
 	}
 
-	result := runHook(cmd, payload, "beforePrompt", mockRunner, &out, style)
+	result := runHook(cmd, payload, "beforePlan", mockRunner, &out, style)
 	if result != hookContinue {
 		t.Fatalf("expected hookContinue, got %v", result)
 	}
 
-	var got config.BeforePromptHookPayload
+	var got config.BeforePlanHookPayload
 
 	err := json.Unmarshal(captured, &got)
 	if err != nil {
