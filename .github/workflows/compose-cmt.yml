@@ -17,6 +17,7 @@ jobs:
     name: cmt plan
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: production-plan
     if: github.event_name == 'pull_request'
     permissions:
       pull-requests: write
