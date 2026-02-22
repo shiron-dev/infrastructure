@@ -8,7 +8,7 @@ runs:
         go-version-file: tools/compose/go.mod
         cache-dependency-path: tools/compose/go.sum
     - name: Authenticate to Google Cloud via Workload Identity Federation
-      uses: google-github-actions/auth@v2
+      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
       with:
         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ env.SERVICE_ACCOUNT }}
