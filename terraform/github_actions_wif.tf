@@ -4,8 +4,8 @@ resource "google_iam_workload_identity_pool" "github_actions" {
   description               = "OIDC identities from GitHub Actions"
 
   depends_on = [
-    google_project_service.apis[local.api_iamcredentials],
-    google_project_service.apis[local.api_sts],
+    google_project_service.iamcredentials,
+    google_project_service.sts,
   ]
 }
 
