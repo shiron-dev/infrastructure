@@ -65,4 +65,4 @@ jobs:
           go-version-file: tools/compose/go.mod
           cache-dependency-path: tools/compose/go.sum
       - name: Run cmt apply
-        run: make cmt-apply
+        run: make cmt-apply CMT_OPT="--auto-approve"
