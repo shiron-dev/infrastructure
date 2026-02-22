@@ -38,13 +38,19 @@ jobs:
           exit_code="${PIPESTATUS[0]}"
 
           echo "output_file=$output_file" >> "$GITHUB_ENV"
+          echo "output_file=${output_file}" >> "$GITHUB_OUTPUT"
           echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
-      - name: Write plan result to job summary
-        run: |
-          echo "## CMT Plan Result" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat "$output_file" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload plan result to Slack
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+        with:
+          method: files.uploadV2
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel_id: ${{ secrets.SLACK_CHANNEL_ID }}
+            title: CMT Plan Result (${{ github.repository }})
+            filename: cmt-plan-${{ github.run_id }}.log
+            initial_comment: CMT plan result for ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            file: ${{ steps.cmt-plan.outputs.output_file }}
       - name: Fail when cmt plan failed
         if: steps.cmt-plan.outputs.exit_code != '0'
         run: exit 1
