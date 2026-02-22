@@ -56,6 +56,7 @@ CMT_DIR := tools/compose
 CMT_BIN := $(CMT_DIR)/cmt
 CMT_CONFIG := compose/config.yml
 CMT_SCHEMA_DIR := $(CMT_DIR)/schemas
+CMT_OPT ?=
 
 # cmt ビルド + JSON Schema 生成
 .PHONY: cmt-init
@@ -68,12 +69,12 @@ cmt-init: init
 # cmt plan（変更内容の確認）
 .PHONY: cmt-plan
 cmt-plan: cmt-init
-	$(CMT_BIN) --config $(CMT_CONFIG) plan
+	$(CMT_BIN) --config $(CMT_CONFIG) plan $(CMT_OPT)
 
 # cmt apply（変更の適用）
 .PHONY: cmt-apply
 cmt-apply: cmt-init
-	$(CMT_BIN) --config $(CMT_CONFIG) apply
+	$(CMT_BIN) --config $(CMT_CONFIG) apply $(CMT_OPT)
 
 .PHONY: terraform-init
 terraform-init: init
