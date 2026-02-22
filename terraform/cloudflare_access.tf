@@ -30,7 +30,7 @@ data "cloudflare_zero_trust_access_application" "arm_srv" {
 
 resource "cloudflare_zero_trust_tunnel_cloudflared" "arm_srv" {
   account_id = local.cloudflare_account_id
-  name       = "cfd_tunnel"
+  name       = "oci-arm"
   config_src = "cloudflare"
 }
 
