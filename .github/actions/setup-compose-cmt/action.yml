@@ -1,18 +1,19 @@
 name: Setup Compose CMT
-description: Setup Go toolchain for compose cmt jobs
-inputs:
-  go-version-file:
-    description: Path to go.mod used for Go version detection
-    required: false
-    default: tools/compose/go.mod
-  cache-dependency-path:
-    description: Path to go.sum used for Go module cache
-    required: false
-    default: tools/compose/go.sum
+description: Setup Go toolchain and SSH init for compose cmt jobs
 runs:
   using: composite
   steps:
     - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
       with:
-        go-version-file: ${{ inputs.go-version-file }}
-        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+        go-version-file: tools/compose/go.mod
+        cache-dependency-path: tools/compose/go.sum
+    - name: Install cloudflared
+      shell: bash
+      run: |
+        set -euo pipefail
+        curl -fsSL \
+          https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+          -o cloudflared
+        chmod +x cloudflared
+        sudo mv cloudflared /usr/local/bin/cloudflared
+        cloudflared --version
