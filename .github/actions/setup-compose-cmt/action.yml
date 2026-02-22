@@ -18,8 +18,8 @@ runs:
       run: |
         set -euo pipefail
         SOPS_VERSION="v3.9.4"
-        curl -fsSL -o /tmp/sops.tar.gz "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64.tar.gz"
-        tar -xzf /tmp/sops.tar.gz -C /tmp
+        curl -fsSL -o /tmp/sops "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
+        chmod +x /tmp/sops
         sudo mv /tmp/sops /usr/local/bin/sops
         sops --version
     - name: Decrypt secrets with make sops-decrypt
