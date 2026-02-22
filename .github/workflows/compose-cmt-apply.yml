@@ -43,15 +43,20 @@ jobs:
           output_file="$(mktemp)"
           make cmt-plan 2>&1 | tee "$output_file"
           exit_code="${PIPESTATUS[0]}"
+          if [ ! -s "$output_file" ]; then
+            echo "cmt plan produced no output." > "$output_file"
+          fi
 
           echo "output_file=$output_file" >> "$GITHUB_ENV"
           echo "output_file=${output_file}" >> "$GITHUB_OUTPUT"
           echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
       - name: Upload plan result to Slack
+        id: slack-upload
         uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
         with:
           method: files.uploadV2
           token: ${{ secrets.SLACK_BOT_TOKEN }}
+          errors: true
           payload: |
             channel_id: ${{ secrets.SLACK_CHANNEL_ID }}
             title: CMT Plan Result (${{ github.repository }})
