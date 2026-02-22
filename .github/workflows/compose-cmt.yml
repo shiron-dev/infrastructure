@@ -32,6 +32,9 @@ jobs:
           SERVICE_ACCOUNT: ${{ secrets.SERVICE_ACCOUNT }}
       - name: Run cmt plan
         id: cmt-plan
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           set +e
 
