@@ -1,0 +1,87 @@
+name: Compose CMT Apply CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "compose/**"
+      - "tools/compose/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  plan:
+    name: cmt plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production-plan
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: ./.github/actions/setup-compose-cmt
+        env:
+          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ secrets.SERVICE_ACCOUNT }}
+          GH_ACTIONS_SSH_PRIVATE_KEY: ${{ secrets.GH_ACTIONS_SSH_PRIVATE_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Run cmt plan
+        id: cmt-plan
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          set +e
+
+          output_file="$(mktemp)"
+          make cmt-plan 2>&1 | tee "$output_file"
+          exit_code="${PIPESTATUS[0]}"
+
+          echo "output_file=$output_file" >> "$GITHUB_ENV"
+          echo "output_file=${output_file}" >> "$GITHUB_OUTPUT"
+          echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
+      - name: Upload plan result to Slack
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+        with:
+          method: files.uploadV2
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel_id: ${{ secrets.SLACK_CHANNEL_ID }}
+            title: CMT Plan Result (${{ github.repository }})
+            filename: cmt-plan-${{ github.run_id }}.log
+            initial_comment: CMT plan result for ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            file: ${{ steps.cmt-plan.outputs.output_file }}
+      - name: Fail when cmt plan failed
+        if: steps.cmt-plan.outputs.exit_code != '0'
+        run: exit 1
+
+  apply:
+    name: cmt apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    if: github.event_name == 'push'
+    needs: plan
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: ./.github/actions/setup-compose-cmt
+        env:
+          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ secrets.SERVICE_ACCOUNT }}
+          GH_ACTIONS_SSH_PRIVATE_KEY: ${{ secrets.GH_ACTIONS_SSH_PRIVATE_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Run cmt apply
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: make cmt-apply CMT_OPT="--auto-approve"

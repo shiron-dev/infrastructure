@@ -1,0 +1,77 @@
+name: Setup Compose CMT
+description: Setup Go toolchain, SOPS decrypt, and SSH init for compose cmt jobs
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
+      with:
+        go-version-file: tools/compose/go.mod
+        cache-dependency-path: tools/compose/go.sum
+    - name: Authenticate to Google Cloud via Workload Identity Federation
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.SERVICE_ACCOUNT }}
+        token_format: access_token
+    - name: Install SOPS
+      shell: bash
+      run: |
+        set -euo pipefail
+        SOPS_VERSION="v3.9.4"
+        curl -fsSL -o /tmp/sops "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
+        chmod +x /tmp/sops
+        sudo mv /tmp/sops /usr/local/bin/sops
+        sops --version
+    - name: Decrypt secrets with make sops-decrypt
+      shell: bash
+      run: |
+        set -euo pipefail
+        make sops-decrypt
+    - name: Install cloudflared
+      shell: bash
+      run: |
+        set -euo pipefail
+        curl -fsSL \
+          https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+          -o cloudflared
+        chmod +x cloudflared
+        sudo mv cloudflared /usr/local/bin/cloudflared
+        cloudflared --version
+    - name: Prepare CI SSH private key
+      shell: bash
+      env:
+        GH_ACTIONS_SSH_PRIVATE_KEY: ${{ env.GH_ACTIONS_SSH_PRIVATE_KEY }}
+      run: |
+        set -euo pipefail
+        test -n "${GH_ACTIONS_SSH_PRIVATE_KEY}"
+        install -m 700 -d "${HOME}/.ssh"
+        printf '%s\n' "${GH_ACTIONS_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/github_actions_srv_key"
+        chmod 600 "${HOME}/.ssh/github_actions_srv_key"
+    - name: Prepare CI SSH config for service token auth
+      shell: bash
+      env:
+        TUNNEL_SERVICE_TOKEN_ID: ${{ env.CF_ACCESS_CLIENT_ID }}
+        TUNNEL_SERVICE_TOKEN_SECRET: ${{ env.CF_ACCESS_CLIENT_SECRET }}
+      run: |
+        set -euo pipefail
+        test -n "${TUNNEL_SERVICE_TOKEN_ID}"
+        test -n "${TUNNEL_SERVICE_TOKEN_SECRET}"
+
+        tmp_config="$(mktemp)"
+        trap 'rm -f "$tmp_config"' EXIT
+
+        cat > "$tmp_config" <<'EOF'
+        Host *-srv.shiron.dev
+          IdentityFile ~/.ssh/github_actions_srv_key
+          IdentitiesOnly yes
+          ProxyCommand sh -c 'exec cloudflared access ssh --hostname %h --service-token-id "$TUNNEL_SERVICE_TOKEN_ID" --service-token-secret "$TUNNEL_SERVICE_TOKEN_SECRET"'
+
+        EOF
+
+        awk '
+          /^Match host arm-srv\.shiron\.dev exec "cloudflared access ssh-gen --hostname %h"$/ { skip=1; next }
+          skip && /^[[:space:]]+(ProxyCommand|IdentityFile|CertificateFile)[[:space:]]/ { next }
+          { skip=0; print }
+        ' compose/ssh_config >> "$tmp_config"
+
+        cp "$tmp_config" compose/ssh_config
