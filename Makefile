@@ -56,6 +56,9 @@ CMT_DIR := tools/compose
 CMT_BIN := $(CMT_DIR)/cmt
 CMT_CONFIG := compose/config.yml
 CMT_SCHEMA_DIR := $(CMT_DIR)/schemas
+TERRAFORM_DIR := terraform
+TERRAFORM_SECRETS_TFVARS := terraform.secrets.tfvars
+TERRAFORM_SECRETS_ARG := $(if $(wildcard $(TERRAFORM_DIR)/$(TERRAFORM_SECRETS_TFVARS)),-var-file=$(TERRAFORM_SECRETS_TFVARS),)
 
 # cmt ビルド + JSON Schema 生成
 .PHONY: cmt-init
@@ -77,15 +80,15 @@ cmt-apply: cmt-init
 
 .PHONY: terraform-init
 terraform-init: init
-	cd terraform && terraform init
+	cd $(TERRAFORM_DIR) && terraform init
 
 .PHONY: terraform-plan
 terraform-plan: terraform-init
-	cd terraform && terraform plan
+	cd $(TERRAFORM_DIR) && terraform plan $(TERRAFORM_SECRETS_ARG)
 
 .PHONY: terraform-apply
 terraform-apply: terraform-init
-	cd terraform && terraform apply
+	cd $(TERRAFORM_DIR) && terraform apply $(TERRAFORM_SECRETS_ARG)
 
 .PHONY: terraform-lint
 terraform-lint: terraform-init
