@@ -30,15 +30,24 @@ jobs:
         env:
           WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
           SERVICE_ACCOUNT: ${{ secrets.SERVICE_ACCOUNT }}
+          GH_ACTIONS_SSH_PRIVATE_KEY: ${{ secrets.GH_ACTIONS_SSH_PRIVATE_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Verify SSH via Cloudflare Access
         env:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          set -euo pipefail
+          echo "CF_ACCESS_CLIENT_ID"
           test -n "${CF_ACCESS_CLIENT_ID}"
+          echo "CF_ACCESS_CLIENT_SECRET"
           test -n "${CF_ACCESS_CLIENT_SECRET}"
-          cloudflared access ssh-gen --hostname arm-srv.shiron.dev
+          echo "TUNNEL_SERVICE_TOKEN_ID"
+          test -n "${TUNNEL_SERVICE_TOKEN_ID}"
+          echo "TUNNEL_SERVICE_TOKEN_SECRET"
+          test -n "${TUNNEL_SERVICE_TOKEN_SECRET}"
           ssh \
             -F compose/ssh_config \
             -o BatchMode=yes \
@@ -51,6 +60,8 @@ jobs:
         env:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           set +e
 
