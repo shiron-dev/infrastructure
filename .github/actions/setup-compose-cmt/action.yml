@@ -1,0 +1,18 @@
+name: Setup Compose CMT
+description: Setup Go toolchain for compose cmt jobs
+inputs:
+  go-version-file:
+    description: Path to go.mod used for Go version detection
+    required: false
+    default: tools/compose/go.mod
+  cache-dependency-path:
+    description: Path to go.sum used for Go module cache
+    required: false
+    default: tools/compose/go.sum
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
+      with:
+        go-version-file: ${{ inputs.go-version-file }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
