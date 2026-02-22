@@ -1,5 +1,5 @@
 name: Setup Compose CMT
-description: Setup Go toolchain and SSH init for compose cmt jobs
+description: Setup Go toolchain, SOPS decrypt, and SSH init for compose cmt jobs
 runs:
   using: composite
   steps:
@@ -7,6 +7,26 @@ runs:
       with:
         go-version-file: tools/compose/go.mod
         cache-dependency-path: tools/compose/go.sum
+    - name: Authenticate to Google Cloud via Workload Identity Federation
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.SERVICE_ACCOUNT }}
+        token_format: access_token
+    - name: Install SOPS
+      shell: bash
+      run: |
+        set -euo pipefail
+        SOPS_VERSION="v3.9.4"
+        curl -fsSL -o /tmp/sops.tar.gz "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64.tar.gz"
+        tar -xzf /tmp/sops.tar.gz -C /tmp
+        sudo mv /tmp/sops /usr/local/bin/sops
+        sops --version
+    - name: Decrypt secrets with make sops-decrypt
+      shell: bash
+      run: |
+        set -euo pipefail
+        make sops-decrypt
     - name: Install cloudflared
       shell: bash
       run: |

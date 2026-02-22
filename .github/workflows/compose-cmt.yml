@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   plan:
@@ -24,6 +25,9 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: ./.github/actions/setup-compose-cmt
+        env:
+          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ secrets.SERVICE_ACCOUNT }}
       - name: Run cmt plan
         id: cmt-plan
         run: |
