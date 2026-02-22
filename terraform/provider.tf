@@ -1,5 +1,8 @@
 terraform {
   required_providers {
+    cloudflare = {
+      source = "cloudflare/cloudflare"
+    }
     google = {
       source  = "hashicorp/google"
       version = "7.20.0"
@@ -25,4 +28,8 @@ provider "google" {
 
 provider "github" {
   owner = local.github_owner
+}
+
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }
