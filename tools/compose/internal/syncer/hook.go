@@ -164,13 +164,13 @@ func collectHostNames(plan *SyncPlan) []string {
 }
 
 func hookWorkdir(payload any) string {
-	switch p := payload.(type) {
+	switch hookPayload := payload.(type) {
 	case config.BeforePlanHookPayload:
-		return p.Paths.BasePath
+		return hookPayload.Paths.BasePath
 	case config.BeforeApplyPromptHookPayload:
-		return p.Paths.BasePath
+		return hookPayload.Paths.BasePath
 	case config.BeforeApplyHookPayload:
-		return p.Paths.BasePath
+		return hookPayload.Paths.BasePath
 	default:
 		return ""
 	}
