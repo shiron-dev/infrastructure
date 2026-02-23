@@ -115,8 +115,7 @@ cmt は常に `ssh -G <host>` を実行して SSH 接続パラメータ
 Docker Compose の bind mount 用ディレクトリを事前に用意する用途を想定しています。
 
 文字列で指定する場合はパスのみが設定されます（従来の形式）。
-オブジェクトで指定する場合は `permission`（8進数文字列）、`owner`、`group` を追加で設定できます。
-両形式を同じリスト内で混在させることも可能です。
+属性を指定する場合は `- <path>:` の下に `permission`（8進数文字列）、`owner`、`group` を指定します。
 
 ```yaml
 projects:
@@ -124,11 +123,11 @@ projects:
     dirs:
       - grafana_storage                         # 文字列形式（従来どおり）
       - grafana_conf
-      - path: influxdb_data                     # オブジェクト形式
+      - influxdb_data:                          # 属性付き形式（推奨）
         permission: "0755"
         owner: influxdb
         group: influxdb
-      - path: vmdata
+      - vmdata:
         permission: "0700"
 ```
 

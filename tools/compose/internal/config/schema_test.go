@@ -95,3 +95,27 @@ func TestGenerateSchemaJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestDirConfigJSONSchema(t *testing.T) {
+	t.Parallel()
+
+	schema := new(DirConfig).JSONSchema()
+
+	data, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatalf("marshal schema: %v", err)
+	}
+
+	raw := string(data)
+	if strings.Contains(raw, `"required":["path"]`) {
+		t.Fatalf("legacy dirs path object format should not be allowed in schema: %s", raw)
+	}
+
+	if !strings.Contains(raw, `"minProperties":1`) || !strings.Contains(raw, `"maxProperties":1`) {
+		t.Fatalf("dirs path-keyed object constraints are missing: %s", raw)
+	}
+
+	if !strings.Contains(raw, `"type":"null"`) {
+		t.Fatalf("dirs schema should allow null value for '- <path>:' form: %s", raw)
+	}
+}

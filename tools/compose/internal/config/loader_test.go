@@ -717,7 +717,7 @@ projects:
 	}
 }
 
-func TestLoadHostConfig_DirsObjectFormat(t *testing.T) {
+func TestLoadHostConfig_DirsPathKeyedFormat(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -732,7 +732,7 @@ func TestLoadHostConfig_DirsObjectFormat(t *testing.T) {
 projects:
   grafana:
     dirs:
-      - path: influxdb_data
+      - influxdb_data:
         permission: "0755"
         owner: influxdb
         group: influxdb
@@ -786,7 +786,7 @@ projects:
   grafana:
     dirs:
       - simple_dir
-      - path: managed_dir
+      - managed_dir:
         permission: "0750"
         owner: app
 `
@@ -827,6 +827,40 @@ projects:
 	}
 }
 
+func TestLoadHostConfig_DirsPathObjectFormat_IsRejected(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	hostDir := filepath.Join(dir, "hosts", "server1")
+
+	err := os.MkdirAll(hostDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := `
+projects:
+  grafana:
+    dirs:
+      - path: legacy_dir
+        owner: legacy
+`
+
+	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = LoadHostConfig(dir, "server1")
+	if err == nil {
+		t.Fatal("expected error for unsupported dirs path object format")
+	}
+
+	if !strings.Contains(err.Error(), "invalid dirs item") {
+		t.Errorf("error should mention invalid dirs item, got %q", err.Error())
+	}
+}
+
 func TestLoadHostConfig_DirsInvalidPermission(t *testing.T) {
 	t.Parallel()
 
@@ -842,7 +876,7 @@ func TestLoadHostConfig_DirsInvalidPermission(t *testing.T) {
 projects:
   grafana:
     dirs:
-      - path: data
+      - data:
         permission: "not-octal"
 `
 

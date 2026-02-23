@@ -23,47 +23,168 @@ type DirConfig struct {
 	Group      string `json:"group,omitempty"      yaml:"group,omitempty"`
 }
 
+type dirConfigAttrsOnly struct {
+	Permission string `yaml:"permission,omitempty"`
+	Owner      string `yaml:"owner,omitempty"`
+	Group      string `yaml:"group,omitempty"`
+}
+
 func (d *DirConfig) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.ScalarNode {
+	switch value.Kind {
+	case yaml.ScalarNode:
 		d.Path = value.Value
 
 		return nil
+	case yaml.MappingNode:
+		parsed, found, err := parseDirConfigPathKeyForm(value)
+		if err != nil {
+			return err
+		}
+
+		if found {
+			*d = parsed
+
+			return nil
+		}
+	case yaml.DocumentNode, yaml.SequenceNode, yaml.AliasNode:
+		return decodeDirConfigPlainNode(d, value)
+	default:
+		return decodeDirConfigPlainNode(d, value)
 	}
 
+	return decodeDirConfigPlainNode(d, value)
+}
+
+func decodeDirConfigPlainNode(dst *DirConfig, value *yaml.Node) error {
 	type plain DirConfig
 
-	return value.Decode((*plain)(d))
+	return value.Decode((*plain)(dst))
+}
+
+func parseDirConfigPathKeyForm(value *yaml.Node) (DirConfig, bool, error) {
+	var (
+		cfg       DirConfig
+		pathFound bool
+		pathValue string
+		attrs     dirConfigAttrsOnly
+	)
+
+	for i := 0; i+1 < len(value.Content); i += 2 {
+		keyNode := value.Content[i]
+		valNode := value.Content[i+1]
+		key := keyNode.Value
+
+		switch key {
+		case "permission":
+			attrs.Permission = valNode.Value
+		case "owner":
+			attrs.Owner = valNode.Value
+		case "group":
+			attrs.Group = valNode.Value
+		default:
+			if pathFound {
+				return cfg, false, fmt.Errorf("invalid dirs item: multiple path keys found (%q and %q)", pathValue, key)
+			}
+
+			pathFound = true
+			pathValue = key
+
+			err := mergeDirConfigAttrsFromValue(pathValue, valNode, &attrs)
+			if err != nil {
+				return cfg, false, err
+			}
+		}
+	}
+
+	if !pathFound {
+		return cfg, false, nil
+	}
+
+	cfg.Path = pathValue
+	cfg.Permission = attrs.Permission
+	cfg.Owner = attrs.Owner
+	cfg.Group = attrs.Group
+
+	return cfg, true, nil
+}
+
+func mergeDirConfigAttrsFromValue(path string, valNode *yaml.Node, attrs *dirConfigAttrsOnly) error {
+	switch valNode.Kind {
+	case yaml.MappingNode:
+		var nested dirConfigAttrsOnly
+
+		err := valNode.Decode(&nested)
+		if err != nil {
+			return err
+		}
+
+		mergeNonEmptyDirConfigAttrs(attrs, nested)
+	case yaml.ScalarNode:
+		// Allow null/empty attributes:
+		//   - <path>:
+		if valNode.Tag != "!!null" && valNode.Value != "" {
+			return fmt.Errorf("invalid dirs item for path %q: expected mapping or null attributes", path)
+		}
+	case yaml.DocumentNode, yaml.SequenceNode, yaml.AliasNode:
+		return fmt.Errorf("invalid dirs item for path %q: expected mapping attributes", path)
+	default:
+		return fmt.Errorf("invalid dirs item for path %q: unsupported YAML node kind %d", path, valNode.Kind)
+	}
+
+	return nil
+}
+
+func mergeNonEmptyDirConfigAttrs(dst *dirConfigAttrsOnly, src dirConfigAttrsOnly) {
+	if src.Permission != "" {
+		dst.Permission = src.Permission
+	}
+
+	if src.Owner != "" {
+		dst.Owner = src.Owner
+	}
+
+	if src.Group != "" {
+		dst.Group = src.Group
+	}
 }
 
 func (*DirConfig) JSONSchema() *jsonschema.Schema {
-	objProps := orderedmap.New[string, *jsonschema.Schema]()
-	pathSchema := new(jsonschema.Schema)
-	pathSchema.Type = jsonSchemaTypeString
-	objProps.Set("path", pathSchema)
-
-	permissionSchema := new(jsonschema.Schema)
-	permissionSchema.Type = jsonSchemaTypeString
-	objProps.Set("permission", permissionSchema)
-
-	ownerSchema := new(jsonschema.Schema)
-	ownerSchema.Type = jsonSchemaTypeString
-	objProps.Set("owner", ownerSchema)
-
-	groupSchema := new(jsonschema.Schema)
-	groupSchema.Type = jsonSchemaTypeString
-	objProps.Set("group", groupSchema)
-
 	stringSchema := new(jsonschema.Schema)
 	stringSchema.Type = jsonSchemaTypeString
 
-	objectSchema := new(jsonschema.Schema)
-	objectSchema.Type = "object"
-	objectSchema.Properties = objProps
-	objectSchema.Required = []string{"path"}
-	objectSchema.AdditionalProperties = jsonschema.FalseSchema
+	attrsProps := orderedmap.New[string, *jsonschema.Schema]()
+	permissionSchema := new(jsonschema.Schema)
+	permissionSchema.Type = jsonSchemaTypeString
+	attrsProps.Set("permission", permissionSchema)
+
+	ownerSchema := new(jsonschema.Schema)
+	ownerSchema.Type = jsonSchemaTypeString
+	attrsProps.Set("owner", ownerSchema)
+
+	groupSchema := new(jsonschema.Schema)
+	groupSchema.Type = jsonSchemaTypeString
+	attrsProps.Set("group", groupSchema)
+
+	attrsObjectSchema := new(jsonschema.Schema)
+	attrsObjectSchema.Type = "object"
+	attrsObjectSchema.Properties = attrsProps
+	attrsObjectSchema.AdditionalProperties = jsonschema.FalseSchema
+
+	nullSchema := new(jsonschema.Schema)
+	nullSchema.Type = "null"
+
+	pathValueSchema := new(jsonschema.Schema)
+	pathValueSchema.OneOf = []*jsonschema.Schema{attrsObjectSchema, nullSchema}
+
+	pathKeyedObjectSchema := new(jsonschema.Schema)
+	pathKeyedObjectSchema.Type = "object"
+	pathKeyedObjectSchema.AdditionalProperties = pathValueSchema
+	pathPropertyCount := uint64(1)
+	pathKeyedObjectSchema.MinProperties = &pathPropertyCount
+	pathKeyedObjectSchema.MaxProperties = &pathPropertyCount
 
 	rootSchema := new(jsonschema.Schema)
-	rootSchema.OneOf = []*jsonschema.Schema{stringSchema, objectSchema}
+	rootSchema.OneOf = []*jsonschema.Schema{stringSchema, pathKeyedObjectSchema}
 
 	return rootSchema
 }

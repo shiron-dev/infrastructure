@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/invopop/jsonschema"
 )
@@ -39,8 +40,16 @@ func GenerateSchemaJSON(kind string) ([]byte, error) {
 		return nil, fmt.Errorf("unknown schema type %q (valid: %v)", kind, SchemaKinds())
 	}
 
-	r := new(jsonschema.Reflector)
-	schema := r.Reflect(target)
+	reflector := new(jsonschema.Reflector)
+	reflector.Mapper = func(t reflect.Type) *jsonschema.Schema {
+		if t == reflect.TypeFor[DirConfig]() {
+			return new(DirConfig).JSONSchema()
+		}
+
+		return nil
+	}
+
+	schema := reflector.Reflect(target)
 
 	data, err := json.MarshalIndent(schema, "", "  ")
 	if err != nil {
