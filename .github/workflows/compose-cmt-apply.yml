@@ -10,21 +10,106 @@ on:
       - ".github/workflows/**"
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
+  actions: write
   contents: read
   id-token: write
 
 jobs:
+  cancel-stale-runs:
+    name: cancel stale runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const branch = context.ref.replace("refs/heads/", "");
+            const currentRunId = context.runId;
+            const currentRunNumber = context.runNumber;
+            const workflowRef = process.env.GITHUB_WORKFLOW_REF || "";
+            const workflowId = workflowRef
+              .split("@")[0]
+              .replace(`${owner}/${repo}/`, "");
+
+            if (!workflowId) {
+              core.warning("Failed to resolve workflow_id from GITHUB_WORKFLOW_REF. Skip stale run cancellation.");
+              return;
+            }
+
+            const runs = await github.paginate(
+              github.rest.actions.listWorkflowRuns,
+              {
+                owner,
+                repo,
+                workflow_id: workflowId,
+                branch,
+                event: "push",
+                per_page: 100,
+              },
+            );
+
+            const activeStatuses = new Set([
+              "queued",
+              "in_progress",
+              "waiting",
+              "requested",
+              "pending",
+              "action_required",
+            ]);
+
+            const candidates = runs.filter((run) => {
+              if (run.id === currentRunId) return false;
+              if (run.run_number >= currentRunNumber) return false;
+              if (!activeStatuses.has(run.status)) return false;
+              return true;
+            });
+
+            let cancelled = 0;
+
+            for (const run of candidates) {
+              const jobs = await github.paginate(
+                github.rest.actions.listJobsForWorkflowRun,
+                {
+                  owner,
+                  repo,
+                  run_id: run.id,
+                  per_page: 100,
+                },
+              );
+
+              const applyJob = jobs.find((job) => job.name === "cmt apply");
+              const applyStarted =
+                Boolean(applyJob?.started_at) ||
+                applyJob?.status === "in_progress" ||
+                Boolean(applyJob?.conclusion);
+
+              if (applyStarted) {
+                core.info(`Skip run ${run.id}: apply already started.`);
+                continue;
+              }
+
+              await github.rest.actions.cancelWorkflowRun({
+                owner,
+                repo,
+                run_id: run.id,
+              });
+              cancelled += 1;
+              core.info(`Cancelled stale run ${run.id}.`);
+            }
+
+            core.info(`Cancelled ${cancelled} stale run(s).`);
+
   plan:
     name: cmt plan
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production-plan
     if: github.event_name == 'push'
+    needs: cancel-stale-runs
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: ./.github/actions/setup-compose-cmt
@@ -97,6 +182,9 @@ jobs:
     environment: production
     if: github.event_name == 'push'
     needs: plan
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-apply
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: ./.github/actions/setup-compose-cmt
