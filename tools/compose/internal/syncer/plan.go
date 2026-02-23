@@ -671,13 +671,13 @@ func buildHostPlan(
 
 	results := make([]projectResult, len(projects))
 
-	var wg sync.WaitGroup
+	var waitGroup sync.WaitGroup
 
 	for i, project := range projects {
-		wg.Add(1)
+		waitGroup.Add(1)
 
 		go func(idx int, proj string) {
-			defer wg.Done()
+			defer waitGroup.Done()
 
 			progress.projectStart(idx+1, len(projects), proj)
 
@@ -690,7 +690,7 @@ func buildHostPlan(
 		}(i, project)
 	}
 
-	wg.Wait()
+	waitGroup.Wait()
 
 	for i := range projects {
 		if results[i].err != nil {
