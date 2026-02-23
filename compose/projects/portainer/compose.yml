@@ -1,0 +1,26 @@
+# kics-scan ignore
+services:
+  portainer:
+    image: portainer/portainer-ce:2.33.0-rc2@sha256:159b023999a3c01f486df54b58f281a8f652e216f67caab468d0cba4711a12cb
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./portainer_data:/data
+    restart: always
+    user: "0:0"
+    privileged: true
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
