@@ -17,3 +17,9 @@ projects:
       - rag
       - postgres_data
       - redis_data
+  portainer:
+    remotePath: /var
+    postSyncCommand: docker compose up -d
+    composeAction: up
+    dirs:
+      - portainer_data
