@@ -4,10 +4,10 @@ services:
     container_name: snipeit-db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: "please-change-root-password"
+      MYSQL_ROOT_PASSWORD: "{{ .db_root_password }}"
       MYSQL_DATABASE: snipeit
       MYSQL_USER: snipeit
-      MYSQL_PASSWORD: "please-change-db-password"
+      MYSQL_PASSWORD: "{{ .db_password }}"
     volumes:
       - ./db_data:/var/lib/mysql
     healthcheck:
@@ -45,7 +45,7 @@ services:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
-      APP_KEY: "base64:please-generate-and-replace-app-key"
+      APP_KEY: "base64:{{ .app_key }}"
       APP_URL: "https://snipeit.shiron.dev"
       APP_TIMEZONE: Asia/Tokyo
       APP_LOCALE: ja
@@ -53,10 +53,10 @@ services:
       DB_HOST: db
       DB_DATABASE: snipeit
       DB_USERNAME: snipeit
-      DB_PASSWORD: "please-change-db-password"
+      DB_PASSWORD: "{{ .db_password }}"
       DB_PORT: "3306"
       REDIS_HOST: redis
-      REDIS_PASSWORD: "null"
+      REDIS_PASSWORD: "{{ .redis_password }}"
       REDIS_PORT: "6379"
       CACHE_DRIVER: redis
       SESSION_DRIVER: redis
@@ -76,7 +76,7 @@ services:
     restart: unless-stopped
     command: tunnel run
     environment:
-      TUNNEL_TOKEN: "please-set-cloudflare-tunnel-token"
+      TUNNEL_TOKEN: "{{ .cf_tunnel_token }}"
     depends_on:
       snipeit:
         condition: service_healthy
