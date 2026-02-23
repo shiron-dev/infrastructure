@@ -56,9 +56,15 @@ jobs:
             echo "cmt plan produced no output." > "$slack_file"
           fi
 
+          summary_line="$(rg '^Summary: ' "$slack_file" -N -m 1 || true)"
+          if [ -z "$summary_line" ]; then
+            summary_line="Summary: (not found)"
+          fi
+
           {
             echo "output_file=${output_file}"
             echo "slack_file=${slack_file}"
+            echo "summary=${summary_line}"
             echo "exit_code=${exit_code}"
           } >> "$GITHUB_OUTPUT"
           {
@@ -76,7 +82,9 @@ jobs:
             snippet_type: text
             title: CMT Plan Result (${{ github.repository }})
             filename: cmt-plan-${{ github.run_id }}.txt
-            initial_comment: CMT plan result for ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            initial_comment: |
+              CMT plan result for ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              ${{ steps.cmt-plan.outputs.summary }}
             file: ${{ steps.cmt-plan.outputs.slack_file }}
       - name: Fail when cmt plan failed
         if: steps.cmt-plan.outputs.exit_code != '0'
