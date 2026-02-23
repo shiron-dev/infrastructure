@@ -148,7 +148,7 @@ func TestApplyWithDeps_BeforeApplyPromptHook_Rejected(t *testing.T) {
 		},
 	}
 
-	mockRunner := func(_ string, _ []byte) (int, string, error) {
+	mockRunner := func(_ string, _ string, _ []byte) (int, string, error) {
 		return 1, "rejected by policy", nil
 	}
 
@@ -197,7 +197,7 @@ func TestApplyWithDeps_BeforeApplyHook_Rejected(t *testing.T) {
 		},
 	}
 
-	mockRunner := func(_ string, _ []byte) (int, string, error) {
+	mockRunner := func(_ string, _ string, _ []byte) (int, string, error) {
 		return 1, "", nil
 	}
 
@@ -246,7 +246,7 @@ func TestApplyWithDeps_BeforeApplyPromptHook_ErrorExitCode(t *testing.T) {
 		},
 	}
 
-	mockRunner := func(_ string, _ []byte) (int, string, error) {
+	mockRunner := func(_ string, _ string, _ []byte) (int, string, error) {
 		return 2, "unexpected error", nil
 	}
 
@@ -313,7 +313,7 @@ func TestApplyWithDeps_AllHooks_Pass(t *testing.T) {
 	}
 
 	hookCalls := 0
-	mockRunner := func(_ string, _ []byte) (int, string, error) {
+	mockRunner := func(_ string, _ string, _ []byte) (int, string, error) {
 		hookCalls++
 
 		return 0, "", nil
