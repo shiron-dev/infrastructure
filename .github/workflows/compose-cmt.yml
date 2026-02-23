@@ -79,6 +79,12 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+          summary_line="$(tr -d '\r' < "$output_file" | awk '/^Summary: /{line=$0} END{print line}')"
+          if [ -z "$summary_line" ]; then
+            summary_line="Summary: (not found)"
+          fi
+
+          echo "summary=${summary_line}" >> "$GITHUB_OUTPUT"
           echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
           rm -f "$output_file"
       - name: Comment cmt plan result
@@ -87,6 +93,8 @@ jobs:
           header: cmt-plan
           message: |
             ### `make cmt-plan` result
+
+            ${{ steps.cmt-plan.outputs.summary }}
 
             ```diff
             ${{ steps.cmt-plan.outputs.output }}
