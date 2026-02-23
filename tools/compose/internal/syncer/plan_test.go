@@ -495,13 +495,13 @@ func TestSyncPlan_Print_FullPlan(t *testing.T) {
 						Dirs: []DirPlan{
 							{RelativePath: "data", Exists: false},
 						},
-					Files: []FilePlan{
-						{
-							RelativePath: "compose.yml",
-							Action:       ActionAdd,
-							LocalData:    []byte("services: {}"),
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								Action:       ActionAdd,
+								LocalData:    []byte("services: {}"),
+							},
 						},
-					},
 					},
 				},
 			},

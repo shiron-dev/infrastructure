@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"cmt/internal/config"
 	"cmt/internal/remote"
@@ -482,6 +483,7 @@ func BuildPlanWithDeps(
 }
 
 type planProgress struct {
+	mu     *sync.Mutex
 	writer io.Writer
 	style  outputStyle
 }
@@ -489,6 +491,7 @@ type planProgress struct {
 func resolvePlanProgress(writer io.Writer) planProgress {
 	if writer == nil {
 		return planProgress{
+			mu:     &sync.Mutex{},
 			writer: io.Discard,
 			style: outputStyle{
 				enabled: false,
@@ -496,15 +499,21 @@ func resolvePlanProgress(writer io.Writer) planProgress {
 		}
 	}
 
-	return planProgress{writer: writer, style: newOutputStyle(writer)}
+	return planProgress{mu: &sync.Mutex{}, writer: writer, style: newOutputStyle(writer)}
 }
 
 func (p planProgress) planStart(hostCount, projectCount int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	_, _ = fmt.Fprintf(p.writer, "%s %d host(s), %d project(s)\n",
 		p.style.key("Planning:"), hostCount, projectCount)
 }
 
 func (p planProgress) hostStart(index, total int, name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	_, _ = fmt.Fprintf(p.writer, "%s %s %s\n",
 		p.style.key(fmt.Sprintf("Planning host %d/%d:", index, total)),
 		p.style.projectName(name),
@@ -512,6 +521,9 @@ func (p planProgress) hostStart(index, total int, name string) {
 }
 
 func (p planProgress) hostDone(index, total int, name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	_, _ = fmt.Fprintf(p.writer, "%s %s %s\n",
 		p.style.key(fmt.Sprintf("Planning host %d/%d:", index, total)),
 		p.style.projectName(name),
@@ -519,12 +531,28 @@ func (p planProgress) hostDone(index, total int, name string) {
 }
 
 func (p planProgress) projectStart(index, total int, name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	_, _ = fmt.Fprintf(p.writer, "  %s %s\n",
 		p.style.muted(fmt.Sprintf("project %d/%d:", index, total)),
 		p.style.projectName(name))
 }
 
+func (p planProgress) projectDone(index, total int, name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	_, _ = fmt.Fprintf(p.writer, "  %s %s %s\n",
+		p.style.muted(fmt.Sprintf("project %d/%d:", index, total)),
+		p.style.projectName(name),
+		p.style.success("done"))
+}
+
 func (p planProgress) planDone() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	_, _ = fmt.Fprintln(p.writer, p.style.success("Plan complete."))
 }
 
@@ -622,6 +650,11 @@ func resolveHostSSHConfig(
 	return sshResolver.Resolve(host, sshConfigPath, hostDir)
 }
 
+type projectResult struct {
+	plan ProjectPlan
+	err  error
+}
+
 func buildHostPlan(
 	cfg *config.CmtConfig,
 	host config.HostEntry,
@@ -633,18 +666,38 @@ func buildHostPlan(
 ) (*HostPlan, error) {
 	hostPlan := &HostPlan{
 		Host:     host,
-		Projects: nil,
+		Projects: make([]ProjectPlan, len(projects)),
 	}
 
-	for projectIdx, project := range projects {
-		progress.projectStart(projectIdx+1, len(projects), project)
+	results := make([]projectResult, len(projects))
 
-		projectPlan, err := buildProjectPlanForHost(cfg, host, hostCfg, project, client, localRunner)
-		if err != nil {
-			return nil, err
+	var waitGroup sync.WaitGroup
+
+	for i, project := range projects {
+		waitGroup.Add(1)
+
+		go func(idx int, proj string) {
+			defer waitGroup.Done()
+
+			progress.projectStart(idx+1, len(projects), proj)
+
+			plan, err := buildProjectPlanForHost(cfg, host, hostCfg, proj, client, localRunner)
+			results[idx] = projectResult{plan: plan, err: err}
+
+			if err == nil {
+				progress.projectDone(idx+1, len(projects), proj)
+			}
+		}(i, project)
+	}
+
+	waitGroup.Wait()
+
+	for i := range projects {
+		if results[i].err != nil {
+			return nil, results[i].err
 		}
 
-		hostPlan.Projects = append(hostPlan.Projects, projectPlan)
+		hostPlan.Projects[i] = results[i].plan
 	}
 
 	return hostPlan, nil
