@@ -1,9 +1,0 @@
-- name: Start n8n
-  listen: Restart n8n
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      docker compose -f /var/n8n/compose.yml down || :
-      docker compose -f /var/n8n/compose.yml up -d --build
-    chdir: /var/n8n
-  changed_when: true
