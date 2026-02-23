@@ -2,6 +2,10 @@
 
 basePath: .
 
+beforeApplyHooks:
+  beforeApplyPrompt:
+    command: sh scripts/is-ci.sh
+
 defaults:
   remotePath: /opt/compose
   postSyncCommand: docker compose up -d
