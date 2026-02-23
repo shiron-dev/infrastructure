@@ -14,7 +14,12 @@ func newPlanCmd(configPath *string) *cobra.Command {
 
 	var projectFilter []string
 
-	var dependencies syncer.PlanDependencies
+	dependencies := syncer.PlanDependencies{
+		ClientFactory:  nil,
+		SSHResolver:    nil,
+		LocalRunner:    nil,
+		ProgressWriter: os.Stdout,
+	}
 
 	planCommand := new(cobra.Command)
 	planCommand.Use = "plan"
