@@ -717,7 +717,7 @@ projects:
 	}
 }
 
-func TestLoadHostConfig_DirsObjectFormat(t *testing.T) {
+func TestLoadHostConfig_DirsPathKeyedFormat(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -732,7 +732,7 @@ func TestLoadHostConfig_DirsObjectFormat(t *testing.T) {
 projects:
   grafana:
     dirs:
-      - path: influxdb_data
+      - influxdb_data:
         permission: "0755"
         owner: influxdb
         group: influxdb
@@ -786,7 +786,7 @@ projects:
   grafana:
     dirs:
       - simple_dir
-      - path: managed_dir
+      - managed_dir:
         permission: "0750"
         owner: app
 `
@@ -824,6 +824,49 @@ projects:
 
 	if dirs[1].Owner != "app" {
 		t.Errorf("dirs[1].Owner = %q", dirs[1].Owner)
+	}
+}
+
+func TestLoadHostConfig_DirsLegacyObjectFormat(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	hostDir := filepath.Join(dir, "hosts", "server1")
+
+	err := os.MkdirAll(hostDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := `
+projects:
+  grafana:
+    dirs:
+      - path: legacy_dir
+        owner: legacy
+`
+
+	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hostConfig, err := LoadHostConfig(dir, "server1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dirs := hostConfig.Projects["grafana"].Dirs
+	if len(dirs) != 1 {
+		t.Fatalf("expected 1 dir, got %d", len(dirs))
+	}
+
+	if dirs[0].Path != "legacy_dir" {
+		t.Errorf("Path = %q", dirs[0].Path)
+	}
+
+	if dirs[0].Owner != "legacy" {
+		t.Errorf("Owner = %q, want %q", dirs[0].Owner, "legacy")
 	}
 }
 

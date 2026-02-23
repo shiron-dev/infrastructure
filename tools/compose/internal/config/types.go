@@ -30,6 +30,91 @@ func (d *DirConfig) UnmarshalYAML(value *yaml.Node) error {
 		return nil
 	}
 
+	if value.Kind == yaml.MappingNode {
+		hasPathField := false
+		for i := 0; i+1 < len(value.Content); i += 2 {
+			if value.Content[i].Value == "path" {
+				hasPathField = true
+				break
+			}
+		}
+
+		if hasPathField {
+			type plain DirConfig
+
+			return value.Decode((*plain)(d))
+		}
+
+		type attrsOnly struct {
+			Permission string `yaml:"permission,omitempty"`
+			Owner      string `yaml:"owner,omitempty"`
+			Group      string `yaml:"group,omitempty"`
+		}
+
+		var (
+			pathFound bool
+			pathValue string
+			attrs     attrsOnly
+		)
+
+		for i := 0; i+1 < len(value.Content); i += 2 {
+			keyNode := value.Content[i]
+			valNode := value.Content[i+1]
+			key := keyNode.Value
+
+			switch key {
+			case "permission":
+				attrs.Permission = valNode.Value
+			case "owner":
+				attrs.Owner = valNode.Value
+			case "group":
+				attrs.Group = valNode.Value
+			default:
+				if pathFound {
+					return fmt.Errorf("invalid dirs item: multiple path keys found (%q and %q)", pathValue, key)
+				}
+
+				pathFound = true
+				pathValue = key
+
+				switch valNode.Kind {
+				case yaml.MappingNode:
+					var nested attrsOnly
+					if err := valNode.Decode(&nested); err != nil {
+						return err
+					}
+
+					if nested.Permission != "" {
+						attrs.Permission = nested.Permission
+					}
+					if nested.Owner != "" {
+						attrs.Owner = nested.Owner
+					}
+					if nested.Group != "" {
+						attrs.Group = nested.Group
+					}
+				case yaml.ScalarNode:
+					// Allow null/empty attributes:
+					//   - <path>:
+					if valNode.Tag != "!!null" && valNode.Value != "" {
+						return fmt.Errorf("invalid dirs item for path %q: expected mapping or null attributes", pathValue)
+					}
+				default:
+					return fmt.Errorf("invalid dirs item for path %q: expected mapping attributes", pathValue)
+				}
+			}
+		}
+
+		if pathFound {
+			d.Path = pathValue
+			d.Permission = attrs.Permission
+			d.Owner = attrs.Owner
+			d.Group = attrs.Group
+
+			return nil
+		}
+	}
+
 	type plain DirConfig
 
 	return value.Decode((*plain)(d))
