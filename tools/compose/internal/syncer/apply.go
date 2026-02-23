@@ -489,13 +489,15 @@ func createMissingDirs(projectPlan ProjectPlan, client remote.RemoteClient, writ
 			}
 		}
 
-		if err := applyDirOwnership(dirPlan, client); err != nil {
+		err := applyDirOwnership(dirPlan, client)
+		if err != nil {
 			_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
 			return err
 		}
 
-		if err := applyDirPermission(dirPlan, client); err != nil {
+		err = applyDirPermission(dirPlan, client)
+		if err != nil {
 			_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
 			return err

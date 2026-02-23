@@ -411,17 +411,17 @@ func printProjectDirPlans(writer io.Writer, style outputStyle, dirPlans []DirPla
 	_, _ = fmt.Fprintln(writer)
 }
 
-func formatDirPlanMeta(dp DirPlan) string {
+func formatDirPlanMeta(dirPlan DirPlan) string {
 	var parts []string
 
-	if dp.Permission != "" {
-		parts = append(parts, "mode="+dp.Permission)
+	if dirPlan.Permission != "" {
+		parts = append(parts, "mode="+dirPlan.Permission)
 	}
 
-	if dp.Owner != "" || dp.Group != "" {
-		ownership := dp.Owner
-		if dp.Group != "" {
-			ownership += ":" + dp.Group
+	if dirPlan.Owner != "" || dirPlan.Group != "" {
+		ownership := dirPlan.Owner
+		if dirPlan.Group != "" {
+			ownership += ":" + dirPlan.Group
 		}
 
 		parts = append(parts, "owner="+ownership)

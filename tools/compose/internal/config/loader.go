@@ -77,7 +77,8 @@ func LoadHostConfig(basePath, hostName string) (*HostConfig, error) {
 			continue
 		}
 
-		if err := ValidateDirConfigs(projectConfig.Dirs); err != nil {
+		err := ValidateDirConfigs(projectConfig.Dirs)
+		if err != nil {
 			return nil, fmt.Errorf("project %s in %s: %w", projectName, hostConfigPath, err)
 		}
 	}
