@@ -23,3 +23,4 @@ projects:
     composeAction: up
     dirs:
       - portainer_data
+  discord-webhook:
