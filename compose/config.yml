@@ -9,6 +9,7 @@ beforeApplyHooks:
 defaults:
   remotePath: /opt/compose
   postSyncCommand: docker compose up -d
+  composeAction: ignore
 
 hosts:
   - name: arm-srv
