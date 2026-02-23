@@ -65,19 +65,19 @@ func TestApplyWithDeps_UsesInjectedClientFactory(t *testing.T) {
 							{RelativePath: "data", RemotePath: "/srv/grafana/data", Exists: false},
 						},
 						Files: []FilePlan{
-						{
-							RelativePath: "compose.yml",
-							LocalPath:    "/tmp/compose.yml",
-							RemotePath:   "/srv/grafana/compose.yml",
-							Action:       ActionAdd,
-							LocalData:    []byte("services: {}"),
+							{
+								RelativePath: "compose.yml",
+								LocalPath:    "/tmp/compose.yml",
+								RemotePath:   "/srv/grafana/compose.yml",
+								Action:       ActionAdd,
+								LocalData:    []byte("services: {}"),
+							},
+							{
+								RelativePath: "old.txt",
+								RemotePath:   "/srv/grafana/old.txt",
+								Action:       ActionDelete,
+							},
 						},
-						{
-							RelativePath: "old.txt",
-							RemotePath:   "/srv/grafana/old.txt",
-							Action:       ActionDelete,
-						},
-					},
 					},
 				},
 			},
