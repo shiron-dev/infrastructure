@@ -114,15 +114,28 @@ cmt は常に `ssh -G <host>` を実行して SSH 接続パラメータ
 `cmt apply` 時にファイル同期より先にディレクトリを作成します。
 Docker Compose の bind mount 用ディレクトリを事前に用意する用途を想定しています。
 
+文字列で指定する場合はパスのみが設定されます（従来の形式）。
+オブジェクトで指定する場合は `permission`（8進数文字列）、`owner`、`group` を追加で設定できます。
+両形式を同じリスト内で混在させることも可能です。
+
 ```yaml
 projects:
   grafana:
     dirs:
-      - grafana_storage    # → <remotePath>/grafana/grafana_storage/
-      - grafana_conf       # → <remotePath>/grafana/grafana_conf/
+      - grafana_storage                         # 文字列形式（従来どおり）
+      - grafana_conf
+      - path: influxdb_data                     # オブジェクト形式
+        permission: "0755"
+        owner: influxdb
+        group: influxdb
+      - path: vmdata
+        permission: "0700"
 ```
 
-`cmt plan` では各ディレクトリの状態（`create` / `exists`）が表示されます。
+`permission` を指定した場合はディレクトリ作成後に `chmod` を実行します。
+`owner` または `group` を指定した場合は `chown` を実行します。
+
+`cmt plan` では各ディレクトリの状態（`create` / `exists`）と設定された属性が表示されます。
 
 #### `templateVarSources` — テンプレート変数ソースの指定
 

@@ -418,7 +418,21 @@ func projectHasChanges(projectPlan ProjectPlan) bool {
 		}
 	}
 
+	if projectHasDirChanges(projectPlan) {
+		return true
+	}
+
 	return projectPlan.Compose.HasChanges()
+}
+
+func projectHasDirChanges(projectPlan ProjectPlan) bool {
+	for _, dirPlan := range projectPlan.Dirs {
+		if !dirPlan.Exists || dirPlan.Permission != "" || dirPlan.Owner != "" || dirPlan.Group != "" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func applyProjectPlan(
@@ -459,20 +473,72 @@ func applyProjectPlan(
 
 func createMissingDirs(projectPlan ProjectPlan, client remote.RemoteClient, writer io.Writer, style outputStyle) error {
 	for _, dirPlan := range projectPlan.Dirs {
+		actionLabel := "creating dir"
 		if dirPlan.Exists {
-			continue
+			actionLabel = "ensuring dir"
 		}
 
-		_, _ = fmt.Fprintf(writer, "    %s %s/... ", style.key("creating dir"), dirPlan.RelativePath)
+		_, _ = fmt.Fprintf(writer, "    %s %s/... ", style.key(actionLabel), dirPlan.RelativePath)
 
-		err := client.MkdirAll(dirPlan.RemotePath)
+		if !dirPlan.Exists {
+			err := client.MkdirAll(dirPlan.RemotePath)
+			if err != nil {
+				_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
+
+				return fmt.Errorf("creating directory %s: %w", dirPlan.RemotePath, err)
+			}
+		}
+
+		err := applyDirOwnership(dirPlan, client)
 		if err != nil {
 			_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
-			return fmt.Errorf("creating directory %s: %w", dirPlan.RemotePath, err)
+			return err
+		}
+
+		err = applyDirPermission(dirPlan, client)
+		if err != nil {
+			_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
+
+			return err
 		}
 
 		_, _ = fmt.Fprintln(writer, style.success("done"))
+	}
+
+	return nil
+}
+
+func applyDirPermission(dirPlan DirPlan, client remote.RemoteClient) error {
+	if dirPlan.Permission == "" {
+		return nil
+	}
+
+	cmd := fmt.Sprintf("chmod %s '%s'", dirPlan.Permission, dirPlan.RemotePath)
+
+	_, err := client.RunCommand("", cmd)
+	if err != nil {
+		return fmt.Errorf("chmod %s on %s: %w", dirPlan.Permission, dirPlan.RemotePath, err)
+	}
+
+	return nil
+}
+
+func applyDirOwnership(dirPlan DirPlan, client remote.RemoteClient) error {
+	if dirPlan.Owner == "" && dirPlan.Group == "" {
+		return nil
+	}
+
+	ownership := dirPlan.Owner
+	if dirPlan.Group != "" {
+		ownership += ":" + dirPlan.Group
+	}
+
+	cmd := fmt.Sprintf("chown %s '%s'", ownership, dirPlan.RemotePath)
+
+	_, err := client.RunCommand("", cmd)
+	if err != nil {
+		return fmt.Errorf("chown %s on %s: %w", ownership, dirPlan.RemotePath, err)
 	}
 
 	return nil

@@ -1,10 +1,91 @@
 package config
 
-const (
-	ComposeActionUp     = "up"
-	ComposeActionDown   = "down"
-	ComposeActionIgnore = "ignore"
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/invopop/jsonschema"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
+	"gopkg.in/yaml.v3"
 )
+
+const (
+	ComposeActionUp      = "up"
+	ComposeActionDown    = "down"
+	ComposeActionIgnore  = "ignore"
+	jsonSchemaTypeString = "string"
+)
+
+type DirConfig struct {
+	Path       string `json:"path"                 yaml:"path"`
+	Permission string `json:"permission,omitempty" yaml:"permission,omitempty"`
+	Owner      string `json:"owner,omitempty"      yaml:"owner,omitempty"`
+	Group      string `json:"group,omitempty"      yaml:"group,omitempty"`
+}
+
+func (d *DirConfig) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		d.Path = value.Value
+
+		return nil
+	}
+
+	type plain DirConfig
+
+	return value.Decode((*plain)(d))
+}
+
+func (*DirConfig) JSONSchema() *jsonschema.Schema {
+	objProps := orderedmap.New[string, *jsonschema.Schema]()
+	pathSchema := new(jsonschema.Schema)
+	pathSchema.Type = jsonSchemaTypeString
+	objProps.Set("path", pathSchema)
+
+	permissionSchema := new(jsonschema.Schema)
+	permissionSchema.Type = jsonSchemaTypeString
+	objProps.Set("permission", permissionSchema)
+
+	ownerSchema := new(jsonschema.Schema)
+	ownerSchema.Type = jsonSchemaTypeString
+	objProps.Set("owner", ownerSchema)
+
+	groupSchema := new(jsonschema.Schema)
+	groupSchema.Type = jsonSchemaTypeString
+	objProps.Set("group", groupSchema)
+
+	stringSchema := new(jsonschema.Schema)
+	stringSchema.Type = jsonSchemaTypeString
+
+	objectSchema := new(jsonschema.Schema)
+	objectSchema.Type = "object"
+	objectSchema.Properties = objProps
+	objectSchema.Required = []string{"path"}
+	objectSchema.AdditionalProperties = jsonschema.FalseSchema
+
+	rootSchema := new(jsonschema.Schema)
+	rootSchema.OneOf = []*jsonschema.Schema{stringSchema, objectSchema}
+
+	return rootSchema
+}
+
+func ValidateDirConfigs(dirs []DirConfig) error {
+	for i, dirConfig := range dirs {
+		if dirConfig.Path == "" {
+			return fmt.Errorf("dirs[%d]: path is required", i)
+		}
+
+		if dirConfig.Permission == "" {
+			continue
+		}
+
+		_, err := strconv.ParseUint(dirConfig.Permission, 8, 32)
+		if err != nil {
+			return fmt.Errorf("dirs[%d]: invalid permission %q (expected octal like \"0755\"): %w", i, dirConfig.Permission, err)
+		}
+	}
+
+	return nil
+}
 
 func DefaultTemplateVarSources() []string {
 	return []string{"*.yml", "*.yaml"}
@@ -57,12 +138,12 @@ type HostConfig struct {
 }
 
 type ProjectConfig struct {
-	RemotePath         string   `json:"remotePath,omitempty"         yaml:"remotePath,omitempty"`
-	PostSyncCommand    string   `json:"postSyncCommand,omitempty"    yaml:"postSyncCommand,omitempty"`
-	ComposeAction      string   `json:"composeAction,omitempty"      yaml:"composeAction,omitempty"`
-	RemoveOrphans      bool     `json:"removeOrphans,omitempty"      yaml:"removeOrphans,omitempty"`
-	Dirs               []string `json:"dirs,omitempty"               yaml:"dirs,omitempty"`
-	TemplateVarSources []string `json:"templateVarSources,omitempty" yaml:"templateVarSources,omitempty"`
+	RemotePath         string      `json:"remotePath,omitempty"         yaml:"remotePath,omitempty"`
+	PostSyncCommand    string      `json:"postSyncCommand,omitempty"    yaml:"postSyncCommand,omitempty"`
+	ComposeAction      string      `json:"composeAction,omitempty"      yaml:"composeAction,omitempty"`
+	RemoveOrphans      bool        `json:"removeOrphans,omitempty"      yaml:"removeOrphans,omitempty"`
+	Dirs               []DirConfig `json:"dirs,omitempty"               yaml:"dirs,omitempty"`
+	TemplateVarSources []string    `json:"templateVarSources,omitempty" yaml:"templateVarSources,omitempty"`
 }
 
 type ResolvedProjectConfig struct {
@@ -70,7 +151,7 @@ type ResolvedProjectConfig struct {
 	PostSyncCommand    string
 	ComposeAction      string
 	RemoveOrphans      bool
-	Dirs               []string
+	Dirs               []DirConfig
 	TemplateVarSources []string
 }
 

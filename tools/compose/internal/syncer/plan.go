@@ -133,6 +133,9 @@ type DirPlan struct {
 	RelativePath string
 	RemotePath   string
 	Exists       bool
+	Permission   string
+	Owner        string
+	Group        string
 }
 
 type FilePlan struct {
@@ -244,6 +247,10 @@ func (p *SyncPlan) HasChanges() bool {
 
 	for _, hostPlan := range p.HostPlans {
 		for _, projectPlan := range hostPlan.Projects {
+			if projectHasDirChanges(projectPlan) {
+				return true
+			}
+
 			if projectPlan.Compose.HasChanges() {
 				return true
 			}
@@ -389,16 +396,42 @@ func printProjectDirPlans(writer io.Writer, style outputStyle, dirPlans []DirPla
 			action = ActionUnchanged
 		}
 
+		extra := formatDirPlanMeta(directoryPlan)
+
 		_, _ = fmt.Fprintf(
 			writer,
-			"      %s %s/ %s\n",
+			"      %s %s/ %s%s\n",
 			style.actionSymbol(action),
 			directoryPlan.RelativePath,
 			statusText,
+			extra,
 		)
 	}
 
 	_, _ = fmt.Fprintln(writer)
+}
+
+func formatDirPlanMeta(dirPlan DirPlan) string {
+	var parts []string
+
+	if dirPlan.Permission != "" {
+		parts = append(parts, "mode="+dirPlan.Permission)
+	}
+
+	if dirPlan.Owner != "" || dirPlan.Group != "" {
+		ownership := dirPlan.Owner
+		if dirPlan.Group != "" {
+			ownership += ":" + dirPlan.Group
+		}
+
+		parts = append(parts, "owner="+ownership)
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	return " [" + strings.Join(parts, ", ") + "]"
 }
 
 func filePlanLabel(filePlan FilePlan) string {
@@ -845,16 +878,19 @@ func buildComposeConfigArgs(filesToValidate map[string][]byte) []string {
 	return append(args, "config")
 }
 
-func buildDirPlans(directories []string, remoteDir string, client remote.RemoteClient) []DirPlan {
+func buildDirPlans(directories []config.DirConfig, remoteDir string, client remote.RemoteClient) []DirPlan {
 	dirPlans := make([]DirPlan, 0, len(directories))
 
 	for _, directory := range directories {
-		absDir := path.Join(remoteDir, directory)
+		absDir := path.Join(remoteDir, directory.Path)
 		_, statErr := client.Stat(absDir)
 		dirPlans = append(dirPlans, DirPlan{
-			RelativePath: directory,
+			RelativePath: directory.Path,
 			RemotePath:   absDir,
 			Exists:       statErr == nil,
+			Permission:   directory.Permission,
+			Owner:        directory.Owner,
+			Group:        directory.Group,
 		})
 	}
 
