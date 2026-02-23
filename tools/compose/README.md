@@ -116,7 +116,6 @@ Docker Compose の bind mount 用ディレクトリを事前に用意する用�
 
 文字列で指定する場合はパスのみが設定されます（従来の形式）。
 属性を指定する場合は `- <path>:` の下に `permission`（8進数文字列）、`owner`、`group` を指定します。
-従来の `- path: <path>` 形式も後方互換として利用できます。
 
 ```yaml
 projects:

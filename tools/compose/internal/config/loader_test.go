@@ -827,7 +827,7 @@ projects:
 	}
 }
 
-func TestLoadHostConfig_DirsLegacyObjectFormat(t *testing.T) {
+func TestLoadHostConfig_DirsPathObjectFormat_IsRejected(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -851,22 +851,13 @@ projects:
 		t.Fatal(err)
 	}
 
-	hostConfig, err := LoadHostConfig(dir, "server1")
-	if err != nil {
-		t.Fatal(err)
+	_, err = LoadHostConfig(dir, "server1")
+	if err == nil {
+		t.Fatal("expected error for unsupported dirs path object format")
 	}
 
-	dirs := hostConfig.Projects["grafana"].Dirs
-	if len(dirs) != 1 {
-		t.Fatalf("expected 1 dir, got %d", len(dirs))
-	}
-
-	if dirs[0].Path != "legacy_dir" {
-		t.Errorf("Path = %q", dirs[0].Path)
-	}
-
-	if dirs[0].Owner != "legacy" {
-		t.Errorf("Owner = %q, want %q", dirs[0].Owner, "legacy")
+	if !strings.Contains(err.Error(), "invalid dirs item") {
+		t.Errorf("error should mention invalid dirs item, got %q", err.Error())
 	}
 }
 
@@ -885,7 +876,7 @@ func TestLoadHostConfig_DirsInvalidPermission(t *testing.T) {
 projects:
   grafana:
     dirs:
-      - path: data
+      - data:
         permission: "not-octal"
 `
 

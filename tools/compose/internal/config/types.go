@@ -36,10 +36,6 @@ func (d *DirConfig) UnmarshalYAML(value *yaml.Node) error {
 
 		return nil
 	case yaml.MappingNode:
-		if hasDirPathField(value) {
-			return decodeDirConfigPlainNode(d, value)
-		}
-
 		parsed, found, err := parseDirConfigPathKeyForm(value)
 		if err != nil {
 			return err
@@ -57,16 +53,6 @@ func (d *DirConfig) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	return decodeDirConfigPlainNode(d, value)
-}
-
-func hasDirPathField(value *yaml.Node) bool {
-	for i := 0; i+1 < len(value.Content); i += 2 {
-		if value.Content[i].Value == "path" {
-			return true
-		}
-	}
-
-	return false
 }
 
 func decodeDirConfigPlainNode(dst *DirConfig, value *yaml.Node) error {
@@ -126,7 +112,6 @@ func mergeDirConfigAttrsFromValue(path string, valNode *yaml.Node, attrs *dirCon
 	switch valNode.Kind {
 	case yaml.MappingNode:
 		var nested dirConfigAttrsOnly
-
 		err := valNode.Decode(&nested)
 		if err != nil {
 			return err
@@ -163,34 +148,42 @@ func mergeNonEmptyDirConfigAttrs(dst *dirConfigAttrsOnly, src dirConfigAttrsOnly
 }
 
 func (*DirConfig) JSONSchema() *jsonschema.Schema {
-	objProps := orderedmap.New[string, *jsonschema.Schema]()
-	pathSchema := new(jsonschema.Schema)
-	pathSchema.Type = jsonSchemaTypeString
-	objProps.Set("path", pathSchema)
-
-	permissionSchema := new(jsonschema.Schema)
-	permissionSchema.Type = jsonSchemaTypeString
-	objProps.Set("permission", permissionSchema)
-
-	ownerSchema := new(jsonschema.Schema)
-	ownerSchema.Type = jsonSchemaTypeString
-	objProps.Set("owner", ownerSchema)
-
-	groupSchema := new(jsonschema.Schema)
-	groupSchema.Type = jsonSchemaTypeString
-	objProps.Set("group", groupSchema)
-
 	stringSchema := new(jsonschema.Schema)
 	stringSchema.Type = jsonSchemaTypeString
 
-	objectSchema := new(jsonschema.Schema)
-	objectSchema.Type = "object"
-	objectSchema.Properties = objProps
-	objectSchema.Required = []string{"path"}
-	objectSchema.AdditionalProperties = jsonschema.FalseSchema
+	attrsProps := orderedmap.New[string, *jsonschema.Schema]()
+	permissionSchema := new(jsonschema.Schema)
+	permissionSchema.Type = jsonSchemaTypeString
+	attrsProps.Set("permission", permissionSchema)
+
+	ownerSchema := new(jsonschema.Schema)
+	ownerSchema.Type = jsonSchemaTypeString
+	attrsProps.Set("owner", ownerSchema)
+
+	groupSchema := new(jsonschema.Schema)
+	groupSchema.Type = jsonSchemaTypeString
+	attrsProps.Set("group", groupSchema)
+
+	attrsObjectSchema := new(jsonschema.Schema)
+	attrsObjectSchema.Type = "object"
+	attrsObjectSchema.Properties = attrsProps
+	attrsObjectSchema.AdditionalProperties = jsonschema.FalseSchema
+
+	nullSchema := new(jsonschema.Schema)
+	nullSchema.Type = "null"
+
+	pathValueSchema := new(jsonschema.Schema)
+	pathValueSchema.OneOf = []*jsonschema.Schema{attrsObjectSchema, nullSchema}
+
+	pathKeyedObjectSchema := new(jsonschema.Schema)
+	pathKeyedObjectSchema.Type = "object"
+	pathKeyedObjectSchema.AdditionalProperties = pathValueSchema
+	pathPropertyCount := uint64(1)
+	pathKeyedObjectSchema.MinProperties = &pathPropertyCount
+	pathKeyedObjectSchema.MaxProperties = &pathPropertyCount
 
 	rootSchema := new(jsonschema.Schema)
-	rootSchema.OneOf = []*jsonschema.Schema{stringSchema, objectSchema}
+	rootSchema.OneOf = []*jsonschema.Schema{stringSchema, pathKeyedObjectSchema}
 
 	return rootSchema
 }
