@@ -24,3 +24,8 @@ projects:
     dirs:
       - portainer_data
   discord-webhook:
+  snipeit:
+    dirs:
+      - db_data
+      - redis_data
+      - snipeit_data

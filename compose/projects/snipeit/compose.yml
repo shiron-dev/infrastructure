@@ -1,0 +1,113 @@
+services:
+  snipeit-db:
+    image: mariadb:10.11@sha256:8d9046cdb0b0961b3d2119bcb4bea62a185f11944be5968bc42b81d47801902e
+    container_name: snipeit-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "{{ .db_root_password }}"
+      MYSQL_DATABASE: snipeit
+      MYSQL_USER: snipeit
+      MYSQL_PASSWORD: "{{ .db_password }}"
+    volumes:
+      - ./db_data:/var/lib/mysql
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  snipeit-redis:
+    image: redis:8.6.0-alpine@sha256:fd83658b0e40e2164617d262f13c02ca9ee9e1e6b276fd2fa06617e09bd5c780
+    container_name: snipeit-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./redis_data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  snipeit-app:
+    image: snipe/snipe-it:v8.3.7@sha256:f277e504357a0a94f9d7afd2251f3e9b6de65ea1f69f1c9cbf27e2e2059804b6
+    container_name: snipeit-app
+    restart: unless-stopped
+    depends_on:
+      snipeit-db:
+        condition: service_healthy
+      snipeit-redis:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: "base64:{{ .app_key }}"
+      APP_URL: "https://snipeit.shiron.dev"
+      APP_TIMEZONE: Asia/Tokyo
+      APP_LOCALE: ja
+      DB_CONNECTION: mysql
+      DB_HOST: snipeit-db
+      DB_DATABASE: snipeit
+      DB_USERNAME: snipeit
+      DB_PASSWORD: "{{ .db_password }}"
+      DB_PORT: "3306"
+      REDIS_HOST: snipeit-redis
+      REDIS_PASSWORD: "{{ .redis_password }}"
+      REDIS_PORT: "6379"
+      CACHE_DRIVER: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+    volumes:
+      - ./snipeit_data:/var/lib/snipeit
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # kics-scan ignore-line - require NET_BIND_SERVICE capability
+    cap_add:
+      - NET_BIND_SERVICE
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/login >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  snipeit-tunnel:
+    image: cloudflare/cloudflared:2026.2.0@sha256:404528c1cd63c3eb882c257ae524919e4376115e6fe57befca8d603656a91a4c
+    container_name: snipeit-tunnel
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: "{{ .cf_tunnel_token }}"
+    depends_on:
+      snipeit-app:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "cloudflared", "version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

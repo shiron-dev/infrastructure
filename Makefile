@@ -90,6 +90,7 @@ terraform-plan: terraform-init
 .PHONY: terraform-apply
 terraform-apply: terraform-init
 	cd $(TERRAFORM_DIR) && terraform apply $(TERRAFORM_SECRETS_ARG)
+	$(MAKE) sops-encrypt
 
 .PHONY: terraform-lint
 terraform-lint: terraform-init
