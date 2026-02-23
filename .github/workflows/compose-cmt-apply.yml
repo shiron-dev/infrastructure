@@ -56,7 +56,7 @@ jobs:
             echo "cmt plan produced no output." > "$slack_file"
           fi
 
-          summary_line="$(rg '^Summary: ' "$slack_file" -N -m 1 || true)"
+          summary_line="$(tr -d '\r' < "$slack_file" | awk '/^Summary: /{line=$0} END{print line}')"
           if [ -z "$summary_line" ]; then
             summary_line="Summary: (not found)"
           fi
