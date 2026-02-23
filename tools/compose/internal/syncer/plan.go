@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"cmt/internal/config"
 	"cmt/internal/remote"
@@ -622,6 +623,11 @@ func resolveHostSSHConfig(
 	return sshResolver.Resolve(host, sshConfigPath, hostDir)
 }
 
+type projectResult struct {
+	plan ProjectPlan
+	err  error
+}
+
 func buildHostPlan(
 	cfg *config.CmtConfig,
 	host config.HostEntry,
@@ -633,18 +639,34 @@ func buildHostPlan(
 ) (*HostPlan, error) {
 	hostPlan := &HostPlan{
 		Host:     host,
-		Projects: nil,
+		Projects: make([]ProjectPlan, len(projects)),
 	}
 
-	for projectIdx, project := range projects {
-		progress.projectStart(projectIdx+1, len(projects), project)
+	results := make([]projectResult, len(projects))
 
-		projectPlan, err := buildProjectPlanForHost(cfg, host, hostCfg, project, client, localRunner)
-		if err != nil {
-			return nil, err
+	var wg sync.WaitGroup
+
+	for i, project := range projects {
+		wg.Add(1)
+
+		go func(idx int, proj string) {
+			defer wg.Done()
+
+			plan, err := buildProjectPlanForHost(cfg, host, hostCfg, proj, client, localRunner)
+			results[idx] = projectResult{plan: plan, err: err}
+		}(i, project)
+	}
+
+	wg.Wait()
+
+	for i, project := range projects {
+		progress.projectStart(i+1, len(projects), project)
+
+		if results[i].err != nil {
+			return nil, results[i].err
 		}
 
-		hostPlan.Projects = append(hostPlan.Projects, projectPlan)
+		hostPlan.Projects[i] = results[i].plan
 	}
 
 	return hostPlan, nil
