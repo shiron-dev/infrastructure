@@ -43,13 +43,23 @@ jobs:
           output_file="$(mktemp)"
           make cmt-plan 2>&1 | tee "$output_file"
           exit_code="${PIPESTATUS[0]}"
+          slack_file="$(mktemp --suffix=.txt)"
+          sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' "$output_file" | iconv -f UTF-8 -t UTF-8 -c > "$slack_file" || cp "$output_file" "$slack_file"
           if [ ! -s "$output_file" ]; then
             echo "cmt plan produced no output." > "$output_file"
           fi
+          if [ ! -s "$slack_file" ]; then
+            echo "cmt plan produced no output." > "$slack_file"
+          fi
 
-          echo "output_file=$output_file" >> "$GITHUB_ENV"
-          echo "output_file=${output_file}" >> "$GITHUB_OUTPUT"
-          echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
+          {
+            echo "output_file=${output_file}"
+            echo "slack_file=${slack_file}"
+            echo "exit_code=${exit_code}"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "output_file=${output_file}"
+          } >> "$GITHUB_ENV"
       - name: Upload plan result to Slack
         id: slack-upload
         uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
@@ -59,10 +69,11 @@ jobs:
           errors: true
           payload: |
             channel_id: ${{ secrets.SLACK_CHANNEL_ID }}
+            snippet_type: text
             title: CMT Plan Result (${{ github.repository }})
-            filename: cmt-plan-${{ github.run_id }}.log
+            filename: cmt-plan-${{ github.run_id }}.txt
             initial_comment: CMT plan result for ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            file: ${{ steps.cmt-plan.outputs.output_file }}
+            file: ${{ steps.cmt-plan.outputs.slack_file }}
       - name: Fail when cmt plan failed
         if: steps.cmt-plan.outputs.exit_code != '0'
         run: exit 1
