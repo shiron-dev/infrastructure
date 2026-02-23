@@ -4,92 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"cmt/internal/config"
 )
-
-// ---------------------------------------------------------------------------
-// parseEnvFile
-// ---------------------------------------------------------------------------
-
-func TestParseEnvFile(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-
-	envPath := filepath.Join(dir, ".env")
-
-	err := os.WriteFile(envPath, []byte(`# comment
-KEY1=value1
-KEY2=value2
-QUOTED="hello world"
-SINGLE_QUOTED='foo bar'
-  SPACED = spaced_val
-
-EMPTY=
-`), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	vars, err := parseEnvFile(envPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	tests := map[string]string{
-		"KEY1":          "value1",
-		"KEY2":          "value2",
-		"QUOTED":        "hello world",
-		"SINGLE_QUOTED": "foo bar",
-		"SPACED":        "spaced_val",
-		"EMPTY":         "",
-	}
-
-	for key, want := range tests {
-		got, ok := vars[key]
-		if !ok {
-			t.Errorf("missing key %q", key)
-
-			continue
-		}
-
-		if got != want {
-			t.Errorf("key %q = %q, want %q", key, got, want)
-		}
-	}
-}
-
-func TestParseEnvFile_EdgeCases(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		path    string
-		wantLen int
-		wantErr bool
-	}{
-		{
-			name:    "not exist",
-			path:    "/nonexistent/.env",
-			wantLen: 0,
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			vars, err := parseEnvFile(tt.path)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("parseEnvFile() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			if len(vars) != tt.wantLen {
-				t.Errorf("expected %d vars, got %v", tt.wantLen, vars)
-			}
-		})
-	}
-}
 
 // ---------------------------------------------------------------------------
 // parseSecretsYAML
@@ -188,7 +105,7 @@ func TestParseSecretsYAML_EdgeCases(t *testing.T) {
 // LoadTemplateVars
 // ---------------------------------------------------------------------------
 
-func TestLoadTemplateVars_SecretsOverrideEnv(t *testing.T) {
+func TestLoadTemplateVars_LaterFileOverridesEarlier(t *testing.T) {
 	t.Parallel()
 
 	base := t.TempDir()
@@ -200,111 +117,140 @@ func TestLoadTemplateVars_SecretsOverrideEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// .env は KEY1 と SHARED を持っています。
-	err = os.WriteFile(filepath.Join(hostProjectDir, ".env"), []byte(`KEY1=from_env
-SHARED=env_value
-`), 0600)
+	err = os.WriteFile(filepath.Join(hostProjectDir, "a_base.yml"), []byte("KEY1: from_base\nSHARED: base_value\n"), 0600)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// env.secrets.yml は KEY2 を持ち、SHARED を上書きします。
-	err = os.WriteFile(filepath.Join(hostProjectDir, "env.secrets.yml"), []byte(`KEY2: from_secrets
-SHARED: secrets_value
-`), 0600)
+	overrideContent := []byte("KEY2: from_override\nSHARED: override_value\n")
+
+	err = os.WriteFile(filepath.Join(hostProjectDir, "b_override.yml"), overrideContent, 0600)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	vars, err := LoadTemplateVars(base, "server1", "grafana")
+	vars, err := LoadTemplateVars(base, "server1", "grafana", config.DefaultTemplateVarSources())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if vars["KEY1"] != "from_env" {
+	if vars["KEY1"] != "from_base" {
 		t.Errorf("KEY1 = %v", vars["KEY1"])
 	}
 
-	if vars["KEY2"] != "from_secrets" {
+	if vars["KEY2"] != "from_override" {
 		t.Errorf("KEY2 = %v", vars["KEY2"])
 	}
-	// SHARED は env.secrets.yml から来るべきです。
-	if vars["SHARED"] != "secrets_value" {
-		t.Errorf("SHARED = %v, want secrets_value", vars["SHARED"])
+
+	if vars["SHARED"] != "override_value" {
+		t.Errorf("SHARED = %v, want override_value", vars["SHARED"])
 	}
 }
 
-func TestLoadTemplateVars_EdgeCases(t *testing.T) {
+func TestLoadTemplateVars_NoFiles(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		setup    func(t *testing.T, base string)
-		wantVars map[string]any
-	}{
-		{
-			name: "no files",
-			setup: func(t *testing.T, base string) {
-				t.Helper()
+	base := t.TempDir()
 
-				err := os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0750)
-				if err != nil {
-					t.Fatal(err)
-				}
-			},
-			wantVars: map[string]any{},
-		},
-		{
-			name: "only secrets",
-			setup: func(t *testing.T, base string) {
-				t.Helper()
-
-				hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
-
-				err := os.MkdirAll(hostProjectDir, 0750)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				err = os.WriteFile(filepath.Join(hostProjectDir, "env.secrets.yml"), []byte(`secret_key: s3cret
-`), 0600)
-				if err != nil {
-					t.Fatal(err)
-				}
-			},
-			wantVars: map[string]any{"secret_key": "s3cret"},
-		},
+	err := os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0750)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	vars, err := LoadTemplateVars(base, "server1", "grafana", config.DefaultTemplateVarSources())
+	if err != nil {
+		t.Fatal(err)
+	}
 
-			base := t.TempDir()
-			tt.setup(t, base)
+	if len(vars) != 0 {
+		t.Errorf("expected 0 vars, got %d: %v", len(vars), vars)
+	}
+}
 
-			vars, err := LoadTemplateVars(base, "server1", "grafana")
-			if err != nil {
-				t.Fatal(err)
-			}
+func TestLoadTemplateVars_SingleYAMLFile(t *testing.T) {
+	t.Parallel()
 
-			if len(vars) != len(tt.wantVars) {
-				t.Errorf("expected %d vars, got %d: %v", len(tt.wantVars), len(vars), vars)
-			}
+	base := t.TempDir()
+	hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
 
-			for key, want := range tt.wantVars {
-				got, ok := vars[key]
-				if !ok {
-					t.Errorf("missing key %q", key)
+	err := os.MkdirAll(hostProjectDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-					continue
-				}
+	err = os.WriteFile(filepath.Join(hostProjectDir, "env.secrets.yml"), []byte("secret_key: s3cret\n"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-				if got != want {
-					t.Errorf("%s = %v, want %v", key, got, want)
-				}
-			}
-		})
+	vars, err := LoadTemplateVars(base, "server1", "grafana", config.DefaultTemplateVarSources())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if vars["secret_key"] != "s3cret" {
+		t.Errorf("secret_key = %v, want s3cret", vars["secret_key"])
+	}
+}
+
+func TestLoadTemplateVars_CustomSourcePattern(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
+
+	err := os.MkdirAll(hostProjectDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(hostProjectDir, "vars.toml.yml"), []byte("key: custom\n"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(hostProjectDir, "ignored.yml"), []byte("other: skip\n"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vars, err := LoadTemplateVars(base, "server1", "grafana", []string{"vars.toml.yml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if vars["key"] != "custom" {
+		t.Errorf("key = %v, want custom", vars["key"])
+	}
+
+	if _, ok := vars["other"]; ok {
+		t.Error("ignored.yml should not be loaded with custom pattern")
+	}
+}
+
+func TestLoadTemplateVars_ExcludesComposeOverride(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	hostProjectDir := filepath.Join(base, "hosts", "server1", "grafana")
+
+	err := os.MkdirAll(hostProjectDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(hostProjectDir, "compose.override.yml"), []byte("excluded: yes\n"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vars, err := LoadTemplateVars(base, "server1", "grafana", config.DefaultTemplateVarSources())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(vars) != 0 {
+		t.Errorf("expected 0 vars, got %d: %v", len(vars), vars)
 	}
 }
 
