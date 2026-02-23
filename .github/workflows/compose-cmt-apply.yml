@@ -52,10 +52,14 @@ jobs:
             echo "cmt plan produced no output." > "$slack_file"
           fi
 
-          echo "output_file=$output_file" >> "$GITHUB_ENV"
-          echo "output_file=${output_file}" >> "$GITHUB_OUTPUT"
-          echo "slack_file=${slack_file}" >> "$GITHUB_OUTPUT"
-          echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
+          {
+            echo "output_file=${output_file}"
+            echo "slack_file=${slack_file}"
+            echo "exit_code=${exit_code}"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "output_file=${output_file}"
+          } >> "$GITHUB_ENV"
       - name: Upload plan result to Slack
         id: slack-upload
         uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
