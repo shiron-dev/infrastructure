@@ -447,6 +447,26 @@ func TestHasChanges(t *testing.T) {
 			},
 			wantChanges: true,
 		},
+		{
+			name: "existing dir metadata drift",
+			plan: &SyncPlan{
+				HostPlans: []HostPlan{
+					{
+						Projects: []ProjectPlan{
+							{
+								Files: []FilePlan{
+									{Action: ActionUnchanged},
+								},
+								Dirs: []DirPlan{
+									{Exists: true, Permission: "0750"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantChanges: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1599,5 +1619,111 @@ func TestBuildPlanWithDeps_NoProgressWhenWriterNil(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("BuildPlanWithDeps should succeed without progress writer: %v", err)
+	}
+}
+
+func TestFormatDirPlanMeta(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		plan DirPlan
+		want string
+	}{
+		{
+			name: "no metadata",
+			plan: DirPlan{RelativePath: "data"},
+			want: "",
+		},
+		{
+			name: "permission only",
+			plan: DirPlan{RelativePath: "data", Permission: "0755"},
+			want: " [mode=0755]",
+		},
+		{
+			name: "owner only",
+			plan: DirPlan{RelativePath: "data", Owner: "app"},
+			want: " [owner=app]",
+		},
+		{
+			name: "owner and group",
+			plan: DirPlan{RelativePath: "data", Owner: "app", Group: "staff"},
+			want: " [owner=app:staff]",
+		},
+		{
+			name: "group only",
+			plan: DirPlan{RelativePath: "data", Group: "staff"},
+			want: " [owner=:staff]",
+		},
+		{
+			name: "all fields",
+			plan: DirPlan{RelativePath: "data", Permission: "0750", Owner: "app", Group: "app"},
+			want: " [mode=0750, owner=app:app]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := formatDirPlanMeta(tt.plan)
+			if got != tt.want {
+				t.Errorf("formatDirPlanMeta() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSyncPlan_Print_DirMetadata(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{
+					Name: "server1",
+					User: "deploy",
+					Host: "192.168.1.1",
+					Port: 22,
+				},
+				Projects: []ProjectPlan{
+					{
+						ProjectName: "grafana",
+						RemoteDir:   "/opt/compose/grafana",
+						Dirs: []DirPlan{
+							{RelativePath: "data", Exists: false, Permission: "0755", Owner: "app", Group: "app"},
+							{RelativePath: "logs", Exists: true},
+						},
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								Action:       ActionUnchanged,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+
+	plan.Print(&buf)
+	output := buf.String()
+
+	if !strings.Contains(output, "mode=0755") {
+		t.Error("output should contain mode=0755")
+	}
+
+	if !strings.Contains(output, "owner=app:app") {
+		t.Error("output should contain owner=app:app")
+	}
+
+	if !strings.Contains(output, "data/") {
+		t.Error("output should show data dir")
+	}
+
+	if !strings.Contains(output, "logs/") {
+		t.Error("output should show logs dir")
 	}
 }

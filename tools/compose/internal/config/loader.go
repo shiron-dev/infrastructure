@@ -72,6 +72,16 @@ func LoadHostConfig(basePath, hostName string) (*HostConfig, error) {
 		return nil, fmt.Errorf("parsing %s: %w", hostConfigPath, errUnmarshal)
 	}
 
+	for projectName, projectConfig := range hostConfig.Projects {
+		if projectConfig == nil {
+			continue
+		}
+
+		if err := ValidateDirConfigs(projectConfig.Dirs); err != nil {
+			return nil, fmt.Errorf("project %s in %s: %w", projectName, hostConfigPath, err)
+		}
+	}
+
 	return hostConfig, nil
 }
 

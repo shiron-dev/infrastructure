@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -666,5 +667,284 @@ projects:
 
 	if hostConfig.Projects["grafana"] == nil {
 		t.Fatal("grafana project config missing")
+	}
+}
+
+func TestLoadHostConfig_DirsStringFormat(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	hostDir := filepath.Join(dir, "hosts", "server1")
+
+	err := os.MkdirAll(hostDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := `
+projects:
+  grafana:
+    dirs:
+      - grafana_storage
+      - grafana_conf
+`
+
+	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hostConfig, err := LoadHostConfig(dir, "server1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dirs := hostConfig.Projects["grafana"].Dirs
+	if len(dirs) != 2 {
+		t.Fatalf("expected 2 dirs, got %d", len(dirs))
+	}
+
+	if dirs[0].Path != "grafana_storage" {
+		t.Errorf("dirs[0].Path = %q, want %q", dirs[0].Path, "grafana_storage")
+	}
+
+	if dirs[1].Path != "grafana_conf" {
+		t.Errorf("dirs[1].Path = %q, want %q", dirs[1].Path, "grafana_conf")
+	}
+
+	if dirs[0].Permission != "" || dirs[0].Owner != "" || dirs[0].Group != "" {
+		t.Error("string-format dir should have empty permission/owner/group")
+	}
+}
+
+func TestLoadHostConfig_DirsObjectFormat(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	hostDir := filepath.Join(dir, "hosts", "server1")
+
+	err := os.MkdirAll(hostDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := `
+projects:
+  grafana:
+    dirs:
+      - path: influxdb_data
+        permission: "0755"
+        owner: influxdb
+        group: influxdb
+`
+
+	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hostConfig, err := LoadHostConfig(dir, "server1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dirs := hostConfig.Projects["grafana"].Dirs
+	if len(dirs) != 1 {
+		t.Fatalf("expected 1 dir, got %d", len(dirs))
+	}
+
+	if dirs[0].Path != "influxdb_data" {
+		t.Errorf("Path = %q", dirs[0].Path)
+	}
+
+	if dirs[0].Permission != "0755" {
+		t.Errorf("Permission = %q, want %q", dirs[0].Permission, "0755")
+	}
+
+	if dirs[0].Owner != "influxdb" {
+		t.Errorf("Owner = %q, want %q", dirs[0].Owner, "influxdb")
+	}
+
+	if dirs[0].Group != "influxdb" {
+		t.Errorf("Group = %q, want %q", dirs[0].Group, "influxdb")
+	}
+}
+
+func TestLoadHostConfig_DirsMixedFormat(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	hostDir := filepath.Join(dir, "hosts", "server1")
+
+	err := os.MkdirAll(hostDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := `
+projects:
+  grafana:
+    dirs:
+      - simple_dir
+      - path: managed_dir
+        permission: "0750"
+        owner: app
+`
+
+	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hostConfig, err := LoadHostConfig(dir, "server1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dirs := hostConfig.Projects["grafana"].Dirs
+	if len(dirs) != 2 {
+		t.Fatalf("expected 2 dirs, got %d", len(dirs))
+	}
+
+	if dirs[0].Path != "simple_dir" {
+		t.Errorf("dirs[0].Path = %q", dirs[0].Path)
+	}
+
+	if dirs[0].Permission != "" {
+		t.Errorf("dirs[0].Permission should be empty, got %q", dirs[0].Permission)
+	}
+
+	if dirs[1].Path != "managed_dir" {
+		t.Errorf("dirs[1].Path = %q", dirs[1].Path)
+	}
+
+	if dirs[1].Permission != "0750" {
+		t.Errorf("dirs[1].Permission = %q", dirs[1].Permission)
+	}
+
+	if dirs[1].Owner != "app" {
+		t.Errorf("dirs[1].Owner = %q", dirs[1].Owner)
+	}
+}
+
+func TestLoadHostConfig_DirsInvalidPermission(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	hostDir := filepath.Join(dir, "hosts", "server1")
+
+	err := os.MkdirAll(hostDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := `
+projects:
+  grafana:
+    dirs:
+      - path: data
+        permission: "not-octal"
+`
+
+	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = LoadHostConfig(dir, "server1")
+	if err == nil {
+		t.Fatal("expected error for invalid permission")
+	}
+
+	if !strings.Contains(err.Error(), "invalid permission") {
+		t.Errorf("error should mention invalid permission, got %q", err.Error())
+	}
+}
+
+func TestValidateDirConfigs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		dirs    []DirConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "valid string-style dirs",
+			dirs:    []DirConfig{{Path: "data"}, {Path: "logs"}},
+			wantErr: false,
+		},
+		{
+			name:    "valid with permission",
+			dirs:    []DirConfig{{Path: "data", Permission: "0755"}},
+			wantErr: false,
+		},
+		{
+			name:    "empty path",
+			dirs:    []DirConfig{{Path: ""}},
+			wantErr: true,
+			errMsg:  "path is required",
+		},
+		{
+			name:    "invalid permission",
+			dirs:    []DirConfig{{Path: "data", Permission: "abc"}},
+			wantErr: true,
+			errMsg:  "invalid permission",
+		},
+		{
+			name:    "nil dirs",
+			dirs:    nil,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := ValidateDirConfigs(tt.dirs)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateDirConfigs() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.wantErr && tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("error = %q, want to contain %q", err.Error(), tt.errMsg)
+			}
+		})
+	}
+}
+
+func TestResolveProjectConfig_Dirs(t *testing.T) {
+	t.Parallel()
+
+	cmtDefaults := &SyncDefaults{RemotePath: "/opt"}
+	hostCfg := &HostConfig{
+		Projects: map[string]*ProjectConfig{
+			"grafana": {
+				Dirs: []DirConfig{
+					{Path: "data"},
+					{Path: "logs", Permission: "0755", Owner: "app", Group: "app"},
+				},
+			},
+		},
+	}
+
+	resolved := ResolveProjectConfig(cmtDefaults, hostCfg, "grafana")
+
+	if len(resolved.Dirs) != 2 {
+		t.Fatalf("Dirs = %d, want 2", len(resolved.Dirs))
+	}
+
+	if resolved.Dirs[0].Path != "data" {
+		t.Errorf("Dirs[0].Path = %q", resolved.Dirs[0].Path)
+	}
+
+	if resolved.Dirs[1].Permission != "0755" {
+		t.Errorf("Dirs[1].Permission = %q", resolved.Dirs[1].Permission)
+	}
+
+	if resolved.Dirs[1].Owner != "app" {
+		t.Errorf("Dirs[1].Owner = %q", resolved.Dirs[1].Owner)
 	}
 }
