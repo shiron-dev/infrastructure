@@ -14,7 +14,9 @@ func newPlanCmd(configPath *string) *cobra.Command {
 
 	var projectFilter []string
 
-	var dependencies syncer.PlanDependencies
+	dependencies := syncer.PlanDependencies{
+		ProgressWriter: os.Stdout,
+	}
 
 	planCommand := new(cobra.Command)
 	planCommand.Use = "plan"

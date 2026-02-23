@@ -1433,3 +1433,156 @@ func TestSyncPlan_Print_ComposeServices(t *testing.T) {
 		t.Error("summary should mention services to start")
 	}
 }
+
+func TestBuildPlanWithDeps_ProgressOutput(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+
+	projectDir := filepath.Join(base, "projects", "grafana")
+
+	err := os.MkdirAll(projectDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(projectDir, "compose.yml"), []byte("services: {}"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.CmtConfig{
+		BasePath: base,
+		Defaults: &config.SyncDefaults{RemotePath: "/srv/compose"},
+		Hosts: []config.HostEntry{
+			{Name: "server1", Host: "server1-alias", User: "deploy"},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	resolver := config.NewMockSSHConfigResolver(ctrl)
+	factory := remote.NewMockClientFactory(ctrl)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	hostDir := filepath.Join(base, "hosts", "server1")
+	gomock.InOrder(
+		resolver.EXPECT().Resolve(gomock.Any(), "", hostDir).Return(nil),
+		factory.EXPECT().NewClient(gomock.AssignableToTypeOf(config.HostEntry{})).Return(client, nil),
+	)
+	client.EXPECT().ReadFile("/srv/compose/grafana/.cmt-manifest.json").Return(nil, errors.New("not found"))
+	client.EXPECT().ReadFile("/srv/compose/grafana/compose.yml").Return(nil, errors.New("not found"))
+	client.EXPECT().RunCommand("/srv/compose/grafana", "docker compose config --services 2>/dev/null").Return("", errors.New("not found"))
+	client.EXPECT().RunCommand("/srv/compose/grafana", "docker compose ps --services --filter status=running 2>/dev/null").Return("", errors.New("not found"))
+	client.EXPECT().Close().Return(nil)
+
+	var progressBuf bytes.Buffer
+
+	_, err = BuildPlanWithDeps(cfg, nil, nil, PlanDependencies{
+		ClientFactory:  factory,
+		SSHResolver:    resolver,
+		LocalRunner:    mockLocalCommandRunner{run: func(string, []string, string) (string, error) { return "ok", nil }},
+		ProgressWriter: &progressBuf,
+	})
+	if err != nil {
+		t.Fatalf("BuildPlanWithDeps: %v", err)
+	}
+
+	output := progressBuf.String()
+
+	if !strings.Contains(output, "Planning:") {
+		t.Error("progress should contain 'Planning:'")
+	}
+
+	if !strings.Contains(output, "1 host(s), 1 project(s)") {
+		t.Errorf("progress should show host/project counts, got %q", output)
+	}
+
+	if !strings.Contains(output, "Planning host 1/1:") {
+		t.Error("progress should contain host progress")
+	}
+
+	if !strings.Contains(output, "server1") {
+		t.Error("progress should contain host name")
+	}
+
+	if !strings.Contains(output, "connecting...") {
+		t.Error("progress should show connecting state")
+	}
+
+	if !strings.Contains(output, "project 1/1:") {
+		t.Errorf("progress should contain project progress, got %q", output)
+	}
+
+	if !strings.Contains(output, "grafana") {
+		t.Error("progress should contain project name")
+	}
+
+	if !strings.Contains(output, "done") {
+		t.Error("progress should show done state")
+	}
+
+	if !strings.Contains(output, "Plan complete.") {
+		t.Error("progress should show plan completion")
+	}
+}
+
+func TestBuildPlanWithDeps_NoProgressWhenWriterNil(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+
+	projectDir := filepath.Join(base, "projects", "grafana")
+
+	err := os.MkdirAll(projectDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(filepath.Join(projectDir, "compose.yml"), []byte("services: {}"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.MkdirAll(filepath.Join(base, "hosts", "server1", "grafana"), 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.CmtConfig{
+		BasePath: base,
+		Defaults: &config.SyncDefaults{RemotePath: "/srv/compose"},
+		Hosts: []config.HostEntry{
+			{Name: "server1", Host: "server1-alias", User: "deploy"},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	resolver := config.NewMockSSHConfigResolver(ctrl)
+	factory := remote.NewMockClientFactory(ctrl)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	hostDir := filepath.Join(base, "hosts", "server1")
+	gomock.InOrder(
+		resolver.EXPECT().Resolve(gomock.Any(), "", hostDir).Return(nil),
+		factory.EXPECT().NewClient(gomock.AssignableToTypeOf(config.HostEntry{})).Return(client, nil),
+	)
+	client.EXPECT().ReadFile("/srv/compose/grafana/.cmt-manifest.json").Return(nil, errors.New("not found"))
+	client.EXPECT().ReadFile("/srv/compose/grafana/compose.yml").Return(nil, errors.New("not found"))
+	client.EXPECT().RunCommand("/srv/compose/grafana", "docker compose config --services 2>/dev/null").Return("", errors.New("not found"))
+	client.EXPECT().RunCommand("/srv/compose/grafana", "docker compose ps --services --filter status=running 2>/dev/null").Return("", errors.New("not found"))
+	client.EXPECT().Close().Return(nil)
+
+	_, err = BuildPlanWithDeps(cfg, nil, nil, PlanDependencies{
+		ClientFactory: factory,
+		SSHResolver:   resolver,
+		LocalRunner:   mockLocalCommandRunner{run: func(string, []string, string) (string, error) { return "ok", nil }},
+	})
+	if err != nil {
+		t.Fatalf("BuildPlanWithDeps should succeed without progress writer: %v", err)
+	}
+}
