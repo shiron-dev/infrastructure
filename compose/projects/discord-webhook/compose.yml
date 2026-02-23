@@ -1,6 +1,6 @@
 services:
   discord-webhook:
-    image: ghcr.io/shiron-dev/discord-webhook:latest@sha256:7ece4d4321c2f117de5ec1b5c66f29aaacbfda64a2e36d0a22679bade186124e
+    image: ghcr.io/shiron-dev/discord-webhook:1.0.2@sha256:7ece4d4321c2f117de5ec1b5c66f29aaacbfda64a2e36d0a22679bade186124e
     container_name: discord-webhook
     restart: unless-stopped
     security_opt:
