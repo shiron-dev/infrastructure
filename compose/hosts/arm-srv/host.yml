@@ -9,3 +9,11 @@ projects:
       - influxdb_data
       - influxdb_config
       - vmdata
+  n8n:
+    remotePath: /var
+    dirs:
+      - n8n_data
+      - local-files
+      - rag
+      - postgres_data
+      - redis_data
