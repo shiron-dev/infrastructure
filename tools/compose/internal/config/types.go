@@ -112,6 +112,7 @@ func mergeDirConfigAttrsFromValue(path string, valNode *yaml.Node, attrs *dirCon
 	switch valNode.Kind {
 	case yaml.MappingNode:
 		var nested dirConfigAttrsOnly
+
 		err := valNode.Decode(&nested)
 		if err != nil {
 			return err
