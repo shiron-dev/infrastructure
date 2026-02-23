@@ -12,6 +12,12 @@ terraform {
       source  = "integrations/github"
       version = "6.11.1"
     }
+    local = {
+      source = "hashicorp/local"
+    }
+    random = {
+      source = "hashicorp/random"
+    }
   }
 
   required_version = ">= 1.14.5"
