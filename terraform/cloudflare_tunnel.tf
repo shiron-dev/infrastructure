@@ -17,7 +17,7 @@ locals {
   cloudflare_tunnels = {
     "arm-srv-snipeit" = {
       domain          = "snipeit.shiron.dev"
-      service         = "http://localhost:8000"
+      service         = "http://snipeit-app:8000"
       secret_yaml_dir = "${path.module}/../compose/hosts/arm-srv/snipeit"
       policies        = local.cloudflare_access_policy_refs.shiron
     }
