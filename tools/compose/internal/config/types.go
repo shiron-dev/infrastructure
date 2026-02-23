@@ -14,6 +14,8 @@ const (
 	ComposeActionDown    = "down"
 	ComposeActionIgnore  = "ignore"
 	jsonSchemaTypeString = "string"
+	jsonSchemaTypeObject = "object"
+	pathDirMaxProperties = 4
 )
 
 type DirConfig struct {
@@ -154,19 +156,28 @@ func (*DirConfig) JSONSchema() *jsonschema.Schema {
 
 	attrsProps := orderedmap.New[string, *jsonschema.Schema]()
 	permissionSchema := new(jsonschema.Schema)
-	permissionSchema.Type = jsonSchemaTypeString
+	permissionSchema.OneOf = []*jsonschema.Schema{
+		{Type: jsonSchemaTypeString},
+		{Type: "integer"},
+	}
 	attrsProps.Set("permission", permissionSchema)
 
 	ownerSchema := new(jsonschema.Schema)
-	ownerSchema.Type = jsonSchemaTypeString
+	ownerSchema.OneOf = []*jsonschema.Schema{
+		{Type: jsonSchemaTypeString},
+		{Type: "integer"},
+	}
 	attrsProps.Set("owner", ownerSchema)
 
 	groupSchema := new(jsonschema.Schema)
-	groupSchema.Type = jsonSchemaTypeString
+	groupSchema.OneOf = []*jsonschema.Schema{
+		{Type: jsonSchemaTypeString},
+		{Type: "integer"},
+	}
 	attrsProps.Set("group", groupSchema)
 
 	attrsObjectSchema := new(jsonschema.Schema)
-	attrsObjectSchema.Type = "object"
+	attrsObjectSchema.Type = jsonSchemaTypeObject
 	attrsObjectSchema.Properties = attrsProps
 	attrsObjectSchema.AdditionalProperties = jsonschema.FalseSchema
 
@@ -176,12 +187,23 @@ func (*DirConfig) JSONSchema() *jsonschema.Schema {
 	pathValueSchema := new(jsonschema.Schema)
 	pathValueSchema.OneOf = []*jsonschema.Schema{attrsObjectSchema, nullSchema}
 
+	pathKeyPattern := "^(?!permission$|owner$|group$).+$"
 	pathKeyedObjectSchema := new(jsonschema.Schema)
-	pathKeyedObjectSchema.Type = "object"
-	pathKeyedObjectSchema.AdditionalProperties = pathValueSchema
-	pathPropertyCount := uint64(1)
-	pathKeyedObjectSchema.MinProperties = &pathPropertyCount
-	pathKeyedObjectSchema.MaxProperties = &pathPropertyCount
+	pathKeyedObjectSchema.Type = jsonSchemaTypeObject
+	pathKeyedObjectSchema.Properties = attrsProps
+	pathKeyedObjectSchema.PatternProperties = map[string]*jsonschema.Schema{
+		pathKeyPattern: pathValueSchema,
+	}
+	pathKeyedObjectSchema.AdditionalProperties = jsonschema.FalseSchema
+	pathPropertyMinCount := uint64(1)
+	pathPropertyMaxCount := uint64(pathDirMaxProperties)
+	pathKeyedObjectSchema.MinProperties = &pathPropertyMinCount
+	pathKeyedObjectSchema.MaxProperties = &pathPropertyMaxCount
+	pathOnlyAttrsSchema := new(jsonschema.Schema)
+	pathOnlyAttrsSchema.Type = jsonSchemaTypeObject
+	pathOnlyAttrsSchema.Properties = attrsProps
+	pathOnlyAttrsSchema.AdditionalProperties = jsonschema.FalseSchema
+	pathKeyedObjectSchema.Not = pathOnlyAttrsSchema
 
 	rootSchema := new(jsonschema.Schema)
 	rootSchema.OneOf = []*jsonschema.Schema{stringSchema, pathKeyedObjectSchema}

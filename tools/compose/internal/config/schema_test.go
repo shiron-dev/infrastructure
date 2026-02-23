@@ -111,11 +111,23 @@ func TestDirConfigJSONSchema(t *testing.T) {
 		t.Fatalf("legacy dirs path object format should not be allowed in schema: %s", raw)
 	}
 
-	if !strings.Contains(raw, `"minProperties":1`) || !strings.Contains(raw, `"maxProperties":1`) {
-		t.Fatalf("dirs path-keyed object constraints are missing: %s", raw)
+	if !strings.Contains(raw, `"minProperties":1`) || !strings.Contains(raw, `"maxProperties":4`) {
+		t.Fatalf("dirs path-keyed object property-count constraints are missing: %s", raw)
+	}
+
+	if strings.Contains(raw, `"maxProperties":1`) {
+		t.Fatalf("dirs schema should allow owner/group/permission alongside path key: %s", raw)
+	}
+
+	if !strings.Contains(raw, `"patternProperties"`) || !strings.Contains(raw, `"^(?!permission$|owner$|group$).+$"`) {
+		t.Fatalf("dirs schema should constrain path keys via patternProperties: %s", raw)
 	}
 
 	if !strings.Contains(raw, `"type":"null"`) {
 		t.Fatalf("dirs schema should allow null value for '- <path>:' form: %s", raw)
+	}
+
+	if !strings.Contains(raw, `"type":"integer"`) {
+		t.Fatalf("dirs schema should allow integer values for owner/group/permission: %s", raw)
 	}
 }
