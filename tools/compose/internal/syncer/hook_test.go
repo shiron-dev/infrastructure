@@ -84,7 +84,9 @@ func TestRunHook_ReceivesStdinJSON(t *testing.T) {
 
 	var captured []byte
 
-	mockRunner := func(command string, stdinData []byte) (int, string, error) {
+	mockRunner := func(command string, workdir string, stdinData []byte) (int, string, error) {
+		_ = command
+		_ = workdir
 		captured = stdinData
 
 		return 0, "", nil
@@ -145,6 +147,34 @@ func TestRunHook_OutputForwarded(t *testing.T) {
 	output := out.String()
 	if !strings.Contains(output, "hello-hook") {
 		t.Errorf("expected hook output in writer, got %q", output)
+	}
+}
+
+func TestRunHook_UsesPayloadBasePathAsWorkdir(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+
+	var out bytes.Buffer
+
+	style := newOutputStyle(&out)
+	cmd := &config.HookCommand{Command: "pwd"}
+	payload := config.BeforeApplyPromptHookPayload{
+		Hosts:      []string{"server1"},
+		WorkingDir: "/should/not/be/used",
+		Paths: config.HookConfigPaths{
+			ConfigPath: "config.yml",
+			BasePath:   tempDir,
+		},
+	}
+
+	result := runHook(cmd, payload, "beforeApplyPrompt", defaultHookRunner, &out, style)
+	if result != hookContinue {
+		t.Fatalf("expected hookContinue, got %v; output: %s", result, out.String())
+	}
+
+	if !strings.Contains(out.String(), tempDir) {
+		t.Fatalf("expected hook output to contain workdir %q, got %q", tempDir, out.String())
 	}
 }
 
