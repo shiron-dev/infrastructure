@@ -666,7 +666,7 @@ func buildProjectPlanForHost(
 	remoteDir := path.Join(resolved.RemotePath, project)
 	dirPlans := buildDirPlans(resolved.Dirs, remoteDir, client)
 
-	templateVars, err := LoadTemplateVars(cfg.BasePath, host.Name, project)
+	templateVars, err := LoadTemplateVars(cfg.BasePath, host.Name, project, resolved.TemplateVarSources)
 	if err != nil {
 		return ProjectPlan{}, fmt.Errorf("loading template vars for %s/%s: %w", host.Name, project, err)
 	}
@@ -787,10 +787,6 @@ func buildComposeConfigArgs(filesToValidate map[string][]byte) []string {
 	args := []string{"compose", "-f", "compose.yml"}
 	if _, hasOverride := filesToValidate["compose.override.yml"]; hasOverride {
 		args = append(args, "-f", "compose.override.yml")
-	}
-
-	if _, hasEnv := filesToValidate[".env"]; hasEnv {
-		args = append(args, "--env-file", ".env")
 	}
 
 	return append(args, "config")
@@ -1040,10 +1036,6 @@ func CollectLocalFiles(basePath, hostName, projectName string) (map[string]strin
 
 	if overridePath := filepath.Join(hostProjectDir, "compose.override.yml"); fileExists(overridePath) {
 		files["compose.override.yml"] = overridePath
-	}
-
-	if envPath := filepath.Join(hostProjectDir, ".env"); fileExists(envPath) {
-		files[".env"] = envPath
 	}
 
 	err = walkFiles(filepath.Join(hostProjectDir, "files"), files)

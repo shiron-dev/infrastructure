@@ -6,6 +6,10 @@ const (
 	ComposeActionIgnore = "ignore"
 )
 
+func DefaultTemplateVarSources() []string {
+	return []string{"*.yml", "*.yaml"}
+}
+
 type CmtConfig struct {
 	BasePath         string            `json:"basePath"                   yaml:"basePath"`
 	Defaults         *SyncDefaults     `json:"defaults,omitempty"         yaml:"defaults,omitempty"`
@@ -24,9 +28,10 @@ type HookCommand struct {
 }
 
 type SyncDefaults struct {
-	RemotePath      string `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
-	PostSyncCommand string `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
-	ComposeAction   string `json:"composeAction,omitempty"   yaml:"composeAction,omitempty"`
+	RemotePath         string   `json:"remotePath,omitempty"         yaml:"remotePath,omitempty"`
+	PostSyncCommand    string   `json:"postSyncCommand,omitempty"    yaml:"postSyncCommand,omitempty"`
+	ComposeAction      string   `json:"composeAction,omitempty"      yaml:"composeAction,omitempty"`
+	TemplateVarSources []string `json:"templateVarSources,omitempty" yaml:"templateVarSources,omitempty"`
 }
 
 type HostEntry struct {
@@ -43,27 +48,30 @@ type HostEntry struct {
 }
 
 type HostConfig struct {
-	SSHConfig       string                    `json:"sshConfig,omitempty"       yaml:"sshConfig,omitempty"`
-	RemotePath      string                    `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
-	PostSyncCommand string                    `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
-	ComposeAction   string                    `json:"composeAction,omitempty"   yaml:"composeAction,omitempty"`
-	Projects        map[string]*ProjectConfig `json:"projects,omitempty"        yaml:"projects,omitempty"`
+	SSHConfig          string                    `json:"sshConfig,omitempty"          yaml:"sshConfig,omitempty"`
+	RemotePath         string                    `json:"remotePath,omitempty"         yaml:"remotePath,omitempty"`
+	PostSyncCommand    string                    `json:"postSyncCommand,omitempty"    yaml:"postSyncCommand,omitempty"`
+	ComposeAction      string                    `json:"composeAction,omitempty"      yaml:"composeAction,omitempty"`
+	TemplateVarSources []string                  `json:"templateVarSources,omitempty" yaml:"templateVarSources,omitempty"`
+	Projects           map[string]*ProjectConfig `json:"projects,omitempty"           yaml:"projects,omitempty"`
 }
 
 type ProjectConfig struct {
-	RemotePath      string   `json:"remotePath,omitempty"      yaml:"remotePath,omitempty"`
-	PostSyncCommand string   `json:"postSyncCommand,omitempty" yaml:"postSyncCommand,omitempty"`
-	ComposeAction   string   `json:"composeAction,omitempty"   yaml:"composeAction,omitempty"`
-	RemoveOrphans   bool     `json:"removeOrphans,omitempty"   yaml:"removeOrphans,omitempty"`
-	Dirs            []string `json:"dirs,omitempty"            yaml:"dirs,omitempty"`
+	RemotePath         string   `json:"remotePath,omitempty"         yaml:"remotePath,omitempty"`
+	PostSyncCommand    string   `json:"postSyncCommand,omitempty"    yaml:"postSyncCommand,omitempty"`
+	ComposeAction      string   `json:"composeAction,omitempty"      yaml:"composeAction,omitempty"`
+	RemoveOrphans      bool     `json:"removeOrphans,omitempty"      yaml:"removeOrphans,omitempty"`
+	Dirs               []string `json:"dirs,omitempty"               yaml:"dirs,omitempty"`
+	TemplateVarSources []string `json:"templateVarSources,omitempty" yaml:"templateVarSources,omitempty"`
 }
 
 type ResolvedProjectConfig struct {
-	RemotePath      string
-	PostSyncCommand string
-	ComposeAction   string
-	RemoveOrphans   bool
-	Dirs            []string
+	RemotePath         string
+	PostSyncCommand    string
+	ComposeAction      string
+	RemoveOrphans      bool
+	Dirs               []string
+	TemplateVarSources []string
 }
 
 type HookConfigPaths struct {
@@ -93,6 +101,7 @@ func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projec
 	resolved := resolveFromDefaults(cmtDefaults)
 	if hostCfg == nil {
 		resolved.ComposeAction = normalizeComposeAction(resolved.ComposeAction)
+		resolved.TemplateVarSources = normalizeTemplateVarSources(resolved.TemplateVarSources)
 
 		return resolved
 	}
@@ -100,27 +109,38 @@ func ResolveProjectConfig(cmtDefaults *SyncDefaults, hostCfg *HostConfig, projec
 	applyHostOverrides(&resolved, hostCfg)
 	applyProjectOverrides(&resolved, hostCfg, projectName)
 	resolved.ComposeAction = normalizeComposeAction(resolved.ComposeAction)
+	resolved.TemplateVarSources = normalizeTemplateVarSources(resolved.TemplateVarSources)
 
 	return resolved
+}
+
+func normalizeTemplateVarSources(sources []string) []string {
+	if len(sources) == 0 {
+		return DefaultTemplateVarSources()
+	}
+
+	return sources
 }
 
 func resolveFromDefaults(defaults *SyncDefaults) ResolvedProjectConfig {
 	if defaults == nil {
 		return ResolvedProjectConfig{
-			RemotePath:      "",
-			PostSyncCommand: "",
-			ComposeAction:   "",
-			RemoveOrphans:   false,
-			Dirs:            nil,
+			RemotePath:         "",
+			PostSyncCommand:    "",
+			ComposeAction:      "",
+			RemoveOrphans:      false,
+			Dirs:               nil,
+			TemplateVarSources: nil,
 		}
 	}
 
 	return ResolvedProjectConfig{
-		RemotePath:      defaults.RemotePath,
-		PostSyncCommand: defaults.PostSyncCommand,
-		ComposeAction:   defaults.ComposeAction,
-		RemoveOrphans:   false,
-		Dirs:            nil,
+		RemotePath:         defaults.RemotePath,
+		PostSyncCommand:    defaults.PostSyncCommand,
+		ComposeAction:      defaults.ComposeAction,
+		RemoveOrphans:      false,
+		Dirs:               nil,
+		TemplateVarSources: defaults.TemplateVarSources,
 	}
 }
 
@@ -135,6 +155,10 @@ func applyHostOverrides(resolved *ResolvedProjectConfig, hostCfg *HostConfig) {
 
 	if hostCfg.ComposeAction != "" {
 		resolved.ComposeAction = hostCfg.ComposeAction
+	}
+
+	if len(hostCfg.TemplateVarSources) > 0 {
+		resolved.TemplateVarSources = hostCfg.TemplateVarSources
 	}
 }
 
@@ -160,6 +184,10 @@ func applyProjectOverrides(resolved *ResolvedProjectConfig, hostCfg *HostConfig,
 
 	if len(projectConfig.Dirs) > 0 {
 		resolved.Dirs = projectConfig.Dirs
+	}
+
+	if len(projectConfig.TemplateVarSources) > 0 {
+		resolved.TemplateVarSources = projectConfig.TemplateVarSources
 	}
 }
 

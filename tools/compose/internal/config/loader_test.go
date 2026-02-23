@@ -446,6 +446,83 @@ func TestResolveProjectConfig_ComposeAction(t *testing.T) {
 	}
 }
 
+func TestResolveProjectConfig_TemplateVarSources(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		defaults    *SyncDefaults
+		hostCfg     *HostConfig
+		project     string
+		wantSources []string
+	}{
+		{
+			name:        "defaults to DefaultTemplateVarSources when unset",
+			defaults:    &SyncDefaults{RemotePath: "/opt"},
+			hostCfg:     nil,
+			project:     "grafana",
+			wantSources: DefaultTemplateVarSources(),
+		},
+		{
+			name:        "defaults level sets sources",
+			defaults:    &SyncDefaults{RemotePath: "/opt", TemplateVarSources: []string{"*.toml"}},
+			hostCfg:     nil,
+			project:     "grafana",
+			wantSources: []string{"*.toml"},
+		},
+		{
+			name:     "host level overrides defaults",
+			defaults: &SyncDefaults{RemotePath: "/opt", TemplateVarSources: []string{"*.toml"}},
+			hostCfg: &HostConfig{
+				TemplateVarSources: []string{"env.yml"},
+			},
+			project:     "grafana",
+			wantSources: []string{"env.yml"},
+		},
+		{
+			name:     "project level overrides host",
+			defaults: &SyncDefaults{RemotePath: "/opt"},
+			hostCfg: &HostConfig{
+				TemplateVarSources: []string{"env.yml"},
+				Projects: map[string]*ProjectConfig{
+					"grafana": {TemplateVarSources: []string{"secrets.yaml"}},
+				},
+			},
+			project:     "grafana",
+			wantSources: []string{"secrets.yaml"},
+		},
+		{
+			name:     "unset project inherits host",
+			defaults: &SyncDefaults{RemotePath: "/opt"},
+			hostCfg: &HostConfig{
+				TemplateVarSources: []string{"env.yml"},
+				Projects: map[string]*ProjectConfig{
+					"grafana": {},
+				},
+			},
+			project:     "grafana",
+			wantSources: []string{"env.yml"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			resolved := ResolveProjectConfig(tt.defaults, tt.hostCfg, tt.project)
+			if len(resolved.TemplateVarSources) != len(tt.wantSources) {
+				t.Fatalf("TemplateVarSources = %v, want %v", resolved.TemplateVarSources, tt.wantSources)
+			}
+
+			for i, s := range tt.wantSources {
+				if resolved.TemplateVarSources[i] != s {
+					t.Errorf("TemplateVarSources[%d] = %q, want %q", i, resolved.TemplateVarSources[i], s)
+				}
+			}
+		})
+	}
+}
+
 func TestResolveProjectConfig_RemoveOrphans(t *testing.T) {
 	t.Parallel()
 

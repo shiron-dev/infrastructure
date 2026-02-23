@@ -36,7 +36,6 @@ func TestCollectLocalFiles(t *testing.T) {
 	expected := []string{
 		"compose.yml",
 		"compose.override.yml",
-		".env",
 		"grafana.ini",
 		"provisioning/ds.yml",
 	}
@@ -62,7 +61,6 @@ func setupCollectLocalFilesFixture(t *testing.T, base string) {
 	hostDir := filepath.Join(base, "hosts", "server1", "grafana")
 	mustMkdirAll(t, filepath.Join(hostDir, "files"))
 	mustWriteFile(t, filepath.Join(hostDir, "compose.override.yml"), []byte("override: true"))
-	mustWriteFile(t, filepath.Join(hostDir, ".env"), []byte("GF_ADMIN=admin"))
 	mustWriteFile(t, filepath.Join(hostDir, "files", "grafana.ini"), []byte("[server]\nhost_override=true"))
 }
 
@@ -123,17 +121,16 @@ func TestBuildManifest(t *testing.T) {
 
 	files := map[string]string{
 		"compose.yml": "/a/compose.yml",
-		".env":        "/a/.env",
 		"config.ini":  "/a/config.ini",
 	}
 
 	manifest := BuildManifest(files)
-	if len(manifest.ManagedFiles) != 3 {
-		t.Errorf("expected 3 managed files, got %d", len(manifest.ManagedFiles))
+	if len(manifest.ManagedFiles) != 2 {
+		t.Errorf("expected 2 managed files, got %d", len(manifest.ManagedFiles))
 	}
-	// ソートされているべきです。
-	if manifest.ManagedFiles[0] != ".env" {
-		t.Errorf("expected first file .env, got %q", manifest.ManagedFiles[0])
+
+	if manifest.ManagedFiles[0] != "compose.yml" {
+		t.Errorf("expected first file compose.yml, got %q", manifest.ManagedFiles[0])
 	}
 }
 
@@ -498,17 +495,13 @@ func TestSyncPlan_Print_FullPlan(t *testing.T) {
 						Dirs: []DirPlan{
 							{RelativePath: "data", Exists: false},
 						},
-						Files: []FilePlan{
-							{
-								RelativePath: "compose.yml",
-								Action:       ActionAdd,
-								LocalData:    []byte("services: {}"),
-							},
-							{
-								RelativePath: ".env",
-								Action:       ActionUnchanged,
-							},
+					Files: []FilePlan{
+						{
+							RelativePath: "compose.yml",
+							Action:       ActionAdd,
+							LocalData:    []byte("services: {}"),
 						},
+					},
 					},
 				},
 			},
@@ -546,10 +539,6 @@ func TestSyncPlan_Print_FullPlan(t *testing.T) {
 	// ファイルプランをチェックします。
 	if !strings.Contains(output, "+ compose.yml") {
 		t.Error("output should show added file")
-	}
-
-	if !strings.Contains(output, "= .env") {
-		t.Error("output should show unchanged file")
 	}
 
 	// サマリーをチェックします。
@@ -1062,8 +1051,8 @@ func TestBuildManifestWithMaskHints(t *testing.T) {
 	t.Parallel()
 
 	files := map[string]string{
-		"compose.yml": "/a/compose.yml",
-		".env":        "/a/.env",
+		"compose.yml":          "/a/compose.yml",
+		"compose.override.yml": "/a/compose.override.yml",
 	}
 
 	hints := map[string][]MaskHint{

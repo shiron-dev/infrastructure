@@ -31,7 +31,7 @@ compose/
 │       ├── host.yml             # ホストレベルのデフォルト設定・プロジェクト別上書き
 │       └── <project>/
 │           ├── compose.override.yml   # ホスト固有の compose override
-│           ├── .env                   # ホスト固有の環境変数
+│           ├── *.yml / *.yaml         # テンプレート変数ソース（リモートには同期されない）
 │           └── files/                 # ホスト固有のファイル（プロジェクトの files/ を上書き）
 │               └── ...
 └── README.md
@@ -45,7 +45,6 @@ compose/
 /opt/compose/grafana/
 ├── compose.yml
 ├── compose.override.yml
-├── .env
 ├── grafana.ini          (files/ から)
 └── .cmt-manifest.json   (cmt が管理)
 ```
@@ -61,6 +60,9 @@ defaults:                       # 最低優先度のデフォルト値
   remotePath: /opt/compose
   postSyncCommand: docker compose up -d
   composeAction: up             # up|down|ignore（未指定時は up）
+  # templateVarSources:         # テンプレート変数ソースの glob（デフォルト: ["*.yml", "*.yaml"]）
+  #   - "*.yml"
+  #   - "*.yaml"
 
 hosts:
   - name: server1               # hosts/<hostname>/ ディレクトリ名と一致させる
@@ -121,6 +123,33 @@ projects:
 ```
 
 `cmt plan` では各ディレクトリの状態（`create` / `exists`）が表示されます。
+
+#### `templateVarSources` — テンプレート変数ソースの指定
+
+`templateVarSources` でテンプレート変数の読み込み元ファイルの glob パターンを指定します。
+未指定時のデフォルトは `["*.yml", "*.yaml"]` です。
+
+```yaml
+defaults:
+  templateVarSources:
+    - "*.yml"
+    - "*.yaml"
+```
+
+ファイルはアルファベット順に読み込まれ、同一キーは後のファイルが上書きします。
+`compose.override.yml` と `host.yml` は自動的に除外されます。
+
+テンプレート変数ソースファイルはリモートには**同期されません**。
+同期したい場合は `files/` ディレクトリに配置してください。
+
+設定の解決順序は他のフィールドと同じく `defaults` → `host.yml` → `projects.<name>` です。
+
+```yaml
+projects:
+  grafana:
+    templateVarSources:
+      - "env.secrets.yml"
+```
 
 #### `composeAction` — Compose 理想状態の管理
 

@@ -1,103 +1,65 @@
 package syncer
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
-	"strings"
+	"sort"
 	"text/template"
 
 	"gopkg.in/yaml.v3"
 )
 
-func LoadTemplateVars(basePath, hostName, projectName string) (map[string]any, error) {
+func isTemplateVarExcluded(name string) bool {
+	return name == "compose.override.yml" || name == "host.yml"
+}
+
+func LoadTemplateVars(basePath, hostName, projectName string, sources []string) (map[string]any, error) {
 	hostProjectDir := filepath.Join(basePath, "hosts", hostName, projectName)
 	vars := make(map[string]any)
 
-	envPath := filepath.Join(hostProjectDir, ".env")
+	var matched []string
 
-	envVars, err := parseEnvFile(envPath)
-	if err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", envPath, err)
-	}
-
-	maps.Copy(vars, envVars)
-
-	secretsPath := filepath.Join(hostProjectDir, "env.secrets.yml")
-
-	secretVars, err := parseSecretsYAML(secretsPath)
-	if err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", secretsPath, err)
-	}
-
-	maps.Copy(vars, secretVars)
-
-	return vars, nil
-}
-
-func parseEnvFile(path string) (map[string]any, error) {
-	vars := make(map[string]any)
-	cleanPath := filepath.Clean(path)
-
-	file, err := os.Open(cleanPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return vars, nil
+	for _, pattern := range sources {
+		paths, err := filepath.Glob(filepath.Join(hostProjectDir, pattern))
+		if err != nil {
+			return nil, fmt.Errorf("glob %q: %w", pattern, err)
 		}
 
-		return nil, err
+		matched = append(matched, paths...)
 	}
 
-	defer func() {
-		_ = file.Close()
-	}()
+	sort.Strings(matched)
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+	seen := make(map[string]bool, len(matched))
 
-		if line == "" || strings.HasPrefix(line, "#") {
+	for _, filePath := range matched {
+		if seen[filePath] {
 			continue
 		}
 
-		key, value, ok := strings.Cut(line, "=")
-		if !ok {
+		seen[filePath] = true
+
+		if isTemplateVarExcluded(filepath.Base(filePath)) {
 			continue
 		}
 
-		key = strings.TrimSpace(key)
-		value = strings.TrimSpace(value)
+		info, statErr := os.Stat(filePath)
+		if statErr != nil || info.IsDir() {
+			continue
+		}
 
-		value = trimSurroundingQuotes(value)
+		fileVars, err := parseSecretsYAML(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", filePath, err)
+		}
 
-		vars[key] = value
-	}
-
-	scanErr := scanner.Err()
-	if scanErr != nil {
-		return nil, scanErr
+		maps.Copy(vars, fileVars)
 	}
 
 	return vars, nil
-}
-
-func trimSurroundingQuotes(value string) string {
-	const minQuotedLength = 2
-	if len(value) < minQuotedLength {
-		return value
-	}
-
-	firstChar := value[0]
-	lastChar := value[len(value)-1]
-
-	if (firstChar == '"' && lastChar == '"') || (firstChar == '\'' && lastChar == '\'') {
-		return value[1 : len(value)-1]
-	}
-
-	return value
 }
 
 func parseSecretsYAML(path string) (map[string]any, error) {

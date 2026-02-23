@@ -28,7 +28,7 @@ func TestGenerateSchemaJSON(t *testing.T) {
 			name:       "host schema",
 			schemaType: "host",
 			wantErr:    false,
-			wantFields: []string{"remotePath", "projects", "removeOrphans"},
+			wantFields: []string{"remotePath", "projects", "removeOrphans", "templateVarSources"},
 		},
 		{
 			name:       "hook-before-plan schema",
