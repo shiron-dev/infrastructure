@@ -33,6 +33,7 @@ func newApplyCmd(configPath *string) *cobra.Command {
 		planDependencies := new(syncer.PlanDependencies)
 		planDependencies.ClientFactory = applyDependencies.ClientFactory
 		planDependencies.SSHResolver = nil
+		planDependencies.ProgressWriter = os.Stdout
 
 		plan, err := syncer.BuildPlanWithDeps(cfg, hostFilter, projectFilter, *planDependencies)
 		if err != nil {

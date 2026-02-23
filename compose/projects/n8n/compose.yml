@@ -63,7 +63,7 @@ services:
     environment:
       POSTGRES_DB: n8n
       POSTGRES_USER: n8n
-      postgres_password: "{{ n8n_postgres_password }}"
+      postgres_password: "{{ .n8n_postgres_password }}"
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
     security_opt:
@@ -91,7 +91,7 @@ services:
     restart: always
     command: tunnel run
     environment:
-      TUNNEL_TOKEN: "{{ cf_tunnel_token }}"
+      TUNNEL_TOKEN: "{{ .cf_tunnel_token }}"
     security_opt:
       - no-new-privileges:true
     cap_drop:

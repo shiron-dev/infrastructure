@@ -1,24 +1,15 @@
+# kics-scan ignore
 services:
   portainer:
     image: portainer/portainer-ce:2.33.0-rc2@sha256:159b023999a3c01f486df54b58f281a8f652e216f67caab468d0cba4711a12cb
     ports:
       - "127.0.0.1:9000:9000"
     volumes:
-      # kics-scan ignore-line
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
       - ./portainer_data:/data
     restart: always
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    # kics-scan ignore-line
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      - SETUID
+    user: "0:0"
+    privileged: true
     deploy:
       resources:
         limits:

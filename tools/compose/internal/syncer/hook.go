@@ -9,12 +9,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"cmt/internal/config"
 )
 
-type HookRunner func(command string, stdinData []byte) (exitCode int, combinedOutput string, err error)
+type HookRunner func(command string, workdir string, stdinData []byte) (exitCode int, combinedOutput string, err error)
 
 type hookResult int
 
@@ -24,8 +25,11 @@ const (
 	hookError
 )
 
-func defaultHookRunner(command string, stdinData []byte) (int, string, error) {
+func defaultHookRunner(command string, workdir string, stdinData []byte) (int, string, error) {
 	cmd := exec.CommandContext(context.Background(), "sh", "-c", "eval \"$CMT_HOOK_COMMAND\"")
+	if workdir != "" {
+		cmd.Dir = filepath.Clean(workdir)
+	}
 
 	cmd.Env = append(os.Environ(), "CMT_HOOK_COMMAND="+command)
 	cmd.Stdin = bytes.NewReader(stdinData)
@@ -69,7 +73,7 @@ func runHook(
 
 	_, _ = fmt.Fprintf(writer, "\n%s %s...\n", style.key("Running hook"), hookName)
 
-	exitCode, output, err := runner(hookCmd.Command, stdinData)
+	exitCode, output, err := runner(hookCmd.Command, hookWorkdir(payload), stdinData)
 	if err != nil {
 		_, _ = fmt.Fprintf(writer, "%s %s: %v\n", style.danger("Hook error"), hookName, err)
 		printHookOutput(output, writer)
@@ -157,4 +161,17 @@ func collectHostNames(plan *SyncPlan) []string {
 	}
 
 	return names
+}
+
+func hookWorkdir(payload any) string {
+	switch hookPayload := payload.(type) {
+	case config.BeforePlanHookPayload:
+		return hookPayload.Paths.BasePath
+	case config.BeforeApplyPromptHookPayload:
+		return hookPayload.Paths.BasePath
+	case config.BeforeApplyHookPayload:
+		return hookPayload.Paths.BasePath
+	default:
+		return ""
+	}
 }

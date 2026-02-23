@@ -24,9 +24,10 @@ import (
 )
 
 type PlanDependencies struct {
-	ClientFactory remote.ClientFactory
-	SSHResolver   config.SSHConfigResolver
-	LocalRunner   LocalCommandRunner
+	ClientFactory  remote.ClientFactory
+	SSHResolver    config.SSHConfigResolver
+	LocalRunner    LocalCommandRunner
+	ProgressWriter io.Writer
 }
 
 type LocalCommandRunner interface {
@@ -440,6 +441,7 @@ func BuildPlanWithDeps(
 	deps PlanDependencies,
 ) (*SyncPlan, error) {
 	clientFactory, sshResolver, localRunner := resolvePlanDependencies(deps)
+	progress := resolvePlanProgress(deps.ProgressWriter)
 
 	allProjects, err := config.DiscoverProjects(cfg.BasePath)
 	if err != nil {
@@ -456,19 +458,74 @@ func BuildPlanWithDeps(
 		return nil, fmt.Errorf("no hosts matched filter %v", hostFilter)
 	}
 
+	progress.planStart(len(hosts), len(projects))
+
 	plan := new(SyncPlan)
 	plan.HostPlans = nil
 
-	for _, host := range hosts {
-		hostPlan, err := buildHostPlanForTarget(cfg, host, projects, clientFactory, sshResolver, localRunner)
+	for hostIdx, host := range hosts {
+		progress.hostStart(hostIdx+1, len(hosts), host.Name)
+
+		hostPlan, err := buildHostPlanForTarget(cfg, host, projects, clientFactory, sshResolver, localRunner, progress)
 		if err != nil {
 			return nil, err
 		}
 
+		progress.hostDone(hostIdx+1, len(hosts), host.Name)
+
 		plan.HostPlans = append(plan.HostPlans, *hostPlan)
 	}
 
+	progress.planDone()
+
 	return plan, nil
+}
+
+type planProgress struct {
+	writer io.Writer
+	style  outputStyle
+}
+
+func resolvePlanProgress(writer io.Writer) planProgress {
+	if writer == nil {
+		return planProgress{
+			writer: io.Discard,
+			style: outputStyle{
+				enabled: false,
+			},
+		}
+	}
+
+	return planProgress{writer: writer, style: newOutputStyle(writer)}
+}
+
+func (p planProgress) planStart(hostCount, projectCount int) {
+	_, _ = fmt.Fprintf(p.writer, "%s %d host(s), %d project(s)\n",
+		p.style.key("Planning:"), hostCount, projectCount)
+}
+
+func (p planProgress) hostStart(index, total int, name string) {
+	_, _ = fmt.Fprintf(p.writer, "%s %s %s\n",
+		p.style.key(fmt.Sprintf("Planning host %d/%d:", index, total)),
+		p.style.projectName(name),
+		p.style.muted("connecting..."))
+}
+
+func (p planProgress) hostDone(index, total int, name string) {
+	_, _ = fmt.Fprintf(p.writer, "%s %s %s\n",
+		p.style.key(fmt.Sprintf("Planning host %d/%d:", index, total)),
+		p.style.projectName(name),
+		p.style.success("done"))
+}
+
+func (p planProgress) projectStart(index, total int, name string) {
+	_, _ = fmt.Fprintf(p.writer, "  %s %s\n",
+		p.style.muted(fmt.Sprintf("project %d/%d:", index, total)),
+		p.style.projectName(name))
+}
+
+func (p planProgress) planDone() {
+	_, _ = fmt.Fprintln(p.writer, p.style.success("Plan complete."))
 }
 
 func resolvePlanDependencies(
@@ -503,6 +560,7 @@ func buildHostPlanForTarget(
 	clientFactory remote.ClientFactory,
 	sshResolver config.SSHConfigResolver,
 	localRunner LocalCommandRunner,
+	progress planProgress,
 ) (*HostPlan, error) {
 	hostCfg, found, err := loadHostConfig(cfg.BasePath, host.Name)
 	if err != nil {
@@ -527,7 +585,7 @@ func buildHostPlanForTarget(
 		_ = client.Close()
 	}()
 
-	hostPlan, err := buildHostPlan(cfg, host, hostCfg, projects, client, localRunner)
+	hostPlan, err := buildHostPlan(cfg, host, hostCfg, projects, client, localRunner, progress)
 	if err != nil {
 		return nil, err
 	}
@@ -571,13 +629,16 @@ func buildHostPlan(
 	projects []string,
 	client remote.RemoteClient,
 	localRunner LocalCommandRunner,
+	progress planProgress,
 ) (*HostPlan, error) {
 	hostPlan := &HostPlan{
 		Host:     host,
 		Projects: nil,
 	}
 
-	for _, project := range projects {
+	for projectIdx, project := range projects {
+		progress.projectStart(projectIdx+1, len(projects), project)
+
 		projectPlan, err := buildProjectPlanForHost(cfg, host, hostCfg, project, client, localRunner)
 		if err != nil {
 			return nil, err

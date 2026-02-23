@@ -8,19 +8,11 @@ locals {
   existing_policy_refs = [
     for p in data.cloudflare_zero_trust_access_application.arm_srv.policies : {
       id         = p.id
-      precedence = p.precedence
+      precedence = p.precedence + 1
     } if p.name != local.github_actions_policy_name
   ]
 
-  existing_policy_precedences = [
-    for p in local.existing_policy_refs : p.precedence
-  ]
-
-  github_actions_policy_precedence = (
-    length(local.existing_policy_precedences) > 0 ?
-    max(local.existing_policy_precedences...) + 1 :
-    1
-  )
+  github_actions_policy_precedence = 1
 }
 
 data "cloudflare_zero_trust_access_application" "arm_srv" {
@@ -46,7 +38,7 @@ resource "cloudflare_zero_trust_access_application" "arm_srv" {
   domain                      = data.cloudflare_zero_trust_access_application.arm_srv.domain
   type                        = data.cloudflare_zero_trust_access_application.arm_srv.type
   session_duration            = data.cloudflare_zero_trust_access_application.arm_srv.session_duration
-  service_auth_401_redirect   = true
+  service_auth_401_redirect   = false
   auto_redirect_to_identity   = data.cloudflare_zero_trust_access_application.arm_srv.auto_redirect_to_identity
   app_launcher_visible        = data.cloudflare_zero_trust_access_application.arm_srv.app_launcher_visible
   allow_authenticate_via_warp = data.cloudflare_zero_trust_access_application.arm_srv.allow_authenticate_via_warp

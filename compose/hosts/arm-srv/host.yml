@@ -3,11 +3,23 @@ sshConfig: ../../ssh_config
 projects:
   grafana:
     remotePath: /var
-    postSyncCommand: docker compose up -d
-    composeAction: up
     dirs:
       - grafana_storage
       - grafana_conf/provisioning/datasources
       - influxdb_data
       - influxdb_config
       - vmdata
+  n8n:
+    remotePath: /var
+    dirs:
+      - n8n_data
+      - local-files
+      - rag
+      - postgres_data
+      - redis_data
+  portainer:
+    remotePath: /var
+    postSyncCommand: docker compose up -d
+    composeAction: up
+    dirs:
+      - portainer_data
