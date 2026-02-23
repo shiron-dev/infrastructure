@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=../../../tools/compose/schemas/host-config.schema.json
+
 sshConfig: ../../ssh_config
 
 projects:
@@ -5,26 +7,58 @@ projects:
     remotePath: /var
     composeAction: ignore
     dirs:
-      - grafana_storage
-      - grafana_conf/provisioning/datasources
-      - influxdb_data
-      - influxdb_config
-      - vmdata
+      - grafana_storage:
+        owner: 472
+        group: 472
+      - grafana_conf/provisioning/datasources:
+        owner: 1000
+        group: 1000
+      - influxdb_data:
+        owner: 1000
+        group: 1000
+      - influxdb_config:
+        owner: 1000
+        group: 1000
+      - vmdata:
+        owner: 0
+        group: 0
+
   n8n:
     remotePath: /var
     dirs:
-      - n8n_data
-      - local-files
-      - rag
-      - postgres_data
-      - redis_data
+      - n8n_data:
+        owner: 1000
+        group: 1000
+      - local-files:
+        owner: 1000
+        group: 1000
+      - rag:
+        owner: 1000
+        group: 1000
+      - postgres_data:
+        owner: 999
+        group: 999
+      - redis_data:
+        owner: 999
+        group: 999
+
   portainer:
     remotePath: /var
     dirs:
-      - portainer_data
+      - portainer_data:
+        owner: 0
+        group: 0
+
   discord-webhook:
+
   snipeit:
     dirs:
-      - db_data
-      - redis_data
-      - snipeit_data
+      - db_data:
+        owner: 999
+        group: 999
+      - redis_data:
+        owner: 999
+        group: 999
+      - snipeit_data:
+        owner: 10000
+        group: 50
