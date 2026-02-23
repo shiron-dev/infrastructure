@@ -618,10 +618,16 @@ func TestBuildPlanWithDeps_UsesInjectedDependencies(t *testing.T) {
 		ReadFile("/srv/compose/grafana/compose.yml").
 		Return(nil, errors.New("remote file missing"))
 	client.EXPECT().
-		RunCommand("/srv/compose/grafana", "docker compose config --services 2>/dev/null").
+		RunCommand(
+			"/srv/compose/grafana",
+			"docker compose config --services 2>/dev/null",
+		).
 		Return("", errors.New("not found"))
 	client.EXPECT().
-		RunCommand("/srv/compose/grafana", "docker compose ps --services --filter status=running 2>/dev/null").
+		RunCommand(
+			"/srv/compose/grafana",
+			"docker compose ps --services --filter status=running 2>/dev/null",
+		).
 		Return("", errors.New("not found"))
 	client.EXPECT().Close().Return(nil)
 
@@ -1476,8 +1482,18 @@ func TestBuildPlanWithDeps_ProgressOutput(t *testing.T) {
 	)
 	client.EXPECT().ReadFile("/srv/compose/grafana/.cmt-manifest.json").Return(nil, errors.New("not found"))
 	client.EXPECT().ReadFile("/srv/compose/grafana/compose.yml").Return(nil, errors.New("not found"))
-	client.EXPECT().RunCommand("/srv/compose/grafana", "docker compose config --services 2>/dev/null").Return("", errors.New("not found"))
-	client.EXPECT().RunCommand("/srv/compose/grafana", "docker compose ps --services --filter status=running 2>/dev/null").Return("", errors.New("not found"))
+	client.EXPECT().
+		RunCommand(
+			"/srv/compose/grafana",
+			"docker compose config --services 2>/dev/null",
+		).
+		Return("", errors.New("not found"))
+	client.EXPECT().
+		RunCommand(
+			"/srv/compose/grafana",
+			"docker compose ps --services --filter status=running 2>/dev/null",
+		).
+		Return("", errors.New("not found"))
 	client.EXPECT().Close().Return(nil)
 
 	var progressBuf bytes.Buffer
@@ -1573,8 +1589,18 @@ func TestBuildPlanWithDeps_NoProgressWhenWriterNil(t *testing.T) {
 	)
 	client.EXPECT().ReadFile("/srv/compose/grafana/.cmt-manifest.json").Return(nil, errors.New("not found"))
 	client.EXPECT().ReadFile("/srv/compose/grafana/compose.yml").Return(nil, errors.New("not found"))
-	client.EXPECT().RunCommand("/srv/compose/grafana", "docker compose config --services 2>/dev/null").Return("", errors.New("not found"))
-	client.EXPECT().RunCommand("/srv/compose/grafana", "docker compose ps --services --filter status=running 2>/dev/null").Return("", errors.New("not found"))
+	client.EXPECT().
+		RunCommand(
+			"/srv/compose/grafana",
+			"docker compose config --services 2>/dev/null",
+		).
+		Return("", errors.New("not found"))
+	client.EXPECT().
+		RunCommand(
+			"/srv/compose/grafana",
+			"docker compose ps --services --filter status=running 2>/dev/null",
+		).
+		Return("", errors.New("not found"))
 	client.EXPECT().Close().Return(nil)
 
 	_, err = BuildPlanWithDeps(cfg, nil, nil, PlanDependencies{

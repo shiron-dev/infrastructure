@@ -486,12 +486,17 @@ type planProgress struct {
 	style  outputStyle
 }
 
-func resolvePlanProgress(w io.Writer) planProgress {
-	if w == nil {
-		return planProgress{writer: io.Discard, style: outputStyle{}}
+func resolvePlanProgress(writer io.Writer) planProgress {
+	if writer == nil {
+		return planProgress{
+			writer: io.Discard,
+			style: outputStyle{
+				enabled: false,
+			},
+		}
 	}
 
-	return planProgress{writer: w, style: newOutputStyle(w)}
+	return planProgress{writer: writer, style: newOutputStyle(writer)}
 }
 
 func (p planProgress) planStart(hostCount, projectCount int) {
