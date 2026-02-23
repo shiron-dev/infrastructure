@@ -1,6 +1,6 @@
 services:
   db:
-    image: mariadb:10.11
+    image: mariadb:10.11@sha256:8d9046cdb0b0961b3d2119bcb4bea62a185f11944be5968bc42b81d47801902e
     container_name: snipeit-db
     restart: unless-stopped
     environment:
@@ -18,7 +18,7 @@ services:
       start_period: 30s
 
   redis:
-    image: redis:alpine
+    image: redis:8.6.0-alpine@sha256:fd83658b0e40e2164617d262f13c02ca9ee9e1e6b276fd2fa06617e09bd5c780
     container_name: snipeit-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
@@ -32,7 +32,7 @@ services:
       start_period: 20s
 
   snipeit:
-    image: snipe/snipe-it:latest
+    image: snipe/snipe-it:v8.3.7@sha256:f277e504357a0a94f9d7afd2251f3e9b6de65ea1f69f1c9cbf27e2e2059804b6
     container_name: snipeit-app
     restart: unless-stopped
     ports:
@@ -71,7 +71,7 @@ services:
       start_period: 60s
 
   tunnel-snipeit:
-    image: cloudflare/cloudflared:2026.2.0
+    image: cloudflare/cloudflared:2026.2.0@sha256:404528c1cd63c3eb882c257ae524919e4376115e6fe57befca8d603656a91a4c
     container_name: snipeit-tunnel
     restart: unless-stopped
     command: tunnel run
