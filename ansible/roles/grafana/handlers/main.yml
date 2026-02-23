@@ -1,9 +1,0 @@
-- name: Start grafana
-  listen: Restart grafana
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      docker compose -f /var/grafana/compose.yml down || :
-      docker compose -f /var/grafana/compose.yml up -d --build
-    chdir: /var/grafana
-  changed_when: true

@@ -7,9 +7,6 @@
     # - role: fail2ban
     #   tags:
     #     - fail2ban
-    - role: grafana
-      tags:
-        - grafana
     - role: portainer
       tags:
         - portainer
