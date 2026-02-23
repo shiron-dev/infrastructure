@@ -3,6 +3,7 @@ sshConfig: ../../ssh_config
 projects:
   grafana:
     remotePath: /var
+    composeAction: ignore
     dirs:
       - grafana_storage
       - grafana_conf/provisioning/datasources
@@ -19,8 +20,6 @@ projects:
       - redis_data
   portainer:
     remotePath: /var
-    postSyncCommand: docker compose up -d
-    composeAction: up
     dirs:
       - portainer_data
   discord-webhook:
