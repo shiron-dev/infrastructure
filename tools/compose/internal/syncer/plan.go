@@ -987,13 +987,17 @@ func computeDirPlanMetadataDrift(plan *DirPlan, meta *remote.DirMetadata) {
 		plan.NeedsPermChange = true
 	}
 
-	if plan.Owner != "" && plan.Owner != meta.Owner {
+	if plan.Owner != "" && !ownershipMatches(plan.Owner, meta.Owner, meta.OwnerID) {
 		plan.NeedsOwnerChange = true
 	}
 
-	if plan.Group != "" && plan.Group != meta.Group {
+	if plan.Group != "" && !ownershipMatches(plan.Group, meta.Group, meta.GroupID) {
 		plan.NeedsOwnerChange = true
 	}
+}
+
+func ownershipMatches(desired, actualName, actualID string) bool {
+	return desired == actualName || desired == actualID
 }
 
 func setDirPlanActionFromMetadataDrift(plan *DirPlan) {

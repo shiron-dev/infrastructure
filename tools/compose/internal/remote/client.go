@@ -46,6 +46,8 @@ type DirMetadata struct {
 	Permission string
 	Owner      string
 	Group      string
+	OwnerID    string
+	GroupID    string
 }
 
 type RemoteClient interface {
@@ -178,7 +180,7 @@ func (c *Client) Stat(remotePath string) (fs.FileInfo, error) {
 }
 
 func (c *Client) StatDirMetadata(remotePath string) (*DirMetadata, error) {
-	cmd := "stat -c '%a %U %G' " + shellQuote(remotePath)
+	cmd := "stat -c '%a %u %g %U %G' " + shellQuote(remotePath)
 
 	out, err := c.runSSH(cmd)
 	if err != nil {
@@ -191,7 +193,7 @@ func (c *Client) StatDirMetadata(remotePath string) (*DirMetadata, error) {
 func ParseDirStatOutput(output string) (*DirMetadata, error) {
 	fields := strings.Fields(strings.TrimSpace(output))
 
-	const expectedFields = 3
+	const expectedFields = 5
 
 	if len(fields) != expectedFields {
 		return nil, fmt.Errorf("unexpected stat output: %q", output)
@@ -199,8 +201,10 @@ func ParseDirStatOutput(output string) (*DirMetadata, error) {
 
 	return &DirMetadata{
 		Permission: fields[0],
-		Owner:      fields[1],
-		Group:      fields[2],
+		OwnerID:    fields[1],
+		GroupID:    fields[2],
+		Owner:      fields[3],
+		Group:      fields[4],
 	}, nil
 }
 

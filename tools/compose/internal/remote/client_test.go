@@ -15,27 +15,27 @@ func TestParseDirStatOutput(t *testing.T) {
 	}{
 		{
 			name:   "standard output",
-			output: "755 root root\n",
-			want:   &DirMetadata{Permission: "755", Owner: "root", Group: "root"},
+			output: "755 0 0 root root\n",
+			want:   &DirMetadata{Permission: "755", OwnerID: "0", GroupID: "0", Owner: "root", Group: "root"},
 		},
 		{
 			name:   "trimmed output",
-			output: "  750 app staff  ",
-			want:   &DirMetadata{Permission: "750", Owner: "app", Group: "staff"},
+			output: "  750 1000 50 app staff  ",
+			want:   &DirMetadata{Permission: "750", OwnerID: "1000", GroupID: "50", Owner: "app", Group: "staff"},
 		},
 		{
 			name:   "setuid permission",
-			output: "3755 deploy deploy\n",
-			want:   &DirMetadata{Permission: "3755", Owner: "deploy", Group: "deploy"},
+			output: "3755 1000 1000 deploy deploy\n",
+			want:   &DirMetadata{Permission: "3755", OwnerID: "1000", GroupID: "1000", Owner: "deploy", Group: "deploy"},
 		},
 		{
 			name:    "too few fields",
-			output:  "755 root",
+			output:  "755 0 0 root",
 			wantErr: true,
 		},
 		{
 			name:    "too many fields",
-			output:  "755 root wheel extra",
+			output:  "755 0 0 root wheel extra",
 			wantErr: true,
 		},
 		{
@@ -72,6 +72,14 @@ func TestParseDirStatOutput(t *testing.T) {
 
 			if got.Group != tt.want.Group {
 				t.Errorf("Group = %q, want %q", got.Group, tt.want.Group)
+			}
+
+			if got.OwnerID != tt.want.OwnerID {
+				t.Errorf("OwnerID = %q, want %q", got.OwnerID, tt.want.OwnerID)
+			}
+
+			if got.GroupID != tt.want.GroupID {
+				t.Errorf("GroupID = %q, want %q", got.GroupID, tt.want.GroupID)
 			}
 		})
 	}
