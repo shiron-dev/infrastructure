@@ -11,11 +11,11 @@ import (
 
 var ErrUnknownSchemaType = errors.New("unknown schema type")
 var (
-	ErrHostSchemaMissingDefs                 = errors.New("host schema compatibility patch failed: missing $defs")
-	ErrHostSchemaMissingHostConfig           = errors.New("host schema compatibility patch failed: missing HostConfig")
-	ErrHostSchemaMissingHostConfigProperties = errors.New("host schema compatibility patch failed: missing HostConfig.properties")
-	ErrHostSchemaMissingProjects             = errors.New("host schema compatibility patch failed: missing HostConfig.properties.projects")
-	ErrHostSchemaMissingAdditionalProperties = errors.New("host schema compatibility patch failed: missing projects.additionalProperties")
+	ErrHostSchemaMissingDefs                 = errors.New("host schema patch failed: missing $defs")
+	ErrHostSchemaMissingHostConfig           = errors.New("host schema patch failed: missing HostConfig")
+	ErrHostSchemaMissingHostConfigProperties = errors.New("host schema patch failed: missing HostConfig.properties")
+	ErrHostSchemaMissingProjects             = errors.New("host schema patch failed: missing HostConfig.properties.projects")
+	ErrHostSchemaMissingAdditionalProperties = errors.New("host schema patch failed: missing projects.additionalProperties")
 )
 
 func SchemaKinds() []string {
