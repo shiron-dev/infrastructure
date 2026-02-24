@@ -255,7 +255,7 @@ func TestApplyWithDeps_BeforeApplyPromptHook_ErrorExitCode(t *testing.T) {
 		t.Fatal("expected error from hook exit code 2")
 	}
 
-	if !strings.Contains(err.Error(), "beforeApplyPrompt hook failed") {
+	if err.Error() != "hook failed: beforeApplyPrompt" {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
