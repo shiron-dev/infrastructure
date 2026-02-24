@@ -7,8 +7,8 @@ linters:
     - depguard
     - wrapcheck
     - ireturn
-    - err113
     - wsl
+    - varnamelen
   exclusions:
     rules:
       - path: (.+)_test\.go
