@@ -178,7 +178,7 @@ func (c *Client) Stat(remotePath string) (fs.FileInfo, error) {
 }
 
 func (c *Client) StatDirMetadata(remotePath string) (*DirMetadata, error) {
-	cmd := fmt.Sprintf("stat -c '%%a %%U %%G' %s", shellQuote(remotePath))
+	cmd := "stat -c '%a %U %G' " + shellQuote(remotePath)
 
 	out, err := c.runSSH(cmd)
 	if err != nil {

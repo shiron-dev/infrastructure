@@ -210,7 +210,7 @@ func (p *SyncPlan) DirStats() (int, int, int) {
 					toCreateCount++
 				case ActionModify:
 					toUpdateCount++
-				default:
+				case ActionUnchanged, ActionDelete:
 					existingCount++
 				}
 			}
@@ -245,7 +245,10 @@ func (p *SyncPlan) ComposeStats() (int, int) {
 }
 
 func (p *SyncPlan) HasChanges() bool {
-	_, _, add, mod, del, _ := p.Stats()
+	hostCount, projectCount, add, mod, del, unchangedCount := p.Stats()
+	_ = hostCount
+	_ = projectCount
+	_ = unchangedCount
 	dirCreate, dirUpdate, _ := p.DirStats()
 
 	if add+mod+del+dirCreate+dirUpdate > 0 {
@@ -402,8 +405,10 @@ func printProjectDirPlans(writer io.Writer, style outputStyle, dirPlans []DirPla
 			statusText = style.success("(create)")
 		case ActionModify:
 			statusText = style.warning("(update)")
-		default:
+		case ActionUnchanged:
 			statusText = style.muted("(exists)")
+		case ActionDelete:
+			statusText = style.danger("(delete)")
 		}
 
 		extra := formatDirPlanMeta(directoryPlan)
@@ -443,6 +448,7 @@ func formatDirPlanMeta(dirPlan DirPlan) string {
 				formatOwnership(dirPlan.ActualOwner, dirPlan.ActualGroup),
 				formatOwnership(dirPlan.Owner, dirPlan.Group)))
 		}
+	case ActionUnchanged, ActionDelete:
 	}
 
 	if len(parts) == 0 {
@@ -913,12 +919,18 @@ func buildDirPlans(directories []config.DirConfig, remoteDir string, client remo
 		exists := statErr == nil
 
 		plan := DirPlan{
-			RelativePath: directory.Path,
-			RemotePath:   absDir,
-			Exists:       exists,
-			Permission:   directory.Permission,
-			Owner:        directory.Owner,
-			Group:        directory.Group,
+			RelativePath:     directory.Path,
+			RemotePath:       absDir,
+			Exists:           exists,
+			Action:           ActionUnchanged,
+			Permission:       directory.Permission,
+			Owner:            directory.Owner,
+			Group:            directory.Group,
+			ActualPermission: "",
+			ActualOwner:      "",
+			ActualGroup:      "",
+			NeedsPermChange:  false,
+			NeedsOwnerChange: false,
 		}
 
 		if !exists {
@@ -936,8 +948,7 @@ func buildDirPlans(directories []config.DirConfig, remoteDir string, client remo
 }
 
 func computeDirDrift(plan *DirPlan, client remote.RemoteClient) {
-	hasDesiredMeta := plan.Permission != "" || plan.Owner != "" || plan.Group != ""
-	if !hasDesiredMeta {
+	if !dirPlanHasDesiredMetadata(plan) {
 		plan.Action = ActionUnchanged
 
 		return
@@ -945,17 +956,33 @@ func computeDirDrift(plan *DirPlan, client remote.RemoteClient) {
 
 	meta, err := client.StatDirMetadata(plan.RemotePath)
 	if err != nil {
-		plan.Action = ActionModify
-		plan.NeedsPermChange = plan.Permission != ""
-		plan.NeedsOwnerChange = plan.Owner != "" || plan.Group != ""
+		markDirPlanAsNeedsMetadataUpdate(plan)
 
 		return
 	}
 
+	applyActualDirMetadata(plan, meta)
+	computeDirPlanMetadataDrift(plan, meta)
+	setDirPlanActionFromMetadataDrift(plan)
+}
+
+func dirPlanHasDesiredMetadata(plan *DirPlan) bool {
+	return plan.Permission != "" || plan.Owner != "" || plan.Group != ""
+}
+
+func markDirPlanAsNeedsMetadataUpdate(plan *DirPlan) {
+	plan.Action = ActionModify
+	plan.NeedsPermChange = plan.Permission != ""
+	plan.NeedsOwnerChange = plan.Owner != "" || plan.Group != ""
+}
+
+func applyActualDirMetadata(plan *DirPlan, meta *remote.DirMetadata) {
 	plan.ActualPermission = meta.Permission
 	plan.ActualOwner = meta.Owner
 	plan.ActualGroup = meta.Group
+}
 
+func computeDirPlanMetadataDrift(plan *DirPlan, meta *remote.DirMetadata) {
 	if plan.Permission != "" && !permissionsMatch(plan.Permission, meta.Permission) {
 		plan.NeedsPermChange = true
 	}
@@ -967,7 +994,9 @@ func computeDirDrift(plan *DirPlan, client remote.RemoteClient) {
 	if plan.Group != "" && plan.Group != meta.Group {
 		plan.NeedsOwnerChange = true
 	}
+}
 
+func setDirPlanActionFromMetadataDrift(plan *DirPlan) {
 	if plan.NeedsPermChange || plan.NeedsOwnerChange {
 		plan.Action = ActionModify
 	} else {
