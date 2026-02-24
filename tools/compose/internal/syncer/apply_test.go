@@ -827,6 +827,136 @@ func TestApplyWithDeps_DirPermissionOnly(t *testing.T) {
 	}
 }
 
+func TestApplyWithDeps_DirPermissionWithBecomeDefaultRoot(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "server1"},
+				Projects: []ProjectPlan{
+					{
+						ProjectName: "grafana",
+						RemoteDir:   "/srv/grafana",
+						Dirs: []DirPlan{
+							{
+								RelativePath:    "data",
+								RemotePath:      "/srv/grafana/data",
+								Exists:          false,
+								Action:          ActionAdd,
+								Permission:      "0700",
+								NeedsPermChange: true,
+								Become:          true,
+							},
+						},
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								LocalPath:    "/tmp/compose.yml",
+								RemotePath:   "/srv/grafana/compose.yml",
+								Action:       ActionAdd,
+								LocalData:    []byte("services: {}"),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	factory := remote.NewMockClientFactory(ctrl)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	gomock.InOrder(
+		factory.EXPECT().
+			NewClient(config.HostEntry{Name: "server1"}).
+			Return(client, nil),
+		client.EXPECT().MkdirAll("/srv/grafana/data").Return(nil),
+		client.EXPECT().RunCommand("", "sudo -n chmod 0700 '/srv/grafana/data'").Return("", nil),
+		client.EXPECT().WriteFile("/srv/grafana/compose.yml", []byte("services: {}")).Return(nil),
+		client.EXPECT().WriteFile("/srv/grafana/.cmt-manifest.json", gomock.Any()).Return(nil),
+		client.EXPECT().Close().Return(nil),
+	)
+
+	var out bytes.Buffer
+
+	err := ApplyWithDeps(&config.CmtConfig{}, plan, true, false, &out, ApplyDependencies{
+		ClientFactory: factory,
+	})
+	if err != nil {
+		t.Fatalf("ApplyWithDeps: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "Apply complete!") {
+		t.Fatalf("expected complete output, got %q", out.String())
+	}
+}
+
+func TestApplyWithDeps_DirPermissionWithBecomeSpecificUser(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "server1"},
+				Projects: []ProjectPlan{
+					{
+						ProjectName: "grafana",
+						RemoteDir:   "/srv/grafana",
+						Dirs: []DirPlan{
+							{
+								RelativePath:    "data",
+								RemotePath:      "/srv/grafana/data",
+								Exists:          true,
+								Action:          ActionModify,
+								Permission:      "0750",
+								NeedsPermChange: true,
+								Become:          true,
+								BecomeUser:      "ops",
+							},
+						},
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								LocalPath:    "/tmp/compose.yml",
+								RemotePath:   "/srv/grafana/compose.yml",
+								Action:       ActionUnchanged,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	factory := remote.NewMockClientFactory(ctrl)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	gomock.InOrder(
+		factory.EXPECT().
+			NewClient(config.HostEntry{Name: "server1"}).
+			Return(client, nil),
+		client.EXPECT().RunCommand("", "sudo -n -u 'ops' chmod 0750 '/srv/grafana/data'").Return("", nil),
+		client.EXPECT().WriteFile("/srv/grafana/.cmt-manifest.json", gomock.Any()).Return(nil),
+		client.EXPECT().Close().Return(nil),
+	)
+
+	var out bytes.Buffer
+
+	err := ApplyWithDeps(&config.CmtConfig{}, plan, true, false, &out, ApplyDependencies{
+		ClientFactory: factory,
+	})
+	if err != nil {
+		t.Fatalf("ApplyWithDeps: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "Apply complete!") {
+		t.Fatalf("expected complete output, got %q", out.String())
+	}
+}
+
 func TestApplyWithDeps_DirNoExtraCommands(t *testing.T) {
 	t.Parallel()
 

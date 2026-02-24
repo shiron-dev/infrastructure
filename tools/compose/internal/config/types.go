@@ -16,7 +16,7 @@ const (
 	ComposeActionIgnore  = "ignore"
 	jsonSchemaTypeString = "string"
 	jsonSchemaTypeObject = "object"
-	pathDirMaxProperties = 4
+	pathDirMaxProperties = 6
 )
 
 var (
@@ -24,7 +24,9 @@ var (
 	errInvalidDirsExpectedMapOrNull = errors.New("invalid dirs item: expected mapping or null attributes")
 	errInvalidDirsExpectedMapAttrs  = errors.New("invalid dirs item: expected mapping attributes")
 	errInvalidDirsUnsupportedNode   = errors.New("invalid dirs item: unsupported YAML node kind")
+	errInvalidDirsBoolValue         = errors.New("invalid dirs item key: expected boolean value")
 	errDirPathRequired              = errors.New("path is required")
+	errBecomeUserRequiresBecome     = errors.New("becomeUser requires become=true")
 )
 
 type DirConfig struct {
@@ -32,13 +34,19 @@ type DirConfig struct {
 	Permission string `json:"permission,omitempty" yaml:"permission,omitempty"`
 	Owner      string `json:"owner,omitempty"      yaml:"owner,omitempty"`
 	Group      string `json:"group,omitempty"      yaml:"group,omitempty"`
+	Become     bool   `json:"become,omitempty"     yaml:"become,omitempty"`
+	BecomeUser string `json:"becomeUser,omitempty" yaml:"becomeUser,omitempty"`
 }
 
 type dirConfigAttrsOnly struct {
 	Permission string `yaml:"permission,omitempty"`
 	Owner      string `yaml:"owner,omitempty"`
 	Group      string `yaml:"group,omitempty"`
+	Become     *bool  `yaml:"become,omitempty"`
+	BecomeUser string `yaml:"becomeUser,omitempty"`
 }
+
+type dirConfigSchemaProps = orderedmap.OrderedMap[string, *jsonschema.Schema]
 
 func (d *DirConfig) UnmarshalYAML(value *yaml.Node) error {
 	switch value.Kind {
@@ -85,25 +93,25 @@ func parseDirConfigPathKeyForm(value *yaml.Node) (DirConfig, bool, error) {
 		valNode := value.Content[i+1]
 		key := keyNode.Value
 
-		switch key {
-		case "permission":
-			attrs.Permission = valNode.Value
-		case "owner":
-			attrs.Owner = valNode.Value
-		case "group":
-			attrs.Group = valNode.Value
-		default:
-			if pathFound {
-				return cfg, false, fmt.Errorf("%w (%q and %q)", errInvalidDirsMultiplePathKeys, pathValue, key)
-			}
+		handled, err := mergeDirConfigKnownAttrs(key, valNode, &attrs)
+		if err != nil {
+			return cfg, false, err
+		}
 
-			pathFound = true
-			pathValue = key
+		if handled {
+			continue
+		}
 
-			err := mergeDirConfigAttrsFromValue(pathValue, valNode, &attrs)
-			if err != nil {
-				return cfg, false, err
-			}
+		if pathFound {
+			return cfg, false, fmt.Errorf("%w (%q and %q)", errInvalidDirsMultiplePathKeys, pathValue, key)
+		}
+
+		pathFound = true
+		pathValue = key
+
+		err = mergeDirConfigAttrsFromValue(pathValue, valNode, &attrs)
+		if err != nil {
+			return cfg, false, err
 		}
 	}
 
@@ -114,9 +122,58 @@ func parseDirConfigPathKeyForm(value *yaml.Node) (DirConfig, bool, error) {
 	cfg.Path = pathValue
 	cfg.Permission = attrs.Permission
 	cfg.Owner = attrs.Owner
+
 	cfg.Group = attrs.Group
+	if attrs.Become != nil {
+		cfg.Become = *attrs.Become
+	}
+
+	cfg.BecomeUser = attrs.BecomeUser
 
 	return cfg, true, nil
+}
+
+func mergeDirConfigKnownAttrs(key string, valNode *yaml.Node, attrs *dirConfigAttrsOnly) (bool, error) {
+	switch key {
+	case "permission":
+		attrs.Permission = valNode.Value
+
+		return true, nil
+	case "owner":
+		attrs.Owner = valNode.Value
+
+		return true, nil
+	case "group":
+		attrs.Group = valNode.Value
+
+		return true, nil
+	case "become":
+		become, parseErr := parseDirConfigBoolAttr(key, valNode)
+		if parseErr != nil {
+			return true, parseErr
+		}
+
+		attrs.Become = &become
+
+		return true, nil
+	case "becomeUser":
+		attrs.BecomeUser = valNode.Value
+
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func parseDirConfigBoolAttr(key string, valNode *yaml.Node) (bool, error) {
+	var parsed bool
+
+	err := valNode.Decode(&parsed)
+	if err != nil {
+		return false, fmt.Errorf("%w (%q)", errInvalidDirsBoolValue, key)
+	}
+
+	return parsed, nil
 }
 
 func mergeDirConfigAttrsFromValue(path string, valNode *yaml.Node, attrs *dirConfigAttrsOnly) error {
@@ -157,34 +214,64 @@ func mergeNonEmptyDirConfigAttrs(dst *dirConfigAttrsOnly, src dirConfigAttrsOnly
 	if src.Group != "" {
 		dst.Group = src.Group
 	}
+
+	if src.Become != nil {
+		become := *src.Become
+		dst.Become = &become
+	}
+
+	if src.BecomeUser != "" {
+		dst.BecomeUser = src.BecomeUser
+	}
 }
 
 func (*DirConfig) JSONSchema() *jsonschema.Schema {
 	stringSchema := new(jsonschema.Schema)
 	stringSchema.Type = jsonSchemaTypeString
 
+	attrsProps := buildDirConfigAttrsProperties()
+	pathKeyedObjectSchema := buildDirConfigPathKeyedObjectSchema(attrsProps)
+
+	rootSchema := new(jsonschema.Schema)
+	rootSchema.OneOf = []*jsonschema.Schema{stringSchema, pathKeyedObjectSchema}
+
+	return rootSchema
+}
+
+func buildDirConfigAttrsProperties() *dirConfigSchemaProps {
 	attrsProps := orderedmap.New[string, *jsonschema.Schema]()
-	permissionSchema := new(jsonschema.Schema)
-	permissionSchema.OneOf = []*jsonschema.Schema{
-		{Type: jsonSchemaTypeString},
-		{Type: "integer"},
-	}
-	attrsProps.Set("permission", permissionSchema)
+	attrsProps.Set("permission", dirConfigStringOrIntegerSchema())
+	attrsProps.Set("owner", dirConfigStringOrIntegerSchema())
+	attrsProps.Set("group", dirConfigStringOrIntegerSchema())
 
-	ownerSchema := new(jsonschema.Schema)
-	ownerSchema.OneOf = []*jsonschema.Schema{
-		{Type: jsonSchemaTypeString},
-		{Type: "integer"},
-	}
-	attrsProps.Set("owner", ownerSchema)
+	becomeSchema := new(jsonschema.Schema)
+	becomeSchema.Type = "boolean"
+	attrsProps.Set("become", becomeSchema)
 
-	groupSchema := new(jsonschema.Schema)
-	groupSchema.OneOf = []*jsonschema.Schema{
-		{Type: jsonSchemaTypeString},
-		{Type: "integer"},
-	}
-	attrsProps.Set("group", groupSchema)
+	becomeUserSchema := new(jsonschema.Schema)
+	becomeUserSchema.Type = jsonSchemaTypeString
+	attrsProps.Set("becomeUser", becomeUserSchema)
 
+	return attrsProps
+}
+
+func dirConfigStringOrIntegerSchema() *jsonschema.Schema {
+	schema := new(jsonschema.Schema)
+	stringSchema := new(jsonschema.Schema)
+	stringSchema.Type = jsonSchemaTypeString
+
+	integerSchema := new(jsonschema.Schema)
+	integerSchema.Type = "integer"
+
+	schema.OneOf = []*jsonschema.Schema{
+		stringSchema,
+		integerSchema,
+	}
+
+	return schema
+}
+
+func buildDirConfigPathKeyedObjectSchema(attrsProps *dirConfigSchemaProps) *jsonschema.Schema {
 	attrsObjectSchema := new(jsonschema.Schema)
 	attrsObjectSchema.Type = jsonSchemaTypeObject
 	attrsObjectSchema.Properties = attrsProps
@@ -196,28 +283,25 @@ func (*DirConfig) JSONSchema() *jsonschema.Schema {
 	pathValueSchema := new(jsonschema.Schema)
 	pathValueSchema.OneOf = []*jsonschema.Schema{attrsObjectSchema, nullSchema}
 
-	pathKeyPattern := "^(?!permission$|owner$|group$).+$"
+	pathKeyPattern := "^(?!permission$|owner$|group$|become$|becomeUser$).+$"
+	pathPropertyMinCount := uint64(1)
+	pathPropertyMaxCount := uint64(pathDirMaxProperties)
+
 	pathKeyedObjectSchema := new(jsonschema.Schema)
 	pathKeyedObjectSchema.Type = jsonSchemaTypeObject
 	pathKeyedObjectSchema.Properties = attrsProps
-	pathKeyedObjectSchema.PatternProperties = map[string]*jsonschema.Schema{
-		pathKeyPattern: pathValueSchema,
-	}
+	pathKeyedObjectSchema.PatternProperties = map[string]*jsonschema.Schema{pathKeyPattern: pathValueSchema}
 	pathKeyedObjectSchema.AdditionalProperties = jsonschema.FalseSchema
-	pathPropertyMinCount := uint64(1)
-	pathPropertyMaxCount := uint64(pathDirMaxProperties)
 	pathKeyedObjectSchema.MinProperties = &pathPropertyMinCount
 	pathKeyedObjectSchema.MaxProperties = &pathPropertyMaxCount
+
 	pathOnlyAttrsSchema := new(jsonschema.Schema)
 	pathOnlyAttrsSchema.Type = jsonSchemaTypeObject
 	pathOnlyAttrsSchema.Properties = attrsProps
 	pathOnlyAttrsSchema.AdditionalProperties = jsonschema.FalseSchema
 	pathKeyedObjectSchema.Not = pathOnlyAttrsSchema
 
-	rootSchema := new(jsonschema.Schema)
-	rootSchema.OneOf = []*jsonschema.Schema{stringSchema, pathKeyedObjectSchema}
-
-	return rootSchema
+	return pathKeyedObjectSchema
 }
 
 func ValidateDirConfigs(dirs []DirConfig) error {
@@ -227,12 +311,20 @@ func ValidateDirConfigs(dirs []DirConfig) error {
 		}
 
 		if dirConfig.Permission == "" {
-			continue
+		} else {
+			_, err := strconv.ParseUint(dirConfig.Permission, 8, 32)
+			if err != nil {
+				return fmt.Errorf(
+					"dirs[%d]: invalid permission %q (expected octal like \"0755\"): %w",
+					i,
+					dirConfig.Permission,
+					err,
+				)
+			}
 		}
 
-		_, err := strconv.ParseUint(dirConfig.Permission, 8, 32)
-		if err != nil {
-			return fmt.Errorf("dirs[%d]: invalid permission %q (expected octal like \"0755\"): %w", i, dirConfig.Permission, err)
+		if dirConfig.BecomeUser != "" && !dirConfig.Become {
+			return fmt.Errorf("dirs[%d]: %w", i, errBecomeUserRequiresBecome)
 		}
 	}
 
