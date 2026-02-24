@@ -41,12 +41,10 @@ hosts/
 
 ```yaml
 remotePath: /opt/compose
-postSyncCommand: docker compose up -d
 composeAction: up                # up|down|ignore (default: up)
 
 projects:
   grafana:
-    postSyncCommand: docker compose -f compose.yml -f compose.override.yml up -d
     composeAction: up            # per-project override
   legacy:
     composeAction: ignore        # ignore up/down runtime drift

@@ -58,7 +58,6 @@ basePath: ../compose            # compose ルートへのパス（設定ファ�
 
 defaults:                       # 最低優先度のデフォルト値
   remotePath: /opt/compose
-  postSyncCommand: docker compose up -d
   composeAction: up             # up|down|ignore（未指定時は up）
   # templateVarSources:         # テンプレート変数ソースの glob（デフォルト: ["*.yml", "*.yaml"]）
   #   - "*.yml"
@@ -78,13 +77,10 @@ hosts:
 sshConfig: ../../ssh_config     # SSH config ファイルのパス（host.yml からの相対パス）
 
 remotePath: /srv/compose        # cmt デフォルトをこのホスト用に上書き
-postSyncCommand: docker compose up -d
 composeAction: up               # up|down|ignore（未指定時は up）
 
 projects:                       # プロジェクト別の上書き
   grafana:
-    postSyncCommand: >-
-      docker compose -f compose.yml -f compose.override.yml up -d
     composeAction: up           # プロジェクト単位で上書き可能
     removeOrphans: true         # composeAction=down 時に --remove-orphans を付与
     dirs:                       # Docker ボリューム用ディレクトリの事前作成
@@ -180,11 +176,13 @@ projects:
 
 `cmt plan` ではリモートの現在の Compose サービス状態と理想状態を比較し、差分を表示します:
 
-- `up` の場合: 停止中/未起動のサービスを「起動予定」として表示
+- `up` の場合:
+  - ファイル/ディレクトリに更新がある場合: 全サービスを「再作成予定」として表示（`docker compose up -d --force-recreate`）
+  - ファイル更新なし + 停止サービスがある場合: 停止中のサービスを「起動予定」として表示（`docker compose up -d`）
 - `down` の場合: 現在起動中のサービスを「停止予定」として表示
 - `ignore` の場合: up/down の状態差分を確認・表示しない
 
-`cmt apply` では差分に基づいて `docker compose up -d` または `docker compose down` を実行します。
+`cmt apply` では差分に基づいて自動的に適切な Compose コマンドを実行します。
 `ignore` の場合は Compose の up/down 実行自体をスキップします。
 ファイル差分がなくても Compose 状態に差分があれば apply の対象になります。
 
