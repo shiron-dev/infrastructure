@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -16,6 +17,14 @@ const (
 	jsonSchemaTypeString = "string"
 	jsonSchemaTypeObject = "object"
 	pathDirMaxProperties = 4
+)
+
+var (
+	errInvalidDirsMultiplePathKeys  = errors.New("invalid dirs item: multiple path keys found")
+	errInvalidDirsExpectedMapOrNull = errors.New("invalid dirs item: expected mapping or null attributes")
+	errInvalidDirsExpectedMapAttrs  = errors.New("invalid dirs item: expected mapping attributes")
+	errInvalidDirsUnsupportedNode   = errors.New("invalid dirs item: unsupported YAML node kind")
+	errDirPathRequired              = errors.New("path is required")
 )
 
 type DirConfig struct {
@@ -85,7 +94,7 @@ func parseDirConfigPathKeyForm(value *yaml.Node) (DirConfig, bool, error) {
 			attrs.Group = valNode.Value
 		default:
 			if pathFound {
-				return cfg, false, fmt.Errorf("invalid dirs item: multiple path keys found (%q and %q)", pathValue, key)
+				return cfg, false, fmt.Errorf("%w (%q and %q)", errInvalidDirsMultiplePathKeys, pathValue, key)
 			}
 
 			pathFound = true
@@ -125,12 +134,12 @@ func mergeDirConfigAttrsFromValue(path string, valNode *yaml.Node, attrs *dirCon
 		// Allow null/empty attributes:
 		//   - <path>:
 		if valNode.Tag != "!!null" && valNode.Value != "" {
-			return fmt.Errorf("invalid dirs item for path %q: expected mapping or null attributes", path)
+			return fmt.Errorf("invalid dirs item for path %q: %w", path, errInvalidDirsExpectedMapOrNull)
 		}
 	case yaml.DocumentNode, yaml.SequenceNode, yaml.AliasNode:
-		return fmt.Errorf("invalid dirs item for path %q: expected mapping attributes", path)
+		return fmt.Errorf("invalid dirs item for path %q: %w", path, errInvalidDirsExpectedMapAttrs)
 	default:
-		return fmt.Errorf("invalid dirs item for path %q: unsupported YAML node kind %d", path, valNode.Kind)
+		return fmt.Errorf("invalid dirs item for path %q: %w %d", path, errInvalidDirsUnsupportedNode, valNode.Kind)
 	}
 
 	return nil
@@ -214,7 +223,7 @@ func (*DirConfig) JSONSchema() *jsonschema.Schema {
 func ValidateDirConfigs(dirs []DirConfig) error {
 	for i, dirConfig := range dirs {
 		if dirConfig.Path == "" {
-			return fmt.Errorf("dirs[%d]: path is required", i)
+			return fmt.Errorf("dirs[%d]: %w", i, errDirPathRequired)
 		}
 
 		if dirConfig.Permission == "" {

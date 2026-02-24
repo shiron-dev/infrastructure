@@ -11,6 +11,11 @@ import (
 
 var ErrHostConfigNotFound = errors.New("host config not found")
 
+var (
+	ErrBasePathRequired = errors.New("basePath is required")
+	ErrHostRequired     = errors.New("at least one host is required")
+)
+
 func LoadCmtConfig(configPath string) (*CmtConfig, error) {
 	cleanConfigPath := filepath.Clean(configPath)
 
@@ -27,11 +32,11 @@ func LoadCmtConfig(configPath string) (*CmtConfig, error) {
 	}
 
 	if cfg.BasePath == "" {
-		return nil, fmt.Errorf("basePath is required in %s", cleanConfigPath)
+		return nil, fmt.Errorf("%w in %s", ErrBasePathRequired, cleanConfigPath)
 	}
 
 	if len(cfg.Hosts) == 0 {
-		return nil, fmt.Errorf("at least one host is required in %s", cleanConfigPath)
+		return nil, fmt.Errorf("%w in %s", ErrHostRequired, cleanConfigPath)
 	}
 
 	if !filepath.IsAbs(cfg.BasePath) {

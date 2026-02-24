@@ -4,6 +4,7 @@ package remote
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -15,6 +16,11 @@ import (
 	"time"
 
 	"cmt/internal/config"
+)
+
+var (
+	errPathDoesNotExist     = errors.New("path does not exist")
+	errUnexpectedStatOutput = errors.New("unexpected stat output")
 )
 
 type CommandRunner interface {
@@ -173,7 +179,7 @@ func (c *Client) Remove(remotePath string) error {
 func (c *Client) Stat(remotePath string) (fs.FileInfo, error) {
 	_, err := c.runSSH("test -e " + shellQuote(remotePath))
 	if err != nil {
-		return nil, fmt.Errorf("stat %s: path does not exist", remotePath)
+		return nil, fmt.Errorf("stat %s: %w", remotePath, errPathDoesNotExist)
 	}
 
 	return minimalFileInfo{name: path.Base(remotePath)}, nil
@@ -196,7 +202,7 @@ func ParseDirStatOutput(output string) (*DirMetadata, error) {
 	const expectedFields = 5
 
 	if len(fields) != expectedFields {
-		return nil, fmt.Errorf("unexpected stat output: %q", output)
+		return nil, fmt.Errorf("%w: %q", errUnexpectedStatOutput, output)
 	}
 
 	return &DirMetadata{

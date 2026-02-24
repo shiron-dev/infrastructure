@@ -14,6 +14,15 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+var (
+	errTestManifestNotFound  = errors.New("manifest not found")
+	errTestRemoteFileMissing = errors.New("remote file missing")
+	errTestNotFound          = errors.New("not found")
+	errTestExitStatus1       = errors.New("exit status 1")
+	errTestStatFailed        = errors.New("stat failed")
+	errTestNotExist          = errors.New("not exist")
+)
+
 type mockLocalCommandRunner struct {
 	run func(name string, args []string, workdir string) (string, error)
 }
@@ -647,22 +656,22 @@ func TestBuildPlanWithDeps_UsesInjectedDependencies(t *testing.T) {
 	)
 	client.EXPECT().
 		ReadFile("/srv/compose/grafana/.cmt-manifest.json").
-		Return(nil, errors.New("manifest not found"))
+		Return(nil, errTestManifestNotFound)
 	client.EXPECT().
 		ReadFile("/srv/compose/grafana/compose.yml").
-		Return(nil, errors.New("remote file missing"))
+		Return(nil, errTestRemoteFileMissing)
 	client.EXPECT().
 		RunCommand(
 			"/srv/compose/grafana",
 			"docker compose config --services 2>/dev/null",
 		).
-		Return("", errors.New("not found"))
+		Return("", errTestNotFound)
 	client.EXPECT().
 		RunCommand(
 			"/srv/compose/grafana",
 			"docker compose ps --services --filter status=running 2>/dev/null",
 		).
-		Return("", errors.New("not found"))
+		Return("", errTestNotFound)
 	client.EXPECT().Close().Return(nil)
 
 	runner := mockLocalCommandRunner{
@@ -754,10 +763,10 @@ func TestBuildPlanWithDeps_ComposeValidationFails(t *testing.T) {
 	)
 	client.EXPECT().
 		ReadFile("/srv/compose/grafana/.cmt-manifest.json").
-		Return(nil, errors.New("manifest not found"))
+		Return(nil, errTestManifestNotFound)
 	client.EXPECT().
 		ReadFile("/srv/compose/grafana/compose.yml").
-		Return(nil, errors.New("remote file missing"))
+		Return(nil, errTestRemoteFileMissing)
 	client.EXPECT().Close().Return(nil)
 
 	_, err = BuildPlanWithDeps(cfg, nil, nil, PlanDependencies{
@@ -765,7 +774,7 @@ func TestBuildPlanWithDeps_ComposeValidationFails(t *testing.T) {
 		SSHResolver:   resolver,
 		LocalRunner: mockLocalCommandRunner{
 			run: func(string, []string, string) (string, error) {
-				return "compose is invalid", errors.New("exit status 1")
+				return "compose is invalid", errTestExitStatus1
 			},
 		},
 	})
@@ -1672,20 +1681,20 @@ func TestBuildPlanWithDeps_ProgressOutput(t *testing.T) {
 		resolver.EXPECT().Resolve(gomock.Any(), "", hostDir).Return(nil),
 		factory.EXPECT().NewClient(gomock.AssignableToTypeOf(config.HostEntry{})).Return(client, nil),
 	)
-	client.EXPECT().ReadFile("/srv/compose/grafana/.cmt-manifest.json").Return(nil, errors.New("not found"))
-	client.EXPECT().ReadFile("/srv/compose/grafana/compose.yml").Return(nil, errors.New("not found"))
+	client.EXPECT().ReadFile("/srv/compose/grafana/.cmt-manifest.json").Return(nil, errTestNotFound)
+	client.EXPECT().ReadFile("/srv/compose/grafana/compose.yml").Return(nil, errTestNotFound)
 	client.EXPECT().
 		RunCommand(
 			"/srv/compose/grafana",
 			"docker compose config --services 2>/dev/null",
 		).
-		Return("", errors.New("not found"))
+		Return("", errTestNotFound)
 	client.EXPECT().
 		RunCommand(
 			"/srv/compose/grafana",
 			"docker compose ps --services --filter status=running 2>/dev/null",
 		).
-		Return("", errors.New("not found"))
+		Return("", errTestNotFound)
 	client.EXPECT().Close().Return(nil)
 
 	var progressBuf bytes.Buffer
@@ -1779,20 +1788,20 @@ func TestBuildPlanWithDeps_NoProgressWhenWriterNil(t *testing.T) {
 		resolver.EXPECT().Resolve(gomock.Any(), "", hostDir).Return(nil),
 		factory.EXPECT().NewClient(gomock.AssignableToTypeOf(config.HostEntry{})).Return(client, nil),
 	)
-	client.EXPECT().ReadFile("/srv/compose/grafana/.cmt-manifest.json").Return(nil, errors.New("not found"))
-	client.EXPECT().ReadFile("/srv/compose/grafana/compose.yml").Return(nil, errors.New("not found"))
+	client.EXPECT().ReadFile("/srv/compose/grafana/.cmt-manifest.json").Return(nil, errTestNotFound)
+	client.EXPECT().ReadFile("/srv/compose/grafana/compose.yml").Return(nil, errTestNotFound)
 	client.EXPECT().
 		RunCommand(
 			"/srv/compose/grafana",
 			"docker compose config --services 2>/dev/null",
 		).
-		Return("", errors.New("not found"))
+		Return("", errTestNotFound)
 	client.EXPECT().
 		RunCommand(
 			"/srv/compose/grafana",
 			"docker compose ps --services --filter status=running 2>/dev/null",
 		).
-		Return("", errors.New("not found"))
+		Return("", errTestNotFound)
 	client.EXPECT().Close().Return(nil)
 
 	_, err = BuildPlanWithDeps(cfg, nil, nil, PlanDependencies{
@@ -2158,7 +2167,7 @@ func TestComputeDirDrift_StatError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	client := remote.NewMockRemoteClient(ctrl)
 
-	client.EXPECT().StatDirMetadata("/srv/data").Return(nil, errors.New("stat failed"))
+	client.EXPECT().StatDirMetadata("/srv/data").Return(nil, errTestStatFailed)
 
 	plan := &DirPlan{
 		RemotePath: "/srv/data",
@@ -2188,7 +2197,7 @@ func TestBuildDirPlans_WithDriftDetection(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	client := remote.NewMockRemoteClient(ctrl)
 
-	client.EXPECT().Stat("/srv/compose/new_dir").Return(nil, errors.New("not exist"))
+	client.EXPECT().Stat("/srv/compose/new_dir").Return(nil, errTestNotExist)
 	client.EXPECT().Stat("/srv/compose/existing_ok").Return(nil, nil)
 	client.EXPECT().StatDirMetadata("/srv/compose/existing_ok").Return(&remote.DirMetadata{
 		Permission: "750",
