@@ -144,6 +144,8 @@ type DirPlan struct {
 	Permission       string
 	Owner            string
 	Group            string
+	Become           bool
+	BecomeUser       string
 	ActualPermission string
 	ActualOwner      string
 	ActualGroup      string
@@ -944,6 +946,8 @@ func buildDirPlans(directories []config.DirConfig, remoteDir string, client remo
 			Permission:       directory.Permission,
 			Owner:            directory.Owner,
 			Group:            directory.Group,
+			Become:           directory.Become,
+			BecomeUser:       directory.BecomeUser,
 			ActualPermission: "",
 			ActualOwner:      "",
 			ActualGroup:      "",

@@ -528,7 +528,10 @@ func applyDirPermission(dirPlan DirPlan, client remote.RemoteClient) error {
 		return nil
 	}
 
-	cmd := fmt.Sprintf("chmod %s '%s'", dirPlan.Permission, dirPlan.RemotePath)
+	cmd := buildDirMetadataCommand(
+		dirPlan,
+		fmt.Sprintf("chmod %s %s", dirPlan.Permission, shellQuote(dirPlan.RemotePath)),
+	)
 
 	_, err := client.RunCommand("", cmd)
 	if err != nil {
@@ -548,7 +551,10 @@ func applyDirOwnership(dirPlan DirPlan, client remote.RemoteClient) error {
 		ownership += ":" + dirPlan.Group
 	}
 
-	cmd := fmt.Sprintf("chown %s '%s'", ownership, dirPlan.RemotePath)
+	cmd := buildDirMetadataCommand(
+		dirPlan,
+		fmt.Sprintf("chown %s %s", ownership, shellQuote(dirPlan.RemotePath)),
+	)
 
 	_, err := client.RunCommand("", cmd)
 	if err != nil {
@@ -556,6 +562,22 @@ func applyDirOwnership(dirPlan DirPlan, client remote.RemoteClient) error {
 	}
 
 	return nil
+}
+
+func buildDirMetadataCommand(dirPlan DirPlan, baseCommand string) string {
+	if !dirPlan.Become {
+		return baseCommand
+	}
+
+	if dirPlan.BecomeUser == "" || dirPlan.BecomeUser == "root" {
+		return "sudo -n " + baseCommand
+	}
+
+	return fmt.Sprintf("sudo -n -u %s %s", shellQuote(dirPlan.BecomeUser), baseCommand)
+}
+
+func shellQuote(input string) string {
+	return "'" + strings.ReplaceAll(input, "'", "'\\''") + "'"
 }
 
 func syncProjectFiles(

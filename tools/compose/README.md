@@ -111,7 +111,7 @@ cmt は常に `ssh -G <host>` を実行して SSH 接続パラメータ
 Docker Compose の bind mount 用ディレクトリを事前に用意する用途を想定しています。
 
 文字列で指定する場合はパスのみが設定されます（従来の形式）。
-属性を指定する場合は `- <path>:` の下に `permission`（8進数文字列）、`owner`、`group` を指定します。
+属性を指定する場合は `- <path>:` の下に `permission`（8進数文字列）、`owner`、`group`、`become`、`becomeUser` を指定します。
 
 ```yaml
 projects:
@@ -123,12 +123,17 @@ projects:
         permission: "0755"
         owner: influxdb
         group: influxdb
+        become: true                            # 権限変更コマンドを sudo 経由で実行
+        # becomeUser: root                      # 未指定時は root
       - vmdata:
         permission: "0700"
 ```
 
 `permission` を指定した場合はディレクトリ作成後に `chmod` を実行します。
 `owner` または `group` を指定した場合は `chown` を実行します。
+
+デフォルトでは（`become` 未指定または `false`）SSH 接続ユーザーの権限で実行されます。
+`become: true` を指定すると `sudo` を使って実行され、`becomeUser` 未指定時は `root`、指定時はそのユーザーで実行されます。
 
 `cmt plan` では各ディレクトリの状態（`create` / `exists`）と設定された属性が表示されます。
 

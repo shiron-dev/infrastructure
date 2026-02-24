@@ -736,6 +736,8 @@ projects:
         permission: "0755"
         owner: influxdb
         group: influxdb
+        become: true
+        becomeUser: root
 `
 
 	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
@@ -767,6 +769,14 @@ projects:
 
 	if dirs[0].Group != "influxdb" {
 		t.Errorf("Group = %q, want %q", dirs[0].Group, "influxdb")
+	}
+
+	if !dirs[0].Become {
+		t.Error("Become should be true")
+	}
+
+	if dirs[0].BecomeUser != "root" {
+		t.Errorf("BecomeUser = %q, want %q", dirs[0].BecomeUser, "root")
 	}
 }
 
@@ -930,6 +940,12 @@ func TestValidateDirConfigs(t *testing.T) {
 			name:    "nil dirs",
 			dirs:    nil,
 			wantErr: false,
+		},
+		{
+			name:    "become user without become",
+			dirs:    []DirConfig{{Path: "data", BecomeUser: "root"}},
+			wantErr: true,
+			errMsg:  "becomeUser requires become=true",
 		},
 	}
 
