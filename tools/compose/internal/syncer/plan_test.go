@@ -1842,6 +1842,8 @@ func TestComputeDirDrift_NoDrift(t *testing.T) {
 		Permission: "750",
 		Owner:      "app",
 		Group:      "app",
+		OwnerID:    "1000",
+		GroupID:    "1000",
 	}, nil)
 
 	plan := &DirPlan{
@@ -1850,6 +1852,43 @@ func TestComputeDirDrift_NoDrift(t *testing.T) {
 		Permission: "0750",
 		Owner:      "app",
 		Group:      "app",
+	}
+
+	computeDirDrift(plan, client)
+
+	if plan.Action != ActionUnchanged {
+		t.Errorf("Action = %v, want ActionUnchanged", plan.Action)
+	}
+
+	if plan.NeedsPermChange {
+		t.Error("NeedsPermChange should be false")
+	}
+
+	if plan.NeedsOwnerChange {
+		t.Error("NeedsOwnerChange should be false")
+	}
+}
+
+func TestComputeDirDrift_OwnerGroupNoDrift_WhenDesiredUsesIDs(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	client.EXPECT().StatDirMetadata("/srv/data").Return(&remote.DirMetadata{
+		Permission: "750",
+		Owner:      "opc",
+		Group:      "opc",
+		OwnerID:    "1000",
+		GroupID:    "1000",
+	}, nil)
+
+	plan := &DirPlan{
+		RemotePath: "/srv/data",
+		Exists:     true,
+		Permission: "0750",
+		Owner:      "1000",
+		Group:      "1000",
 	}
 
 	computeDirDrift(plan, client)
