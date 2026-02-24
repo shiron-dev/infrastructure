@@ -19,6 +19,7 @@ jobs:
       - check-symlinks
       # - dockerfile-lint
       - yaml-lint
+      - compose-config-schema-check
       - markdown-lint
       - shell-lint
       - action-lint
@@ -140,6 +141,30 @@ jobs:
         with:
           level: warning
           yamllint_flags: "-c .yamllint ."
+
+  compose-config-schema-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
+        with:
+          go-version-file: tools/compose/go.mod
+          cache-dependency-path: tools/compose/go.sum
+      - name: Install check-jsonschema
+        run: python -m pip install --upgrade check-jsonschema
+      - name: Generate cmt schemas
+        working-directory: tools/compose
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/cmt-schemas
+          go run . schema cmt > /tmp/cmt-schemas/cmt.schema.json
+          go run . schema host > /tmp/cmt-schemas/host.schema.json
+      - name: Validate compose config YAML files
+        run: |
+          set -euo pipefail
+          python -m check_jsonschema --schemafile /tmp/cmt-schemas/cmt.schema.json compose/config.yml
+          python -m check_jsonschema --schemafile /tmp/cmt-schemas/host.schema.json compose/hosts/*/host.yml
 
   markdown-lint:
     runs-on: ubuntu-latest
