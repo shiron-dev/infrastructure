@@ -105,6 +105,7 @@ type ComposeActionType int
 const (
 	ComposeNoChange ComposeActionType = iota
 	ComposeStartServices
+	ComposeRecreateServices
 	ComposeStopServices
 )
 
@@ -220,8 +221,9 @@ func (p *SyncPlan) DirStats() (int, int, int) {
 	return toCreateCount, toUpdateCount, existingCount
 }
 
-func (p *SyncPlan) ComposeStats() (int, int) {
+func (p *SyncPlan) ComposeStats() (int, int, int) {
 	startCount := 0
+	recreateCount := 0
 	stopCount := 0
 
 	for _, hostPlan := range p.HostPlans {
@@ -235,13 +237,15 @@ func (p *SyncPlan) ComposeStats() (int, int) {
 				continue
 			case ComposeStartServices:
 				startCount += len(projectPlan.Compose.Services)
+			case ComposeRecreateServices:
+				recreateCount += len(projectPlan.Compose.Services)
 			case ComposeStopServices:
 				stopCount += len(projectPlan.Compose.Services)
 			}
 		}
 	}
 
-	return startCount, stopCount
+	return startCount, recreateCount, stopCount
 }
 
 func (p *SyncPlan) HasChanges() bool {
@@ -299,9 +303,13 @@ func (p *SyncPlan) Print(writer io.Writer) {
 		_, _ = fmt.Fprintf(writer, ", %s dir(s) to update", style.warning(strconv.Itoa(dirUpdate)))
 	}
 
-	composeStart, composeStop := p.ComposeStats()
+	composeStart, composeRecreate, composeStop := p.ComposeStats()
 	if composeStart > 0 {
 		_, _ = fmt.Fprintf(writer, ", %s service(s) to start", style.success(strconv.Itoa(composeStart)))
+	}
+
+	if composeRecreate > 0 {
+		_, _ = fmt.Fprintf(writer, ", %s service(s) to recreate", style.warning(strconv.Itoa(composeRecreate)))
 	}
 
 	if composeStop > 0 {
@@ -381,6 +389,9 @@ func printComposePlan(writer io.Writer, style outputStyle, compose *ComposePlan)
 		case ComposeStartServices:
 			_, _ = fmt.Fprintf(writer, "      %s %s %s\n",
 				style.actionSymbol(ActionAdd), svc, style.success("(start)"))
+		case ComposeRecreateServices:
+			_, _ = fmt.Fprintf(writer, "      %s %s %s\n",
+				style.actionSymbol(ActionModify), svc, style.warning("(recreate)"))
 		case ComposeStopServices:
 			_, _ = fmt.Fprintf(writer, "      %s %s %s\n",
 				style.actionSymbol(ActionDelete), svc, style.danger("(stop)"))
@@ -806,7 +817,8 @@ func buildProjectPlanForHost(
 		return ProjectPlan{}, err
 	}
 
-	composePlan := buildComposePlan(resolved.ComposeAction, remoteDir, client)
+	hasFileChanges := projectFilesOrDirsChanged(filePlans, dirPlans)
+	composePlan := buildComposePlan(resolved.ComposeAction, remoteDir, client, hasFileChanges)
 
 	return ProjectPlan{
 		ProjectName:     project,
@@ -1019,7 +1031,7 @@ func permissionsMatch(desired, actual string) bool {
 	return dVal == aVal
 }
 
-func buildComposePlan(action string, remoteDir string, client remote.RemoteClient) *ComposePlan {
+func buildComposePlan(action string, remoteDir string, client remote.RemoteClient, hasFileChanges bool) *ComposePlan {
 	plan := &ComposePlan{
 		DesiredAction: action,
 		ActionType:    ComposeNoChange,
@@ -1031,10 +1043,15 @@ func buildComposePlan(action string, remoteDir string, client remote.RemoteClien
 		defined := queryComposeServices(client, remoteDir)
 		running := queryRunningServices(client, remoteDir)
 
-		stopped := diffServices(defined, running)
-		if len(stopped) > 0 {
-			plan.ActionType = ComposeStartServices
-			plan.Services = stopped
+		if hasFileChanges && len(defined) > 0 {
+			plan.ActionType = ComposeRecreateServices
+			plan.Services = defined
+		} else {
+			stopped := diffServices(defined, running)
+			if len(stopped) > 0 {
+				plan.ActionType = ComposeStartServices
+				plan.Services = stopped
+			}
 		}
 	case config.ComposeActionDown:
 		running := queryRunningServices(client, remoteDir)
@@ -1098,6 +1115,22 @@ func diffServices(all, running []string) []string {
 	}
 
 	return stopped
+}
+
+func projectFilesOrDirsChanged(filePlans []FilePlan, dirPlans []DirPlan) bool {
+	for _, fp := range filePlans {
+		if fp.Action != ActionUnchanged {
+			return true
+		}
+	}
+
+	for _, dp := range dirPlans {
+		if dp.Action != ActionUnchanged {
+			return true
+		}
+	}
+
+	return false
 }
 
 func buildFilePlans(

@@ -400,10 +400,11 @@ func printApplySummary(plan *SyncPlan, writer io.Writer, style outputStyle) {
 		style.danger(strconv.Itoa(deleteCount)),
 	)
 
-	composeStart, composeStop := plan.ComposeStats()
-	if composeStart > 0 || composeStop > 0 {
-		_, _ = fmt.Fprintf(writer, ", compose: %s started, %s stopped",
+	composeStart, composeRecreate, composeStop := plan.ComposeStats()
+	if composeStart > 0 || composeRecreate > 0 || composeStop > 0 {
+		_, _ = fmt.Fprintf(writer, ", compose: %s started, %s recreated, %s stopped",
 			style.success(strconv.Itoa(composeStart)),
+			style.warning(strconv.Itoa(composeRecreate)),
 			style.danger(strconv.Itoa(composeStop)),
 		)
 	}
@@ -719,6 +720,8 @@ func composeCommand(projectPlan ProjectPlan) (string, bool) {
 		return "", false
 	case ComposeStartServices:
 		return "docker compose up -d", true
+	case ComposeRecreateServices:
+		return "docker compose up -d --force-recreate", true
 	case ComposeStopServices:
 		cmd := "docker compose down"
 		if projectPlan.RemoveOrphans {

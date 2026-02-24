@@ -456,6 +456,72 @@ func TestApplyWithDeps_ComposeUp(t *testing.T) {
 	}
 }
 
+func TestApplyWithDeps_ComposeRecreate(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "server1"},
+				Projects: []ProjectPlan{
+					{
+						ProjectName:   "grafana",
+						RemoteDir:     "/srv/grafana",
+						ComposeAction: "up",
+						Compose: &ComposePlan{
+							DesiredAction: "up",
+							ActionType:    ComposeRecreateServices,
+							Services:      []string{"grafana", "influxdb"},
+						},
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								LocalPath:    "/tmp/compose.yml",
+								RemotePath:   "/srv/grafana/compose.yml",
+								Action:       ActionModify,
+								LocalData:    []byte("services: {web: {}}"),
+								RemoteData:   []byte("services: {}"),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	factory := remote.NewMockClientFactory(ctrl)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	gomock.InOrder(
+		factory.EXPECT().
+			NewClient(config.HostEntry{Name: "server1"}).
+			Return(client, nil),
+		client.EXPECT().WriteFile("/srv/grafana/compose.yml", gomock.Any()).Return(nil),
+		client.EXPECT().WriteFile("/srv/grafana/.cmt-manifest.json", gomock.Any()).Return(nil),
+		client.EXPECT().RunCommand("/srv/grafana", "docker compose up -d --force-recreate").Return("ok", nil),
+		client.EXPECT().Close().Return(nil),
+	)
+
+	var out bytes.Buffer
+
+	err := ApplyWithDeps(&config.CmtConfig{}, plan, true, false, &out, ApplyDependencies{
+		ClientFactory: factory,
+	})
+	if err != nil {
+		t.Fatalf("ApplyWithDeps: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "Apply complete!") {
+		t.Fatalf("expected complete output, got %q", output)
+	}
+
+	if !strings.Contains(output, "force-recreate") {
+		t.Fatalf("expected force-recreate in compose output, got %q", output)
+	}
+}
+
 func TestApplyWithDeps_ComposeDown(t *testing.T) {
 	t.Parallel()
 

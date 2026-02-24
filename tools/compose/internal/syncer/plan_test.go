@@ -536,7 +536,7 @@ func TestSyncPlan_Print_FullPlan(t *testing.T) {
 					{
 						ProjectName:     "grafana",
 						RemoteDir:       "/opt/compose/grafana",
-						PostSyncCommand: "docker compose up -d",
+						PostSyncCommand: "echo done",
 						Dirs: []DirPlan{
 							{RelativePath: "data", Exists: false, Action: ActionAdd},
 						},
@@ -1209,6 +1209,14 @@ func TestComposePlan_HasChanges(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "recreate with services",
+			plan: &ComposePlan{
+				ActionType: ComposeRecreateServices,
+				Services:   []string{"web", "db"},
+			},
+			want: true,
+		},
+		{
 			name: "ignore action keeps no changes",
 			plan: &ComposePlan{
 				DesiredAction: config.ComposeActionIgnore,
@@ -1235,7 +1243,7 @@ func TestBuildComposePlan_IgnoreAction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	client := remote.NewMockRemoteClient(ctrl)
 
-	composePlan := buildComposePlan(config.ComposeActionIgnore, "/srv/compose/grafana", client)
+	composePlan := buildComposePlan(config.ComposeActionIgnore, "/srv/compose/grafana", client, false)
 	if composePlan == nil {
 		t.Fatal("compose plan should not be nil")
 	}
@@ -1246,6 +1254,64 @@ func TestBuildComposePlan_IgnoreAction(t *testing.T) {
 
 	if composePlan.HasChanges() {
 		t.Fatal("ignore action should not produce compose state changes")
+	}
+}
+
+func TestBuildComposePlan_UpWithFileChanges(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	client.EXPECT().
+		RunCommand("/srv/compose/grafana", "docker compose config --services 2>/dev/null").
+		Return("grafana\ninfluxdb\n", nil)
+	client.EXPECT().
+		RunCommand("/srv/compose/grafana", "docker compose ps --services --filter status=running 2>/dev/null").
+		Return("grafana\ninfluxdb\n", nil)
+
+	composePlan := buildComposePlan(config.ComposeActionUp, "/srv/compose/grafana", client, true)
+	if composePlan == nil {
+		t.Fatal("compose plan should not be nil")
+	}
+
+	if composePlan.ActionType != ComposeRecreateServices {
+		t.Fatalf("ActionType = %v, want ComposeRecreateServices", composePlan.ActionType)
+	}
+
+	if len(composePlan.Services) != 2 {
+		t.Fatalf("Services = %v, want 2 services", composePlan.Services)
+	}
+
+	if !composePlan.HasChanges() {
+		t.Fatal("recreate should produce compose state changes")
+	}
+}
+
+func TestBuildComposePlan_UpWithoutFileChanges(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	client.EXPECT().
+		RunCommand("/srv/compose/grafana", "docker compose config --services 2>/dev/null").
+		Return("grafana\ninfluxdb\n", nil)
+	client.EXPECT().
+		RunCommand("/srv/compose/grafana", "docker compose ps --services --filter status=running 2>/dev/null").
+		Return("grafana\ninfluxdb\n", nil)
+
+	composePlan := buildComposePlan(config.ComposeActionUp, "/srv/compose/grafana", client, false)
+	if composePlan == nil {
+		t.Fatal("compose plan should not be nil")
+	}
+
+	if composePlan.ActionType != ComposeNoChange {
+		t.Fatalf("ActionType = %v, want ComposeNoChange (all services running)", composePlan.ActionType)
+	}
+
+	if composePlan.HasChanges() {
+		t.Fatal("no file changes + all running should not produce compose state changes")
 	}
 }
 
@@ -1305,9 +1371,13 @@ func TestComposeStats(t *testing.T) {
 		},
 	}
 
-	start, stop := plan.ComposeStats()
+	start, recreate, stop := plan.ComposeStats()
 	if start != 2 {
 		t.Errorf("start = %d, want 2", start)
+	}
+
+	if recreate != 0 {
+		t.Errorf("recreate = %d, want 0", recreate)
 	}
 
 	if stop != 1 {
@@ -1471,6 +1541,94 @@ func TestSyncPlan_Print_ComposeServices(t *testing.T) {
 
 	if !strings.Contains(output, "service(s) to start") {
 		t.Error("summary should mention services to start")
+	}
+}
+
+func TestSyncPlan_Print_ComposeRecreateServices(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{
+					Name: "server1",
+					User: "deploy",
+					Host: "192.168.1.1",
+					Port: 22,
+				},
+				Projects: []ProjectPlan{
+					{
+						ProjectName:   "grafana",
+						RemoteDir:     "/opt/compose/grafana",
+						ComposeAction: "up",
+						Compose: &ComposePlan{
+							DesiredAction: "up",
+							ActionType:    ComposeRecreateServices,
+							Services:      []string{"grafana", "influxdb"},
+						},
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								Action:       ActionModify,
+								LocalData:    []byte("services: {web: {}}"),
+								RemoteData:   []byte("services: {}"),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+
+	plan.Print(&buf)
+	output := buf.String()
+
+	if !strings.Contains(output, "(recreate)") {
+		t.Error("output should show (recreate) for force-recreate action")
+	}
+
+	if !strings.Contains(output, "service(s) to recreate") {
+		t.Error("summary should mention services to recreate")
+	}
+}
+
+func TestComposeStats_WithRecreate(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Projects: []ProjectPlan{
+					{
+						Compose: &ComposePlan{
+							ActionType: ComposeRecreateServices,
+							Services:   []string{"web", "db"},
+						},
+					},
+					{
+						Compose: &ComposePlan{
+							ActionType: ComposeStopServices,
+							Services:   []string{"redis"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	start, recreate, stop := plan.ComposeStats()
+	if start != 0 {
+		t.Errorf("start = %d, want 0", start)
+	}
+
+	if recreate != 2 {
+		t.Errorf("recreate = %d, want 2", recreate)
+	}
+
+	if stop != 1 {
+		t.Errorf("stop = %d, want 1", stop)
 	}
 }
 

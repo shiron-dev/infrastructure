@@ -8,7 +8,6 @@ beforeApplyHooks:
 
 defaults:
   remotePath: /opt/compose
-  postSyncCommand: docker compose up -d
   composeAction: up
 
 hosts:
