@@ -4,10 +4,11 @@ services:
     container_name: snipeit-db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: "{{ .db_root_password }}"
-      MYSQL_DATABASE: snipeit
-      MYSQL_USER: snipeit
-      MYSQL_PASSWORD: "{{ .db_password }}"
+      MARIADB_ROOT_PASSWORD: "{{ .db_root_password }}"
+      MARIADB_DATABASE: snipeit
+      MARIADB_USER: snipeit
+      MARIADB_PASSWORD: "{{ .db_password }}"
+    user: "999:999"
     volumes:
       - ./db_data:/var/lib/mysql
     security_opt:
@@ -15,7 +16,7 @@ services:
     cap_drop:
       - ALL
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
