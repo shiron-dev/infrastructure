@@ -35,7 +35,7 @@ func TestParseDirStatOutput(t *testing.T) {
 		},
 		{
 			name:    "too many fields",
-			output:  "755 root extra",
+			output:  "755 root wheel extra",
 			wantErr: true,
 		},
 		{
