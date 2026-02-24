@@ -10,6 +10,13 @@ import (
 )
 
 var ErrUnknownSchemaType = errors.New("unknown schema type")
+var (
+	ErrHostSchemaMissingDefs                 = errors.New("host schema compatibility patch failed: missing $defs")
+	ErrHostSchemaMissingHostConfig           = errors.New("host schema compatibility patch failed: missing HostConfig")
+	ErrHostSchemaMissingHostConfigProperties = errors.New("host schema compatibility patch failed: missing HostConfig.properties")
+	ErrHostSchemaMissingProjects             = errors.New("host schema compatibility patch failed: missing HostConfig.properties.projects")
+	ErrHostSchemaMissingAdditionalProperties = errors.New("host schema compatibility patch failed: missing projects.additionalProperties")
+)
 
 func SchemaKinds() []string {
 	return []string{"cmt", "host", "hook-before-plan", "hook-before-apply-prompt", "hook-before-apply"}
@@ -100,27 +107,27 @@ func marshalSchemaWithCompatibility(kind string, schema any) ([]byte, error) {
 func allowNullHostProjectOverrides(schemaDoc map[string]any) error {
 	defs, ok := schemaDoc["$defs"].(map[string]any)
 	if !ok {
-		return errors.New("host schema compatibility patch failed: missing $defs")
+		return ErrHostSchemaMissingDefs
 	}
 
 	hostConfigDef, ok := defs["HostConfig"].(map[string]any)
 	if !ok {
-		return errors.New("host schema compatibility patch failed: missing HostConfig")
+		return ErrHostSchemaMissingHostConfig
 	}
 
 	properties, ok := hostConfigDef["properties"].(map[string]any)
 	if !ok {
-		return errors.New("host schema compatibility patch failed: missing HostConfig.properties")
+		return ErrHostSchemaMissingHostConfigProperties
 	}
 
 	projects, ok := properties["projects"].(map[string]any)
 	if !ok {
-		return errors.New("host schema compatibility patch failed: missing HostConfig.properties.projects")
+		return ErrHostSchemaMissingProjects
 	}
 
 	projectConfigSchema, ok := projects["additionalProperties"]
 	if !ok {
-		return errors.New("host schema compatibility patch failed: missing projects.additionalProperties")
+		return ErrHostSchemaMissingAdditionalProperties
 	}
 
 	projects["additionalProperties"] = map[string]any{
