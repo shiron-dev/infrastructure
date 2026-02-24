@@ -10,18 +10,23 @@ projects:
       - grafana_storage:
         owner: 472
         group: 472
+        become: true
       - grafana_conf/provisioning/datasources:
         owner: 1000
         group: 1000
+        become: true
       - influxdb_data:
         owner: 1000
         group: 1000
+        become: true
       - influxdb_config:
         owner: 1000
         group: 1000
+        become: true
       - vmdata:
         owner: 0
         group: 0
+        become: true
 
   n8n:
     remotePath: /var
@@ -29,18 +34,23 @@ projects:
       - n8n_data:
         owner: 1000
         group: 1000
+        become: true
       - local-files:
         owner: 1000
         group: 1000
+        become: true
       - rag:
         owner: 1000
         group: 1000
+        become: true
       - postgres_data:
         owner: 999
         group: 999
+        become: true
       - redis_data:
         owner: 999
         group: 999
+        become: true
 
   portainer:
     remotePath: /var
@@ -48,6 +58,7 @@ projects:
       - portainer_data:
         owner: 0
         group: 0
+        become: true
 
   discord-webhook:
 
@@ -56,9 +67,12 @@ projects:
       - db_data:
         owner: 999
         group: 999
+        become: true
       - redis_data:
         owner: 999
         group: 999
+        become: true
       - snipeit_data:
         owner: 10000
         group: 50
+        become: true
