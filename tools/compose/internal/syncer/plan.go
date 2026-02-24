@@ -31,6 +31,12 @@ type PlanDependencies struct {
 	ProgressWriter io.Writer
 }
 
+var (
+	errNoProjectsFound  = errors.New("no projects found")
+	errNoHostsMatched   = errors.New("no hosts matched filter")
+	errRemotePathNotSet = errors.New("remotePath is not set")
+)
+
 type LocalCommandRunner interface {
 	Run(name string, args []string, workdir string) (string, error)
 }
@@ -527,12 +533,12 @@ func BuildPlanWithDeps(
 
 	projects := config.FilterProjects(allProjects, projectFilter)
 	if len(projects) == 0 {
-		return nil, fmt.Errorf("no projects found (filter: %v)", projectFilter)
+		return nil, fmt.Errorf("%w (filter: %v)", errNoProjectsFound, projectFilter)
 	}
 
 	hosts := config.FilterHosts(cfg.Hosts, hostFilter)
 	if len(hosts) == 0 {
-		return nil, fmt.Errorf("no hosts matched filter %v", hostFilter)
+		return nil, fmt.Errorf("%w %v", errNoHostsMatched, hostFilter)
 	}
 
 	progress.planStart(len(hosts), len(projects))
@@ -789,7 +795,7 @@ func buildProjectPlanForHost(
 ) (ProjectPlan, error) {
 	resolved := config.ResolveProjectConfig(cfg.Defaults, hostCfg, project)
 	if resolved.RemotePath == "" {
-		return ProjectPlan{}, fmt.Errorf("remotePath is not set for host %q, project %q", host.Name, project)
+		return ProjectPlan{}, fmt.Errorf("%w for host %q, project %q", errRemotePathNotSet, host.Name, project)
 	}
 
 	remoteDir := path.Join(resolved.RemotePath, project)

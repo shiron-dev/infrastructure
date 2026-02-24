@@ -22,6 +22,11 @@ type ApplyDependencies struct {
 	ConfigPath    string
 }
 
+var (
+	errHookFailed        = errors.New("hook failed")
+	errUnknownHookResult = errors.New("unknown hook result")
+)
+
 func Apply(cfg *config.CmtConfig, plan *SyncPlan, autoApprove bool, w io.Writer) error {
 	var dependencies ApplyDependencies
 
@@ -228,10 +233,10 @@ func executeApplyHook(
 
 		return true, nil
 	case hookError:
-		return false, errors.New(hookName + " hook failed")
+		return false, fmt.Errorf("%w: %s", errHookFailed, hookName)
 	}
 
-	return false, errors.New("unknown hook result")
+	return false, errUnknownHookResult
 }
 
 func confirmApplyOrCancel(autoApprove bool, input io.Reader, writer io.Writer, style outputStyle) bool {

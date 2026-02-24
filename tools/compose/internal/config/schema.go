@@ -2,11 +2,14 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 
 	"github.com/invopop/jsonschema"
 )
+
+var ErrUnknownSchemaType = errors.New("unknown schema type")
 
 func SchemaKinds() []string {
 	return []string{"cmt", "host", "hook-before-plan", "hook-before-apply-prompt", "hook-before-apply"}
@@ -37,7 +40,7 @@ func GenerateSchemaJSON(kind string) ([]byte, error) {
 	case "hook-before-apply":
 		target = new(BeforeApplyHookPayload)
 	default:
-		return nil, fmt.Errorf("unknown schema type %q (valid: %v)", kind, SchemaKinds())
+		return nil, fmt.Errorf("%w %q (valid: %v)", ErrUnknownSchemaType, kind, SchemaKinds())
 	}
 
 	reflector := new(jsonschema.Reflector)
