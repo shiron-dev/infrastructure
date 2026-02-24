@@ -27,6 +27,7 @@ services:
     container_name: snipeit-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
+    user: "1000:1000"
     volumes:
       - ./redis_data:/data
     security_opt:
