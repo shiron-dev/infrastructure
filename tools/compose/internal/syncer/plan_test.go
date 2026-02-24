@@ -378,9 +378,10 @@ func TestDirStats(t *testing.T) {
 				Projects: []ProjectPlan{
 					{
 						Dirs: []DirPlan{
-							{RelativePath: "data", Exists: false},
-							{RelativePath: "logs", Exists: true},
-							{RelativePath: "config", Exists: false},
+							{RelativePath: "data", Exists: false, Action: ActionAdd},
+							{RelativePath: "logs", Exists: true, Action: ActionUnchanged},
+							{RelativePath: "config", Exists: false, Action: ActionAdd},
+							{RelativePath: "cache", Exists: true, Action: ActionModify, NeedsPermChange: true},
 						},
 					},
 				},
@@ -388,9 +389,13 @@ func TestDirStats(t *testing.T) {
 		},
 	}
 
-	toCreate, existing := plan.DirStats()
+	toCreate, toUpdate, existing := plan.DirStats()
 	if toCreate != 2 {
 		t.Errorf("toCreate = %d, want 2", toCreate)
+	}
+
+	if toUpdate != 1 {
+		t.Errorf("toUpdate = %d, want 1", toUpdate)
 	}
 
 	if existing != 1 {
@@ -418,7 +423,7 @@ func TestHasChanges(t *testing.T) {
 									{Action: ActionUnchanged},
 								},
 								Dirs: []DirPlan{
-									{Exists: true},
+									{Exists: true, Action: ActionUnchanged},
 								},
 							},
 						},
@@ -438,7 +443,7 @@ func TestHasChanges(t *testing.T) {
 									{Action: ActionUnchanged},
 								},
 								Dirs: []DirPlan{
-									{Exists: false},
+									{Exists: false, Action: ActionAdd},
 								},
 							},
 						},
@@ -458,7 +463,7 @@ func TestHasChanges(t *testing.T) {
 									{Action: ActionUnchanged},
 								},
 								Dirs: []DirPlan{
-									{Exists: true, Permission: "0750"},
+									{Exists: true, Action: ActionModify, Permission: "0750", NeedsPermChange: true},
 								},
 							},
 						},
@@ -466,6 +471,26 @@ func TestHasChanges(t *testing.T) {
 				},
 			},
 			wantChanges: true,
+		},
+		{
+			name: "existing dir no drift",
+			plan: &SyncPlan{
+				HostPlans: []HostPlan{
+					{
+						Projects: []ProjectPlan{
+							{
+								Files: []FilePlan{
+									{Action: ActionUnchanged},
+								},
+								Dirs: []DirPlan{
+									{Exists: true, Action: ActionUnchanged, Permission: "0750"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantChanges: false,
 		},
 	}
 
@@ -513,7 +538,7 @@ func TestSyncPlan_Print_FullPlan(t *testing.T) {
 						RemoteDir:       "/opt/compose/grafana",
 						PostSyncCommand: "docker compose up -d",
 						Dirs: []DirPlan{
-							{RelativePath: "data", Exists: false},
+							{RelativePath: "data", Exists: false, Action: ActionAdd},
 						},
 						Files: []FilePlan{
 							{
@@ -1631,34 +1656,60 @@ func TestFormatDirPlanMeta(t *testing.T) {
 		want string
 	}{
 		{
-			name: "no metadata",
-			plan: DirPlan{RelativePath: "data"},
+			name: "no metadata on add",
+			plan: DirPlan{RelativePath: "data", Action: ActionAdd},
 			want: "",
 		},
 		{
-			name: "permission only",
-			plan: DirPlan{RelativePath: "data", Permission: "0755"},
+			name: "permission on add",
+			plan: DirPlan{RelativePath: "data", Action: ActionAdd, Permission: "0755", NeedsPermChange: true},
 			want: " [mode=0755]",
 		},
 		{
-			name: "owner only",
-			plan: DirPlan{RelativePath: "data", Owner: "app"},
+			name: "owner on add",
+			plan: DirPlan{RelativePath: "data", Action: ActionAdd, Owner: "app", NeedsOwnerChange: true},
 			want: " [owner=app]",
 		},
 		{
-			name: "owner and group",
-			plan: DirPlan{RelativePath: "data", Owner: "app", Group: "staff"},
+			name: "owner and group on add",
+			plan: DirPlan{RelativePath: "data", Action: ActionAdd, Owner: "app", Group: "staff", NeedsOwnerChange: true},
 			want: " [owner=app:staff]",
 		},
 		{
-			name: "group only",
-			plan: DirPlan{RelativePath: "data", Group: "staff"},
+			name: "group only on add",
+			plan: DirPlan{RelativePath: "data", Action: ActionAdd, Group: "staff", NeedsOwnerChange: true},
 			want: " [owner=:staff]",
 		},
 		{
-			name: "all fields",
-			plan: DirPlan{RelativePath: "data", Permission: "0750", Owner: "app", Group: "app"},
+			name: "all fields on add",
+			plan: DirPlan{RelativePath: "data", Action: ActionAdd, Permission: "0750", Owner: "app", Group: "app",
+				NeedsPermChange: true, NeedsOwnerChange: true},
 			want: " [mode=0750, owner=app:app]",
+		},
+		{
+			name: "unchanged shows nothing",
+			plan: DirPlan{RelativePath: "data", Action: ActionUnchanged, Permission: "0750", Owner: "app"},
+			want: "",
+		},
+		{
+			name: "permission drift on modify",
+			plan: DirPlan{RelativePath: "data", Action: ActionModify, Permission: "0750",
+				ActualPermission: "700", NeedsPermChange: true},
+			want: " [mode: 700\u21920750]",
+		},
+		{
+			name: "owner drift on modify",
+			plan: DirPlan{RelativePath: "data", Action: ActionModify, Owner: "app", Group: "app",
+				ActualOwner: "root", ActualGroup: "root", NeedsOwnerChange: true},
+			want: " [owner: root:root\u2192app:app]",
+		},
+		{
+			name: "all drift on modify",
+			plan: DirPlan{RelativePath: "data", Action: ActionModify,
+				Permission: "0750", Owner: "app", Group: "app",
+				ActualPermission: "755", ActualOwner: "root", ActualGroup: "root",
+				NeedsPermChange: true, NeedsOwnerChange: true},
+			want: " [mode: 755\u21920750, owner: root:root\u2192app:app]",
 		},
 	}
 
@@ -1691,8 +1742,17 @@ func TestSyncPlan_Print_DirMetadata(t *testing.T) {
 						ProjectName: "grafana",
 						RemoteDir:   "/opt/compose/grafana",
 						Dirs: []DirPlan{
-							{RelativePath: "data", Exists: false, Permission: "0755", Owner: "app", Group: "app"},
-							{RelativePath: "logs", Exists: true},
+							{
+								RelativePath: "data", Exists: false, Action: ActionAdd,
+								Permission: "0755", Owner: "app", Group: "app",
+								NeedsPermChange: true, NeedsOwnerChange: true,
+							},
+							{RelativePath: "logs", Exists: true, Action: ActionUnchanged},
+							{
+								RelativePath: "cache", Exists: true, Action: ActionModify,
+								Permission: "0750", ActualPermission: "755",
+								NeedsPermChange: true,
+							},
 						},
 						Files: []FilePlan{
 							{
@@ -1712,11 +1772,11 @@ func TestSyncPlan_Print_DirMetadata(t *testing.T) {
 	output := buf.String()
 
 	if !strings.Contains(output, "mode=0755") {
-		t.Error("output should contain mode=0755")
+		t.Error("output should contain mode=0755 for new dir")
 	}
 
 	if !strings.Contains(output, "owner=app:app") {
-		t.Error("output should contain owner=app:app")
+		t.Error("output should contain owner=app:app for new dir")
 	}
 
 	if !strings.Contains(output, "data/") {
@@ -1725,5 +1785,259 @@ func TestSyncPlan_Print_DirMetadata(t *testing.T) {
 
 	if !strings.Contains(output, "logs/") {
 		t.Error("output should show logs dir")
+	}
+
+	if !strings.Contains(output, "(update)") {
+		t.Error("output should show (update) for drifted dir")
+	}
+
+	if !strings.Contains(output, "755\u21920750") {
+		t.Error("output should show permission drift arrow")
+	}
+
+	if !strings.Contains(output, "dir(s) to update") {
+		t.Error("summary should mention dirs to update")
+	}
+}
+
+func TestPermissionsMatch(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desired string
+		actual  string
+		want    bool
+	}{
+		{"0755", "755", true},
+		{"0700", "700", true},
+		{"0750", "750", true},
+		{"0755", "700", false},
+		{"0750", "755", false},
+		{"3755", "3755", true},
+		{"0755", "3755", false},
+		{"bad", "755", false},
+		{"0755", "bad", false},
+		{"same", "same", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desired+"_vs_"+tt.actual, func(t *testing.T) {
+			t.Parallel()
+
+			got := permissionsMatch(tt.desired, tt.actual)
+			if got != tt.want {
+				t.Errorf("permissionsMatch(%q, %q) = %v, want %v", tt.desired, tt.actual, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestComputeDirDrift_NoDrift(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	client.EXPECT().StatDirMetadata("/srv/data").Return(&remote.DirMetadata{
+		Permission: "750",
+		Owner:      "app",
+		Group:      "app",
+	}, nil)
+
+	plan := &DirPlan{
+		RemotePath: "/srv/data",
+		Exists:     true,
+		Permission: "0750",
+		Owner:      "app",
+		Group:      "app",
+	}
+
+	computeDirDrift(plan, client)
+
+	if plan.Action != ActionUnchanged {
+		t.Errorf("Action = %v, want ActionUnchanged", plan.Action)
+	}
+
+	if plan.NeedsPermChange {
+		t.Error("NeedsPermChange should be false")
+	}
+
+	if plan.NeedsOwnerChange {
+		t.Error("NeedsOwnerChange should be false")
+	}
+}
+
+func TestComputeDirDrift_PermissionDrift(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	client.EXPECT().StatDirMetadata("/srv/data").Return(&remote.DirMetadata{
+		Permission: "700",
+		Owner:      "app",
+		Group:      "app",
+	}, nil)
+
+	plan := &DirPlan{
+		RemotePath: "/srv/data",
+		Exists:     true,
+		Permission: "0750",
+		Owner:      "app",
+		Group:      "app",
+	}
+
+	computeDirDrift(plan, client)
+
+	if plan.Action != ActionModify {
+		t.Errorf("Action = %v, want ActionModify", plan.Action)
+	}
+
+	if !plan.NeedsPermChange {
+		t.Error("NeedsPermChange should be true")
+	}
+
+	if plan.NeedsOwnerChange {
+		t.Error("NeedsOwnerChange should be false")
+	}
+}
+
+func TestComputeDirDrift_OwnerDrift(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	client.EXPECT().StatDirMetadata("/srv/data").Return(&remote.DirMetadata{
+		Permission: "750",
+		Owner:      "root",
+		Group:      "root",
+	}, nil)
+
+	plan := &DirPlan{
+		RemotePath: "/srv/data",
+		Exists:     true,
+		Permission: "0750",
+		Owner:      "app",
+		Group:      "app",
+	}
+
+	computeDirDrift(plan, client)
+
+	if plan.Action != ActionModify {
+		t.Errorf("Action = %v, want ActionModify", plan.Action)
+	}
+
+	if plan.NeedsPermChange {
+		t.Error("NeedsPermChange should be false")
+	}
+
+	if !plan.NeedsOwnerChange {
+		t.Error("NeedsOwnerChange should be true")
+	}
+}
+
+func TestComputeDirDrift_NoDesiredMetadata(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	plan := &DirPlan{
+		RemotePath: "/srv/data",
+		Exists:     true,
+	}
+
+	computeDirDrift(plan, client)
+
+	if plan.Action != ActionUnchanged {
+		t.Errorf("Action = %v, want ActionUnchanged", plan.Action)
+	}
+}
+
+func TestComputeDirDrift_StatError(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	client.EXPECT().StatDirMetadata("/srv/data").Return(nil, errors.New("stat failed"))
+
+	plan := &DirPlan{
+		RemotePath: "/srv/data",
+		Exists:     true,
+		Permission: "0750",
+		Owner:      "app",
+	}
+
+	computeDirDrift(plan, client)
+
+	if plan.Action != ActionModify {
+		t.Errorf("Action = %v, want ActionModify (assume drift on error)", plan.Action)
+	}
+
+	if !plan.NeedsPermChange {
+		t.Error("NeedsPermChange should be true on error")
+	}
+
+	if !plan.NeedsOwnerChange {
+		t.Error("NeedsOwnerChange should be true on error")
+	}
+}
+
+func TestBuildDirPlans_WithDriftDetection(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	client.EXPECT().Stat("/srv/compose/new_dir").Return(nil, errors.New("not exist"))
+	client.EXPECT().Stat("/srv/compose/existing_ok").Return(nil, nil)
+	client.EXPECT().StatDirMetadata("/srv/compose/existing_ok").Return(&remote.DirMetadata{
+		Permission: "750",
+		Owner:      "app",
+		Group:      "app",
+	}, nil)
+	client.EXPECT().Stat("/srv/compose/existing_drift").Return(nil, nil)
+	client.EXPECT().StatDirMetadata("/srv/compose/existing_drift").Return(&remote.DirMetadata{
+		Permission: "700",
+		Owner:      "root",
+		Group:      "root",
+	}, nil)
+
+	dirs := []config.DirConfig{
+		{Path: "new_dir", Permission: "0755", Owner: "app", Group: "app"},
+		{Path: "existing_ok", Permission: "0750", Owner: "app", Group: "app"},
+		{Path: "existing_drift", Permission: "0750", Owner: "app", Group: "app"},
+	}
+
+	plans := buildDirPlans(dirs, "/srv/compose", client)
+
+	if len(plans) != 3 {
+		t.Fatalf("len = %d, want 3", len(plans))
+	}
+
+	if plans[0].Action != ActionAdd {
+		t.Errorf("new_dir: Action = %v, want ActionAdd", plans[0].Action)
+	}
+
+	if !plans[0].NeedsPermChange || !plans[0].NeedsOwnerChange {
+		t.Error("new_dir should need both perm and owner changes")
+	}
+
+	if plans[1].Action != ActionUnchanged {
+		t.Errorf("existing_ok: Action = %v, want ActionUnchanged", plans[1].Action)
+	}
+
+	if plans[2].Action != ActionModify {
+		t.Errorf("existing_drift: Action = %v, want ActionModify", plans[2].Action)
+	}
+
+	if !plans[2].NeedsPermChange || !plans[2].NeedsOwnerChange {
+		t.Error("existing_drift should need both perm and owner changes")
+	}
+
+	if plans[2].ActualPermission != "700" {
+		t.Errorf("existing_drift: ActualPermission = %q, want %q", plans[2].ActualPermission, "700")
 	}
 }

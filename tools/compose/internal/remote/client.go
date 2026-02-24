@@ -42,12 +42,19 @@ func (ExecCommandRunner) SCPCombinedOutput(args ...string) ([]byte, error) {
 	return cmd.CombinedOutput()
 }
 
+type DirMetadata struct {
+	Permission string
+	Owner      string
+	Group      string
+}
+
 type RemoteClient interface {
 	ReadFile(remotePath string) ([]byte, error)
 	WriteFile(remotePath string, data []byte) error
 	MkdirAll(dir string) error
 	Remove(remotePath string) error
 	Stat(remotePath string) (fs.FileInfo, error)
+	StatDirMetadata(remotePath string) (*DirMetadata, error)
 	ListFilesRecursive(dir string) ([]string, error)
 	RunCommand(workdir, command string) (string, error)
 	Close() error
@@ -168,6 +175,33 @@ func (c *Client) Stat(remotePath string) (fs.FileInfo, error) {
 	}
 
 	return minimalFileInfo{name: path.Base(remotePath)}, nil
+}
+
+func (c *Client) StatDirMetadata(remotePath string) (*DirMetadata, error) {
+	cmd := fmt.Sprintf("stat -c '%%a %%U %%G' %s", shellQuote(remotePath))
+
+	out, err := c.runSSH(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("stat metadata %s: %w", remotePath, err)
+	}
+
+	return ParseDirStatOutput(string(out))
+}
+
+func ParseDirStatOutput(output string) (*DirMetadata, error) {
+	fields := strings.Fields(strings.TrimSpace(output))
+
+	const expectedFields = 3
+
+	if len(fields) != expectedFields {
+		return nil, fmt.Errorf("unexpected stat output: %q", output)
+	}
+
+	return &DirMetadata{
+		Permission: fields[0],
+		Owner:      fields[1],
+		Group:      fields[2],
+	}, nil
 }
 
 func (c *Client) ListFilesRecursive(dir string) ([]string, error) {

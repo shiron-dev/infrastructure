@@ -143,6 +143,21 @@ func (mr *MockRemoteClientMockRecorder) Stat(remotePath any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stat", reflect.TypeOf((*MockRemoteClient)(nil).Stat), remotePath)
 }
 
+// StatDirMetadata mocks base method.
+func (m *MockRemoteClient) StatDirMetadata(remotePath string) (*DirMetadata, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StatDirMetadata", remotePath)
+	ret0, _ := ret[0].(*DirMetadata)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StatDirMetadata indicates an expected call of StatDirMetadata.
+func (mr *MockRemoteClientMockRecorder) StatDirMetadata(remotePath any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StatDirMetadata", reflect.TypeOf((*MockRemoteClient)(nil).StatDirMetadata), remotePath)
+}
+
 // WriteFile mocks base method.
 func (m *MockRemoteClient) WriteFile(remotePath string, data []byte) error {
 	m.ctrl.T.Helper()
