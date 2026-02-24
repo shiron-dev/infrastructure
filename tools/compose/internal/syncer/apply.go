@@ -427,7 +427,7 @@ func projectHasChanges(projectPlan ProjectPlan) bool {
 
 func projectHasDirChanges(projectPlan ProjectPlan) bool {
 	for _, dirPlan := range projectPlan.Dirs {
-		if !dirPlan.Exists || dirPlan.Permission != "" || dirPlan.Owner != "" || dirPlan.Group != "" {
+		if dirPlan.Action != ActionUnchanged {
 			return true
 		}
 	}
@@ -473,9 +473,13 @@ func applyProjectPlan(
 
 func createMissingDirs(projectPlan ProjectPlan, client remote.RemoteClient, writer io.Writer, style outputStyle) error {
 	for _, dirPlan := range projectPlan.Dirs {
+		if dirPlan.Action == ActionUnchanged {
+			continue
+		}
+
 		actionLabel := "creating dir"
 		if dirPlan.Exists {
-			actionLabel = "ensuring dir"
+			actionLabel = "updating dir"
 		}
 
 		_, _ = fmt.Fprintf(writer, "    %s %s/... ", style.key(actionLabel), dirPlan.RelativePath)
@@ -489,18 +493,22 @@ func createMissingDirs(projectPlan ProjectPlan, client remote.RemoteClient, writ
 			}
 		}
 
-		err := applyDirOwnership(dirPlan, client)
-		if err != nil {
-			_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
+		if dirPlan.NeedsOwnerChange {
+			err := applyDirOwnership(dirPlan, client)
+			if err != nil {
+				_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
-			return err
+				return err
+			}
 		}
 
-		err = applyDirPermission(dirPlan, client)
-		if err != nil {
-			_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
+		if dirPlan.NeedsPermChange {
+			err := applyDirPermission(dirPlan, client)
+			if err != nil {
+				_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
-			return err
+				return err
+			}
 		}
 
 		_, _ = fmt.Fprintln(writer, style.success("done"))
