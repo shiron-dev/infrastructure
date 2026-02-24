@@ -54,10 +54,81 @@ func GenerateSchemaJSON(kind string) ([]byte, error) {
 
 	schema := reflector.Reflect(target)
 
-	data, err := json.MarshalIndent(schema, "", "  ")
+	data, err := marshalSchemaWithCompatibility(kind, schema)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func marshalSchemaWithCompatibility(kind string, schema any) ([]byte, error) {
+	rawData, err := json.Marshal(schema)
 	if err != nil {
 		return nil, fmt.Errorf("marshalling schema: %w", err)
 	}
 
-	return data, nil
+	if kind != "host" {
+		indentedData, marshalErr := json.MarshalIndent(schema, "", "  ")
+		if marshalErr != nil {
+			return nil, fmt.Errorf("marshalling schema: %w", marshalErr)
+		}
+
+		return indentedData, nil
+	}
+
+	var schemaDoc map[string]any
+
+	err = json.Unmarshal(rawData, &schemaDoc)
+	if err != nil {
+		return nil, fmt.Errorf("decoding schema document: %w", err)
+	}
+
+	err = allowNullHostProjectOverrides(schemaDoc)
+	if err != nil {
+		return nil, err
+	}
+
+	indentedData, marshalErr := json.MarshalIndent(schemaDoc, "", "  ")
+	if marshalErr != nil {
+		return nil, fmt.Errorf("marshalling schema: %w", marshalErr)
+	}
+
+	return indentedData, nil
+}
+
+func allowNullHostProjectOverrides(schemaDoc map[string]any) error {
+	defs, ok := schemaDoc["$defs"].(map[string]any)
+	if !ok {
+		return errors.New("host schema compatibility patch failed: missing $defs")
+	}
+
+	hostConfigDef, ok := defs["HostConfig"].(map[string]any)
+	if !ok {
+		return errors.New("host schema compatibility patch failed: missing HostConfig")
+	}
+
+	properties, ok := hostConfigDef["properties"].(map[string]any)
+	if !ok {
+		return errors.New("host schema compatibility patch failed: missing HostConfig.properties")
+	}
+
+	projects, ok := properties["projects"].(map[string]any)
+	if !ok {
+		return errors.New("host schema compatibility patch failed: missing HostConfig.properties.projects")
+	}
+
+	projectConfigSchema, ok := projects["additionalProperties"]
+	if !ok {
+		return errors.New("host schema compatibility patch failed: missing projects.additionalProperties")
+	}
+
+	projects["additionalProperties"] = map[string]any{
+		"oneOf": []any{
+			projectConfigSchema,
+			map[string]any{"type": "null"},
+		},
+	}
+
+	return nil
 }
