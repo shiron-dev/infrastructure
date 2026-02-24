@@ -10,6 +10,17 @@ import (
 )
 
 var ErrUnknownSchemaType = errors.New("unknown schema type")
+var (
+	ErrHostSchemaMissingDefs                 = errors.New("host schema patch failed: missing $defs")
+	ErrHostSchemaMissingHostConfig           = errors.New("host schema patch failed: missing HostConfig")
+	ErrHostSchemaMissingHostConfigProperties = errors.New("host schema patch failed: missing HostConfig.properties")
+	ErrHostSchemaMissingProjects             = errors.New(
+		"host schema patch failed: missing HostConfig.properties.projects",
+	)
+	ErrHostSchemaMissingAdditionalProperties = errors.New(
+		"host schema patch failed: missing projects.additionalProperties",
+	)
+)
 
 func SchemaKinds() []string {
 	return []string{"cmt", "host", "hook-before-plan", "hook-before-apply-prompt", "hook-before-apply"}
@@ -54,10 +65,81 @@ func GenerateSchemaJSON(kind string) ([]byte, error) {
 
 	schema := reflector.Reflect(target)
 
-	data, err := json.MarshalIndent(schema, "", "  ")
+	data, err := marshalSchemaWithCompatibility(kind, schema)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func marshalSchemaWithCompatibility(kind string, schema any) ([]byte, error) {
+	rawData, err := json.Marshal(schema)
 	if err != nil {
 		return nil, fmt.Errorf("marshalling schema: %w", err)
 	}
 
-	return data, nil
+	if kind != "host" {
+		indentedData, marshalErr := json.MarshalIndent(schema, "", "  ")
+		if marshalErr != nil {
+			return nil, fmt.Errorf("marshalling schema: %w", marshalErr)
+		}
+
+		return indentedData, nil
+	}
+
+	var schemaDoc map[string]any
+
+	err = json.Unmarshal(rawData, &schemaDoc)
+	if err != nil {
+		return nil, fmt.Errorf("decoding schema document: %w", err)
+	}
+
+	err = allowNullHostProjectOverrides(schemaDoc)
+	if err != nil {
+		return nil, err
+	}
+
+	indentedData, marshalErr := json.MarshalIndent(schemaDoc, "", "  ")
+	if marshalErr != nil {
+		return nil, fmt.Errorf("marshalling schema: %w", marshalErr)
+	}
+
+	return indentedData, nil
+}
+
+func allowNullHostProjectOverrides(schemaDoc map[string]any) error {
+	defs, ok := schemaDoc["$defs"].(map[string]any)
+	if !ok {
+		return ErrHostSchemaMissingDefs
+	}
+
+	hostConfigDef, ok := defs["HostConfig"].(map[string]any)
+	if !ok {
+		return ErrHostSchemaMissingHostConfig
+	}
+
+	properties, ok := hostConfigDef["properties"].(map[string]any)
+	if !ok {
+		return ErrHostSchemaMissingHostConfigProperties
+	}
+
+	projects, ok := properties["projects"].(map[string]any)
+	if !ok {
+		return ErrHostSchemaMissingProjects
+	}
+
+	projectConfigSchema, ok := projects["additionalProperties"]
+	if !ok {
+		return ErrHostSchemaMissingAdditionalProperties
+	}
+
+	projects["additionalProperties"] = map[string]any{
+		"oneOf": []any{
+			projectConfigSchema,
+			map[string]any{"type": "null"},
+		},
+	}
+
+	return nil
 }

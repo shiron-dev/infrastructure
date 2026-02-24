@@ -131,3 +131,74 @@ func TestDirConfigJSONSchema(t *testing.T) {
 		t.Fatalf("dirs schema should allow integer values for owner/group/permission: %s", raw)
 	}
 }
+
+func TestHostSchema_AllowsNullProjectConfig(t *testing.T) {
+	t.Parallel()
+
+	data, err := GenerateSchemaJSON("host")
+	if err != nil {
+		t.Fatalf("GenerateSchemaJSON(host): %v", err)
+	}
+
+	var root map[string]any
+
+	err = json.Unmarshal(data, &root)
+	if err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	defs, ok := root["$defs"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing $defs in host schema")
+	}
+
+	hostDef, ok := defs["HostConfig"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing HostConfig definition in host schema")
+	}
+
+	properties, ok := hostDef["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing HostConfig.properties in host schema")
+	}
+
+	projects, ok := properties["projects"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing HostConfig.properties.projects in host schema")
+	}
+
+	additionalProperties, ok := projects["additionalProperties"].(map[string]any)
+	if !ok {
+		t.Fatalf("host schema projects.additionalProperties should be an object")
+	}
+
+	oneOf, ok := additionalProperties["oneOf"].([]any)
+	if !ok {
+		t.Fatalf("host schema projects.additionalProperties should include oneOf")
+	}
+
+	hasNull := false
+	hasProjectRef := false
+
+	for _, branch := range oneOf {
+		branchSchema, ok := branch.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		if branchType, ok := branchSchema["type"].(string); ok && branchType == "null" {
+			hasNull = true
+		}
+
+		if branchRef, ok := branchSchema["$ref"].(string); ok && branchRef == "#/$defs/ProjectConfig" {
+			hasProjectRef = true
+		}
+	}
+
+	if !hasNull || !hasProjectRef {
+		t.Fatalf(
+			"host schema projects.additionalProperties should allow ProjectConfig or null, got: %v",
+			additionalProperties,
+		)
+	}
+}
