@@ -119,7 +119,8 @@ func TestDirConfigJSONSchema(t *testing.T) {
 		t.Fatalf("dirs schema should allow owner/group/permission alongside path key: %s", raw)
 	}
 
-	if !strings.Contains(raw, `"patternProperties"`) || !strings.Contains(raw, `"^(?!permission$|owner$|group$|become$|becomeUser$).+$"`) {
+	if !strings.Contains(raw, `"patternProperties"`) ||
+		!strings.Contains(raw, `"^(?!permission$|owner$|group$|become$|becomeUser$).+$"`) {
 		t.Fatalf("dirs schema should constrain path keys via patternProperties: %s", raw)
 	}
 
