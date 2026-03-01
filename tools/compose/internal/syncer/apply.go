@@ -73,6 +73,10 @@ func ApplyWithDeps(
 
 	printApplySummary(plan, writer, style)
 
+	if PlanHasExistenceUnknown(plan) {
+		return fmt.Errorf("one or more directory existence checks failed (SSH unreachable); fix connectivity and re-run")
+	}
+
 	return nil
 }
 
