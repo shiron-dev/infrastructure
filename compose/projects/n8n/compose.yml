@@ -11,6 +11,9 @@ services:
       - ./n8n_data:/home/node/.n8n
       - ./local-files:/files
       - ./rag:/mnt/rag
+    depends_on:
+      - redis
+      - postgres
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -60,11 +63,11 @@ services:
     image: postgres:16-alpine@sha256:4327b9fd295502f326f44153a1045a7170ddbfffed1c3829798328556cfd09e2
     container_name: n8n-postgres
     restart: always
-    user: "70:70"
+    user: "1000:1000"
     environment:
       POSTGRES_DB: n8n
       POSTGRES_USER: n8n
-      postgres_password: "{{ .n8n_postgres_password }}"
+      POSTGRES_PASSWORD: "{{ .n8n_postgres_password }}"
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
     security_opt:
@@ -93,6 +96,8 @@ services:
     command: tunnel run
     environment:
       TUNNEL_TOKEN: "{{ .cf_tunnel_token }}"
+    depends_on:
+      - n8n
     security_opt:
       - no-new-privileges:true
     cap_drop:
