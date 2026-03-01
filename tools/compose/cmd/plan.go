@@ -14,6 +14,8 @@ func newPlanCmd(configPath *string) *cobra.Command {
 
 	var projectFilter []string
 
+	var exitCode bool
+
 	dependencies := syncer.PlanDependencies{
 		ClientFactory:  nil,
 		SSHResolver:    nil,
@@ -37,11 +39,21 @@ func newPlanCmd(configPath *string) *cobra.Command {
 
 		plan.Print(os.Stdout)
 
+		if exitCode {
+			if plan.HasChanges() {
+				os.Exit(2)
+			}
+
+			os.Exit(0)
+		}
+
 		return nil
 	}
 
 	planCommand.Flags().StringSliceVar(&hostFilter, "host", nil, "filter by host name (repeatable)")
 	planCommand.Flags().StringSliceVar(&projectFilter, "project", nil, "filter by project name (repeatable)")
+	planCommand.Flags().BoolVar(&exitCode, "exit-code", false,
+		"exit with 0 when no changes, 1 on error, 2 when changes exist")
 
 	return planCommand
 }
