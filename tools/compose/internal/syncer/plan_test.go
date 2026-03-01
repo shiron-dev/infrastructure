@@ -529,6 +529,42 @@ func TestSyncPlan_Print_NoHosts(t *testing.T) {
 	}
 }
 
+func TestSyncPlan_Print_UnchangedProjectCollapsed(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "srv", User: "u", Host: "h", Port: 22},
+				Projects: []ProjectPlan{
+					{
+						ProjectName: "noop",
+						RemoteDir:   "/opt/noop",
+						Files:       []FilePlan{{RelativePath: "compose.yml", Action: ActionUnchanged}},
+						Dirs:        []DirPlan{{RelativePath: "data", Action: ActionUnchanged}},
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	plan.Print(&buf)
+	output := buf.String()
+
+	if !strings.Contains(output, "noop") {
+		t.Error("output should contain project name")
+	}
+
+	if !strings.Contains(output, "(no changes)") {
+		t.Error("unchanged project should be collapsed with (no changes)")
+	}
+
+	if strings.Contains(output, "Remote:") {
+		t.Error("collapsed project should not show Remote: detail")
+	}
+}
+
 func TestSyncPlan_Print_FullPlan(t *testing.T) {
 	t.Parallel()
 

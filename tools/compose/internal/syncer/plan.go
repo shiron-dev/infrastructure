@@ -136,6 +136,22 @@ type ProjectPlan struct {
 	Files           []FilePlan
 }
 
+func (pp *ProjectPlan) HasChanges() bool {
+	for _, f := range pp.Files {
+		if f.Action != ActionUnchanged {
+			return true
+		}
+	}
+
+	for _, d := range pp.Dirs {
+		if d.Action != ActionUnchanged {
+			return true
+		}
+	}
+
+	return pp.Compose.HasChanges()
+}
+
 type DirPlan struct {
 	RelativePath     string
 	RemotePath       string
@@ -361,7 +377,11 @@ func printHostPlan(writer io.Writer, style outputStyle, hostPlan HostPlan) {
 	}
 
 	for _, projectPlan := range hostPlan.Projects {
-		printProjectPlan(writer, style, projectPlan)
+		if projectPlan.HasChanges() {
+			printProjectPlan(writer, style, projectPlan)
+		} else {
+			printProjectPlanCollapsed(writer, style, projectPlan)
+		}
 	}
 }
 
@@ -398,6 +418,13 @@ func printProjectPlan(writer io.Writer, style outputStyle, projectPlan ProjectPl
 
 		printFileDiff(writer, style, filePlan.Diff)
 	}
+}
+
+func printProjectPlanCollapsed(writer io.Writer, style outputStyle, projectPlan ProjectPlan) {
+	_, _ = fmt.Fprintf(writer, "\n  %s %s %s\n",
+		style.actionSymbol(ActionUnchanged),
+		style.projectName(projectPlan.ProjectName),
+		style.muted("(no changes)"))
 }
 
 func printComposePlan(writer io.Writer, style outputStyle, compose *ComposePlan) {
