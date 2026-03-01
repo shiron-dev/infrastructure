@@ -20,8 +20,14 @@ import (
 
 var (
 	errPathDoesNotExist     = errors.New("path does not exist")
+	errExistenceUnknown     = errors.New("path existence unknown")
 	errUnexpectedStatOutput = errors.New("unexpected stat output")
 )
+
+// ErrExistenceUnknown is returned by Stat when the path existence could not be
+// determined (e.g. SSH connection failed). Callers should treat it as unknown
+// and exit with failure at the end.
+var ErrExistenceUnknown = errExistenceUnknown
 
 type CommandRunner interface {
 	SSHCombinedOutput(args ...string) ([]byte, error)
@@ -178,11 +184,16 @@ func (c *Client) Remove(remotePath string) error {
 
 func (c *Client) Stat(remotePath string) (fs.FileInfo, error) {
 	_, err := c.runSSH("test -e " + shellQuote(remotePath))
-	if err != nil {
+	if err == nil {
+		return minimalFileInfo{name: path.Base(remotePath)}, nil
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 		return nil, fmt.Errorf("stat %s: %w", remotePath, errPathDoesNotExist)
 	}
 
-	return minimalFileInfo{name: path.Base(remotePath)}, nil
+	return nil, fmt.Errorf("stat %s: %w", remotePath, errExistenceUnknown)
 }
 
 func (c *Client) StatDirMetadata(remotePath string) (*DirMetadata, error) {

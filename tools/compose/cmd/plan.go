@@ -44,6 +44,10 @@ func newPlanCmd(configPath *string) *cobra.Command {
 
 		plan.Print(os.Stdout)
 
+		if syncer.PlanHasExistenceUnknown(plan) {
+			return syncer.ErrExistenceCheckFailed
+		}
+
 		if exitCode {
 			if plan.HasChanges() {
 				os.Exit(exitCodeHasChanges)

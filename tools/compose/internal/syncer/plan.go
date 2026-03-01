@@ -140,6 +140,7 @@ type DirPlan struct {
 	RelativePath     string
 	RemotePath       string
 	Exists           bool
+	ExistenceUnknown bool
 	Action           ActionType
 	Permission       string
 	Owner            string
@@ -227,6 +228,22 @@ func (p *SyncPlan) DirStats() (int, int, int) {
 	}
 
 	return toCreateCount, toUpdateCount, existingCount
+}
+
+// PlanHasExistenceUnknown returns true if any directory in the plan has
+// ExistenceUnknown (e.g. SSH was unreachable when checking).
+func PlanHasExistenceUnknown(plan *SyncPlan) bool {
+	for _, hostPlan := range plan.HostPlans {
+		for _, projectPlan := range hostPlan.Projects {
+			for _, dirPlan := range projectPlan.Dirs {
+				if dirPlan.ExistenceUnknown {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 func (p *SyncPlan) ComposeStats() (int, int, int) {
@@ -421,7 +438,11 @@ func printProjectDirPlans(writer io.Writer, style outputStyle, dirPlans []DirPla
 
 		switch directoryPlan.Action {
 		case ActionAdd:
-			statusText = style.success("(create)")
+			if directoryPlan.ExistenceUnknown {
+				statusText = style.warning("(unknown)")
+			} else {
+				statusText = style.success("(create)")
+			}
 		case ActionModify:
 			statusText = style.warning("(update)")
 		case ActionUnchanged:
@@ -937,11 +958,13 @@ func buildDirPlans(directories []config.DirConfig, remoteDir string, client remo
 		absDir := path.Join(remoteDir, directory.Path)
 		_, statErr := client.Stat(absDir)
 		exists := statErr == nil
+		existenceUnknown := errors.Is(statErr, remote.ErrExistenceUnknown)
 
 		plan := DirPlan{
 			RelativePath:     directory.Path,
 			RemotePath:       absDir,
 			Exists:           exists,
+			ExistenceUnknown: existenceUnknown,
 			Action:           ActionUnchanged,
 			Permission:       directory.Permission,
 			Owner:            directory.Owner,
@@ -955,11 +978,16 @@ func buildDirPlans(directories []config.DirConfig, remoteDir string, client remo
 			NeedsOwnerChange: false,
 		}
 
-		if !exists {
+		switch {
+		case existenceUnknown:
 			plan.Action = ActionAdd
 			plan.NeedsPermChange = directory.Permission != ""
 			plan.NeedsOwnerChange = directory.Owner != "" || directory.Group != ""
-		} else {
+		case !exists:
+			plan.Action = ActionAdd
+			plan.NeedsPermChange = directory.Permission != ""
+			plan.NeedsOwnerChange = directory.Owner != "" || directory.Group != ""
+		default:
 			computeDirDrift(&plan, client)
 		}
 
