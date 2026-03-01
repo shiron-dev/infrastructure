@@ -717,6 +717,56 @@ projects:
 	}
 }
 
+func TestLoadHostConfig_DirsRecursive(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	hostDir := filepath.Join(dir, "hosts", "server1")
+
+	err := os.MkdirAll(hostDir, 0750)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := `
+projects:
+  snipeit:
+    dirs:
+      - redis_data:
+          owner: 1000
+          group: 1000
+          recursive: true
+          become: true
+`
+
+	err = os.WriteFile(filepath.Join(hostDir, "host.yml"), []byte(content), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hostConfig, err := LoadHostConfig(dir, "server1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dirs := hostConfig.Projects["snipeit"].Dirs
+	if len(dirs) != 1 {
+		t.Fatalf("expected 1 dir, got %d", len(dirs))
+	}
+
+	if dirs[0].Path != "redis_data" {
+		t.Errorf("Path = %q, want %q", dirs[0].Path, "redis_data")
+	}
+
+	if dirs[0].Owner != "1000" || dirs[0].Group != "1000" {
+		t.Errorf("Owner = %q, Group = %q", dirs[0].Owner, dirs[0].Group)
+	}
+
+	if !dirs[0].Recursive {
+		t.Error("Recursive = false, want true")
+	}
+}
+
 func TestLoadHostConfig_DirsPathKeyedFormat(t *testing.T) {
 	t.Parallel()
 
@@ -946,6 +996,11 @@ func TestValidateDirConfigs(t *testing.T) {
 			dirs:    []DirConfig{{Path: "data", BecomeUser: "root"}},
 			wantErr: true,
 			errMsg:  "becomeUser requires become=true",
+		},
+		{
+			name:    "valid with recursive",
+			dirs:    []DirConfig{{Path: "redis_data", Owner: "1000", Group: "1000", Recursive: true}},
+			wantErr: false,
 		},
 	}
 

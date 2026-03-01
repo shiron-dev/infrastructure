@@ -2332,3 +2332,35 @@ func TestBuildDirPlans_WithDriftDetection(t *testing.T) {
 		t.Errorf("existing_drift: ActualPermission = %q, want %q", plans[2].ActualPermission, "700")
 	}
 }
+
+func TestBuildDirPlans_Recursive(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	client.EXPECT().Stat("/srv/compose/redis_data").Return(nil, nil)
+	client.EXPECT().StatDirMetadata("/srv/compose/redis_data").Return(&remote.DirMetadata{
+		Permission: "755",
+		Owner:      "1000",
+		Group:      "1000",
+	}, nil)
+
+	dirs := []config.DirConfig{
+		{Path: "redis_data", Owner: "1000", Group: "1000", Recursive: true, Become: true},
+	}
+
+	plans := buildDirPlans(dirs, "/srv/compose", client)
+
+	if len(plans) != 1 {
+		t.Fatalf("len = %d, want 1", len(plans))
+	}
+
+	if !plans[0].Recursive {
+		t.Error("Recursive = false, want true")
+	}
+
+	if plans[0].Owner != "1000" || plans[0].Group != "1000" {
+		t.Errorf("Owner = %q, Group = %q", plans[0].Owner, plans[0].Group)
+	}
+}

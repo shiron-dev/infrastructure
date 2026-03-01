@@ -111,7 +111,7 @@ func TestDirConfigJSONSchema(t *testing.T) {
 		t.Fatalf("legacy dirs path object format should not be allowed in schema: %s", raw)
 	}
 
-	if !strings.Contains(raw, `"minProperties":1`) || !strings.Contains(raw, `"maxProperties":6`) {
+	if !strings.Contains(raw, `"minProperties":1`) || !strings.Contains(raw, `"maxProperties":7`) {
 		t.Fatalf("dirs path-keyed object property-count constraints are missing: %s", raw)
 	}
 
@@ -120,7 +120,7 @@ func TestDirConfigJSONSchema(t *testing.T) {
 	}
 
 	if !strings.Contains(raw, `"patternProperties"`) ||
-		!strings.Contains(raw, `"^(?!permission$|owner$|group$|become$|becomeUser$).+$"`) {
+		!strings.Contains(raw, `"^(?!permission$|owner$|group$|become$|becomeUser$|recursive$).+$"`) {
 		t.Fatalf("dirs schema should constrain path keys via patternProperties: %s", raw)
 	}
 
@@ -134,6 +134,10 @@ func TestDirConfigJSONSchema(t *testing.T) {
 
 	if !strings.Contains(raw, `"become"`) || !strings.Contains(raw, `"becomeUser"`) {
 		t.Fatalf("dirs schema should include become/becomeUser fields: %s", raw)
+	}
+
+	if !strings.Contains(raw, `"recursive"`) {
+		t.Fatalf("dirs schema should include recursive field: %s", raw)
 	}
 }
 
