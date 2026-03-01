@@ -9,6 +9,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	exitCodeNoChanges  = 0
+	exitCodeHasChanges = 2
+)
+
 func newPlanCmd(configPath *string) *cobra.Command {
 	var hostFilter []string
 
@@ -41,10 +46,10 @@ func newPlanCmd(configPath *string) *cobra.Command {
 
 		if exitCode {
 			if plan.HasChanges() {
-				os.Exit(2)
+				os.Exit(exitCodeHasChanges)
 			}
 
-			os.Exit(0)
+			os.Exit(exitCodeNoChanges)
 		}
 
 		return nil
@@ -54,6 +59,8 @@ func newPlanCmd(configPath *string) *cobra.Command {
 	planCommand.Flags().StringSliceVar(&projectFilter, "project", nil, "filter by project name (repeatable)")
 	planCommand.Flags().BoolVar(&exitCode, "exit-code", false,
 		"exit with 0 when no changes, 1 on error, 2 when changes exist")
+	planCommand.Flags().BoolVar(&exitCode, "exit-status", false,
+		"alias of --exit-code: exit with 0 when no changes, 1 on error, 2 when changes exist")
 
 	return planCommand
 }
