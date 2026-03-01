@@ -466,46 +466,86 @@ func applyProjectPlan(
 
 func createMissingDirs(projectPlan ProjectPlan, client remote.RemoteClient, writer io.Writer, style outputStyle) error {
 	for _, dirPlan := range projectPlan.Dirs {
-		applyRecursiveOwnership := dirPlan.Recursive && (dirPlan.Owner != "" || dirPlan.Group != "") && dirPlan.Exists
-		if dirPlan.Action == ActionUnchanged && !applyRecursiveOwnership {
+		if !shouldProcessDir(dirPlan) {
 			continue
 		}
 
-		actionLabel := "creating dir"
-		if dirPlan.Exists {
-			actionLabel = "updating dir"
+		err := processDirPlan(dirPlan, client, writer, style)
+		if err != nil {
+			return err
 		}
+	}
 
-		_, _ = fmt.Fprintf(writer, "    %s %s/... ", style.key(actionLabel), dirPlan.RelativePath)
+	return nil
+}
 
-		if !dirPlan.Exists {
-			err := client.MkdirAll(dirPlan.RemotePath)
-			if err != nil {
-				_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
+func shouldProcessDir(dirPlan DirPlan) bool {
+	applyRecursiveOwnership := dirPlan.Recursive && (dirPlan.Owner != "" || dirPlan.Group != "") && dirPlan.Exists
 
-				return fmt.Errorf("creating directory %s: %w", dirPlan.RemotePath, err)
-			}
+	return dirPlan.Action != ActionUnchanged || applyRecursiveOwnership
+}
+
+func processDirPlan(dirPlan DirPlan, client remote.RemoteClient, writer io.Writer, style outputStyle) error {
+	actionLabel := dirActionLabel(dirPlan.Exists)
+	_, _ = fmt.Fprintf(writer, "    %s %s/... ", style.key(actionLabel), dirPlan.RelativePath)
+
+	err := ensureDirExists(dirPlan, client, writer, style)
+	if err != nil {
+		return err
+	}
+
+	err = applyDirMetadata(dirPlan, client, writer, style)
+	if err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintln(writer, style.success("done"))
+
+	return nil
+}
+
+func dirActionLabel(exists bool) string {
+	if exists {
+		return "updating dir"
+	}
+
+	return "creating dir"
+}
+
+func ensureDirExists(dirPlan DirPlan, client remote.RemoteClient, writer io.Writer, style outputStyle) error {
+	if dirPlan.Exists {
+		return nil
+	}
+
+	err := client.MkdirAll(dirPlan.RemotePath)
+	if err != nil {
+		_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
+
+		return fmt.Errorf("creating directory %s: %w", dirPlan.RemotePath, err)
+	}
+
+	return nil
+}
+
+func applyDirMetadata(dirPlan DirPlan, client remote.RemoteClient, writer io.Writer, style outputStyle) error {
+	applyRecursiveOwnership := dirPlan.Recursive && (dirPlan.Owner != "" || dirPlan.Group != "") && dirPlan.Exists
+
+	if dirPlan.NeedsOwnerChange || applyRecursiveOwnership {
+		err := applyDirOwnership(dirPlan, client)
+		if err != nil {
+			_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
+
+			return err
 		}
+	}
 
-		if dirPlan.NeedsOwnerChange || applyRecursiveOwnership {
-			err := applyDirOwnership(dirPlan, client)
-			if err != nil {
-				_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
+	if dirPlan.NeedsPermChange {
+		err := applyDirPermission(dirPlan, client)
+		if err != nil {
+			_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
 
-				return err
-			}
+			return err
 		}
-
-		if dirPlan.NeedsPermChange {
-			err := applyDirPermission(dirPlan, client)
-			if err != nil {
-				_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
-
-				return err
-			}
-		}
-
-		_, _ = fmt.Fprintln(writer, style.success("done"))
 	}
 
 	return nil
