@@ -978,15 +978,16 @@ func buildDirPlans(directories []config.DirConfig, remoteDir string, client remo
 			NeedsOwnerChange: false,
 		}
 
-		if existenceUnknown {
+		switch {
+		case existenceUnknown:
 			plan.Action = ActionAdd
 			plan.NeedsPermChange = directory.Permission != ""
 			plan.NeedsOwnerChange = directory.Owner != "" || directory.Group != ""
-		} else if !exists {
+		case !exists:
 			plan.Action = ActionAdd
 			plan.NeedsPermChange = directory.Permission != ""
 			plan.NeedsOwnerChange = directory.Owner != "" || directory.Group != ""
-		} else {
+		default:
 			computeDirDrift(&plan, client)
 		}
 

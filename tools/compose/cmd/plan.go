@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"cmt/internal/config"
@@ -46,7 +45,7 @@ func newPlanCmd(configPath *string) *cobra.Command {
 		plan.Print(os.Stdout)
 
 		if syncer.PlanHasExistenceUnknown(plan) {
-			return fmt.Errorf("one or more directory existence checks failed (SSH unreachable); fix connectivity and re-run")
+			return syncer.ErrExistenceCheckFailed
 		}
 
 		if exitCode {

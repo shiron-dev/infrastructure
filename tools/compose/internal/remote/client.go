@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	errPathDoesNotExist   = errors.New("path does not exist")
-	errExistenceUnknown   = errors.New("path existence unknown")
+	errPathDoesNotExist     = errors.New("path does not exist")
+	errExistenceUnknown     = errors.New("path existence unknown")
 	errUnexpectedStatOutput = errors.New("unexpected stat output")
 )
 
