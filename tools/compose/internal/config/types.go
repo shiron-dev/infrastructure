@@ -16,7 +16,7 @@ const (
 	ComposeActionIgnore  = "ignore"
 	jsonSchemaTypeString = "string"
 	jsonSchemaTypeObject = "object"
-	pathDirMaxProperties = 6
+	pathDirMaxProperties = 7
 )
 
 var (
@@ -36,6 +36,7 @@ type DirConfig struct {
 	Group      string `json:"group,omitempty"      yaml:"group,omitempty"`
 	Become     bool   `json:"become,omitempty"     yaml:"become,omitempty"`
 	BecomeUser string `json:"becomeUser,omitempty" yaml:"becomeUser,omitempty"`
+	Recursive  bool   `json:"recursive,omitempty"  yaml:"recursive,omitempty"`
 }
 
 type dirConfigAttrsOnly struct {
@@ -44,6 +45,7 @@ type dirConfigAttrsOnly struct {
 	Group      string `yaml:"group,omitempty"`
 	Become     *bool  `yaml:"become,omitempty"`
 	BecomeUser string `yaml:"becomeUser,omitempty"`
+	Recursive  *bool  `yaml:"recursive,omitempty"`
 }
 
 type dirConfigSchemaProps = orderedmap.OrderedMap[string, *jsonschema.Schema]
@@ -129,6 +131,9 @@ func parseDirConfigPathKeyForm(value *yaml.Node) (DirConfig, bool, error) {
 	}
 
 	cfg.BecomeUser = attrs.BecomeUser
+	if attrs.Recursive != nil {
+		cfg.Recursive = *attrs.Recursive
+	}
 
 	return cfg, true, nil
 }
@@ -158,6 +163,15 @@ func mergeDirConfigKnownAttrs(key string, valNode *yaml.Node, attrs *dirConfigAt
 		return true, nil
 	case "becomeUser":
 		attrs.BecomeUser = valNode.Value
+
+		return true, nil
+	case "recursive":
+		recursive, parseErr := parseDirConfigBoolAttr(key, valNode)
+		if parseErr != nil {
+			return true, parseErr
+		}
+
+		attrs.Recursive = &recursive
 
 		return true, nil
 	default:
@@ -220,6 +234,11 @@ func mergeNonEmptyDirConfigAttrs(dst *dirConfigAttrsOnly, src dirConfigAttrsOnly
 		dst.Become = &become
 	}
 
+	if src.Recursive != nil {
+		recursive := *src.Recursive
+		dst.Recursive = &recursive
+	}
+
 	if src.BecomeUser != "" {
 		dst.BecomeUser = src.BecomeUser
 	}
@@ -247,6 +266,10 @@ func buildDirConfigAttrsProperties() *dirConfigSchemaProps {
 	becomeSchema := new(jsonschema.Schema)
 	becomeSchema.Type = "boolean"
 	attrsProps.Set("become", becomeSchema)
+
+	recursiveSchema := new(jsonschema.Schema)
+	recursiveSchema.Type = "boolean"
+	attrsProps.Set("recursive", recursiveSchema)
 
 	becomeUserSchema := new(jsonschema.Schema)
 	becomeUserSchema.Type = jsonSchemaTypeString
@@ -283,7 +306,7 @@ func buildDirConfigPathKeyedObjectSchema(attrsProps *dirConfigSchemaProps) *json
 	pathValueSchema := new(jsonschema.Schema)
 	pathValueSchema.OneOf = []*jsonschema.Schema{attrsObjectSchema, nullSchema}
 
-	pathKeyPattern := "^(?!permission$|owner$|group$|become$|becomeUser$).+$"
+	pathKeyPattern := "^(?!permission$|owner$|group$|become$|becomeUser$|recursive$).+$"
 	pathPropertyMinCount := uint64(1)
 	pathPropertyMaxCount := uint64(pathDirMaxProperties)
 

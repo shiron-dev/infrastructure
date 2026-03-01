@@ -111,7 +111,7 @@ cmt は常に `ssh -G <host>` を実行して SSH 接続パラメータ
 Docker Compose の bind mount 用ディレクトリを事前に用意する用途を想定しています。
 
 文字列で指定する場合はパスのみが設定されます（従来の形式）。
-属性を指定する場合は `- <path>:` の下に `permission`（8進数文字列）、`owner`、`group`、`become`、`becomeUser` を指定します。
+属性を指定する場合は `- <path>:` の下に `permission`（8進数文字列）、`owner`、`group`、`recursive`、`become`、`becomeUser` を指定します。
 
 ```yaml
 projects:
@@ -125,12 +125,19 @@ projects:
         group: influxdb
         become: true                            # 権限変更コマンドを sudo 経由で実行
         # becomeUser: root                      # 未指定時は root
+      - redis_data:                             # recursive で既存ファイルも chown
+        owner: 1000
+        group: 1000
+        recursive: true                         # chown -R でディレクトリ内も再帰的に変更
+        become: true
       - vmdata:
         permission: "0700"
 ```
 
 `permission` を指定した場合はディレクトリ作成後に `chmod` を実行します。
 `owner` または `group` を指定した場合は `chown` を実行します。
+`recursive: true` を指定すると `chown -R` でディレクトリとその中身を再帰的に変更します。
+Docker コンテナが root で作成したファイルを非 root ユーザーで動くサービス（例: Redis）が使う場合に有用です。
 
 デフォルトでは（`become` 未指定または `false`）SSH 接続ユーザーの権限で実行されます。
 `become: true` を指定すると `sudo` を使って実行され、`becomeUser` 未指定時は `root`、指定時はそのユーザーで実行されます。

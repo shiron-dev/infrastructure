@@ -466,7 +466,8 @@ func applyProjectPlan(
 
 func createMissingDirs(projectPlan ProjectPlan, client remote.RemoteClient, writer io.Writer, style outputStyle) error {
 	for _, dirPlan := range projectPlan.Dirs {
-		if dirPlan.Action == ActionUnchanged {
+		applyRecursiveOwnership := dirPlan.Recursive && (dirPlan.Owner != "" || dirPlan.Group != "") && dirPlan.Exists
+		if dirPlan.Action == ActionUnchanged && !applyRecursiveOwnership {
 			continue
 		}
 
@@ -486,7 +487,7 @@ func createMissingDirs(projectPlan ProjectPlan, client remote.RemoteClient, writ
 			}
 		}
 
-		if dirPlan.NeedsOwnerChange {
+		if dirPlan.NeedsOwnerChange || applyRecursiveOwnership {
 			err := applyDirOwnership(dirPlan, client)
 			if err != nil {
 				_, _ = fmt.Fprintln(writer, style.danger("FAILED"))
@@ -538,9 +539,14 @@ func applyDirOwnership(dirPlan DirPlan, client remote.RemoteClient) error {
 		ownership += ":" + dirPlan.Group
 	}
 
+	chownCmd := "chown"
+	if dirPlan.Recursive {
+		chownCmd = "chown -R"
+	}
+
 	cmd := buildDirMetadataCommand(
 		dirPlan,
-		fmt.Sprintf("chown %s %s", ownership, shellQuote(dirPlan.RemotePath)),
+		fmt.Sprintf("%s %s %s", chownCmd, ownership, shellQuote(dirPlan.RemotePath)),
 	)
 
 	_, err := client.RunCommand("", cmd)
