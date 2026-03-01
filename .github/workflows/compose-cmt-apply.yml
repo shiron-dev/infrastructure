@@ -110,6 +110,8 @@ jobs:
     environment: production-plan
     if: github.event_name == 'push'
     needs: cancel-stale-runs
+    outputs:
+      has_diff: ${{ steps.cmt-plan.outputs.exit_code == '2' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: ./.github/actions/setup-compose-cmt
@@ -122,6 +124,7 @@ jobs:
       - name: Run cmt plan
         id: cmt-plan
         env:
+          CMT_OPT: "--exit-status"
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
@@ -172,7 +175,7 @@ jobs:
               ${{ steps.cmt-plan.outputs.summary }}
             file: ${{ steps.cmt-plan.outputs.slack_file }}
       - name: Fail when cmt plan failed
-        if: steps.cmt-plan.outputs.exit_code != '0'
+        if: steps.cmt-plan.outputs.exit_code == '1'
         run: exit 1
 
   apply:
@@ -180,7 +183,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && needs.plan.outputs.has_diff == 'true'
     needs: plan
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-apply
