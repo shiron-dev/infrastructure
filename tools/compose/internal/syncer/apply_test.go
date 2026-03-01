@@ -1088,6 +1088,74 @@ func TestApplyWithDeps_ExistingDirDriftIsReconciled(t *testing.T) {
 	}
 }
 
+func TestApplyWithDeps_DirRecursiveChown(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "server1"},
+				Projects: []ProjectPlan{
+					{
+						ProjectName: "snipeit",
+						RemoteDir:   "/srv/snipeit",
+						Dirs: []DirPlan{
+							{
+								RelativePath:     "redis_data",
+								RemotePath:       "/srv/snipeit/redis_data",
+								Exists:           false,
+								Action:           ActionAdd,
+								Owner:            "1000",
+								Group:            "1000",
+								Recursive:        true,
+								Become:           true,
+								NeedsOwnerChange: true,
+							},
+						},
+						Files: []FilePlan{
+							{
+								RelativePath: "compose.yml",
+								LocalPath:    "/tmp/compose.yml",
+								RemotePath:   "/srv/snipeit/compose.yml",
+								Action:       ActionAdd,
+								LocalData:    []byte("services: {}"),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	factory := remote.NewMockClientFactory(ctrl)
+	client := remote.NewMockRemoteClient(ctrl)
+
+	gomock.InOrder(
+		factory.EXPECT().
+			NewClient(config.HostEntry{Name: "server1"}).
+			Return(client, nil),
+		client.EXPECT().MkdirAll("/srv/snipeit/redis_data").Return(nil),
+		client.EXPECT().RunCommand("", "sudo -n chown -R 1000:1000 '/srv/snipeit/redis_data'").Return("", nil),
+		client.EXPECT().WriteFile("/srv/snipeit/compose.yml", []byte("services: {}")).Return(nil),
+		client.EXPECT().WriteFile("/srv/snipeit/.cmt-manifest.json", gomock.Any()).Return(nil),
+		client.EXPECT().Close().Return(nil),
+	)
+
+	var out bytes.Buffer
+
+	err := ApplyWithDeps(&config.CmtConfig{}, plan, true, false, &out, ApplyDependencies{
+		ClientFactory: factory,
+	})
+	if err != nil {
+		t.Fatalf("ApplyWithDeps: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "Apply complete!") {
+		t.Fatalf("expected complete output, got %q", out.String())
+	}
+}
+
 func TestProjectHasChanges_ExistingDirMetadata(t *testing.T) {
 	t.Parallel()
 
