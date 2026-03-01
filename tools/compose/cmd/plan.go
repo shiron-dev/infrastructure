@@ -9,10 +9,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	exitCodeNoChanges  = 0
+	exitCodeHasChanges = 2
+)
+
 func newPlanCmd(configPath *string) *cobra.Command {
 	var hostFilter []string
 
 	var projectFilter []string
+
+	var exitCode bool
 
 	dependencies := syncer.PlanDependencies{
 		ClientFactory:  nil,
@@ -37,11 +44,23 @@ func newPlanCmd(configPath *string) *cobra.Command {
 
 		plan.Print(os.Stdout)
 
+		if exitCode {
+			if plan.HasChanges() {
+				os.Exit(exitCodeHasChanges)
+			}
+
+			os.Exit(exitCodeNoChanges)
+		}
+
 		return nil
 	}
 
 	planCommand.Flags().StringSliceVar(&hostFilter, "host", nil, "filter by host name (repeatable)")
 	planCommand.Flags().StringSliceVar(&projectFilter, "project", nil, "filter by project name (repeatable)")
+	planCommand.Flags().BoolVar(&exitCode, "exit-code", false,
+		"exit with 0 when no changes, 1 on error, 2 when changes exist")
+	planCommand.Flags().BoolVar(&exitCode, "exit-status", false,
+		"alias of --exit-code: exit with 0 when no changes, 1 on error, 2 when changes exist")
 
 	return planCommand
 }
