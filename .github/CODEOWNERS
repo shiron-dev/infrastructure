@@ -4,3 +4,7 @@
 
 compose.yml
 compose.yaml
+provider.tf
+.terraform.lock.hcl
+pyproject.toml
+uv.lock
