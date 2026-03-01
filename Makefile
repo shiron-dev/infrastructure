@@ -145,7 +145,6 @@ sops-encrypt:
 	for file in $$FILES; do \
 		echo "Encrypting $$file..."; \
 		sops --output-type json --encrypt "$$file" > "$$file.sops"; \
-		chmod -w "$$file" "$$file.sops"; \
 	done
 
 .PHONY: sops-decrypt
@@ -166,9 +165,7 @@ sops-decrypt:
 		  yaml|yml) output_type="yaml" ;; \
 		  *) output_type="binary" ;; \
 		esac; \
-		if [ -f "$$base" ]; then chmod +w "$$base"; fi; \
 		sops --decrypt --output-type "$$output_type" "$$file" > "$$base"; \
-		chmod -w "$$base" "$$file"; \
 	done
 
 .PHONY: sops-edit
@@ -177,14 +174,10 @@ sops-edit:
 	if [ -n "$(FILE)" ]; then \
 		base="$(FILE)"; \
 		[ "$${base%.sops}" != "$$base" ] && base="$${base%.sops}"; \
-		chmod +w "$$base" "$$base.sops"; \
 		echo "Edit the decrypted file(s). Press Enter when done to re-encrypt."; \
 		code --wait "$$base"; \
 		$(MAKE) sops-encrypt FILE="$$base"; \
 	else \
-		for f in $$(find . -name "*.secrets.*.sops" -type f); do \
-			chmod +w "$${f%.sops}" "$$f"; \
-		done; \
 		echo "Edit the decrypted file(s). Press Enter when done to re-encrypt."; \
 		read -r _; \
 		$(MAKE) sops-encrypt; \
