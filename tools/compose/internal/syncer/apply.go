@@ -322,7 +322,7 @@ func applyHostPlan(cfg *config.CmtConfig, hostPlan HostPlan, client remote.Remot
 	style := newOutputStyle(writer)
 
 	for _, projectPlan := range hostPlan.Projects {
-		if !projectHasChanges(projectPlan) {
+		if !projectPlan.HasChanges() {
 			_, _ = fmt.Fprintf(writer, "  %s: %s\n", style.projectName(projectPlan.ProjectName), style.muted("no changes"))
 
 			continue
@@ -425,27 +425,7 @@ func printApplySummary(plan *SyncPlan, writer io.Writer, style outputStyle) {
 }
 
 func projectHasChanges(projectPlan ProjectPlan) bool {
-	for _, filePlan := range projectPlan.Files {
-		if filePlan.Action != ActionUnchanged {
-			return true
-		}
-	}
-
-	if projectHasDirChanges(projectPlan) {
-		return true
-	}
-
-	return projectPlan.Compose.HasChanges()
-}
-
-func projectHasDirChanges(projectPlan ProjectPlan) bool {
-	for _, dirPlan := range projectPlan.Dirs {
-		if dirPlan.Action != ActionUnchanged {
-			return true
-		}
-	}
-
-	return false
+	return projectPlan.HasChanges()
 }
 
 func applyProjectPlan(

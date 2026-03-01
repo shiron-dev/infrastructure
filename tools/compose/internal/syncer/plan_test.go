@@ -529,6 +529,42 @@ func TestSyncPlan_Print_NoHosts(t *testing.T) {
 	}
 }
 
+func TestSyncPlan_Print_UnchangedProjectCollapsed(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "srv", User: "u", Host: "h", Port: 22},
+				Projects: []ProjectPlan{
+					{
+						ProjectName: "noop",
+						RemoteDir:   "/opt/noop",
+						Files:       []FilePlan{{RelativePath: "compose.yml", Action: ActionUnchanged}},
+						Dirs:        []DirPlan{{RelativePath: "data", Action: ActionUnchanged}},
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	plan.Print(&buf)
+	output := buf.String()
+
+	if !strings.Contains(output, "noop") {
+		t.Error("output should contain project name")
+	}
+
+	if !strings.Contains(output, "(no changes)") {
+		t.Error("unchanged project should be collapsed with (no changes)")
+	}
+
+	if strings.Contains(output, "Remote:") {
+		t.Error("collapsed project should not show Remote: detail")
+	}
+}
+
 func TestSyncPlan_Print_FullPlan(t *testing.T) {
 	t.Parallel()
 
@@ -602,6 +638,55 @@ func TestSyncPlan_Print_FullPlan(t *testing.T) {
 
 	if !strings.Contains(output, "1 to add") {
 		t.Error("summary should show add count")
+	}
+
+	if !strings.Contains(output, "PROJECT") || !strings.Contains(output, "COMPOSE ACTION") ||
+		!strings.Contains(output, "RESOURCES") {
+		t.Error("output should contain per-host summary table header")
+	}
+
+	if !strings.Contains(output, "----------------------------------------------------------") {
+		t.Error("output should contain summary table separator")
+	}
+}
+
+func TestSyncPlan_Print_PerHostSummaryTable(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "srv-a", User: "u", Host: "a", Port: 22},
+				Projects: []ProjectPlan{
+					{
+						ProjectName: "proj1",
+						Files:       []FilePlan{{RelativePath: "compose.yml", Action: ActionAdd}},
+						Compose:     &ComposePlan{ActionType: ComposeStartServices, Services: []string{"web"}},
+					},
+					{
+						ProjectName: "proj2",
+						Files:       []FilePlan{{RelativePath: "compose.yml", Action: ActionUnchanged}},
+						Compose:     &ComposePlan{ActionType: ComposeNoChange},
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	plan.Print(&buf)
+	output := buf.String()
+
+	if !strings.Contains(output, "Host: srv-a") {
+		t.Error("summary should contain host name")
+	}
+
+	if !strings.Contains(output, "changed") || !strings.Contains(output, "unchanged") {
+		t.Error("summary should show status (changed/unchanged)")
+	}
+
+	if !strings.Contains(output, "start (1)") {
+		t.Error("summary should show compose action for proj1")
 	}
 }
 
