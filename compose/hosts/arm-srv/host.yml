@@ -48,8 +48,8 @@ projects:
         group: 999
         become: true
       - redis_data:
-        owner: 999
-        group: 999
+        owner: 1000
+        group: 1000
         become: true
 
   portainer:
@@ -69,10 +69,10 @@ projects:
         group: 999
         become: true
       - redis_data:
-        owner: 999
-        group: 999
+        owner: 1000
+        group: 1000
+        recursive: true
         become: true
       - snipeit_data:
-        owner: 10000
-        group: 50
+        permission: "0775"
         become: true
