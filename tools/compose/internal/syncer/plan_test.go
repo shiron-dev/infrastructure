@@ -639,6 +639,55 @@ func TestSyncPlan_Print_FullPlan(t *testing.T) {
 	if !strings.Contains(output, "1 to add") {
 		t.Error("summary should show add count")
 	}
+
+	if !strings.Contains(output, "PROJECT") || !strings.Contains(output, "COMPOSE ACTION") ||
+		!strings.Contains(output, "RESOURCES") {
+		t.Error("output should contain per-host summary table header")
+	}
+
+	if !strings.Contains(output, "----------------------------------------------------------") {
+		t.Error("output should contain summary table separator")
+	}
+}
+
+func TestSyncPlan_Print_PerHostSummaryTable(t *testing.T) {
+	t.Parallel()
+
+	plan := &SyncPlan{
+		HostPlans: []HostPlan{
+			{
+				Host: config.HostEntry{Name: "srv-a", User: "u", Host: "a", Port: 22},
+				Projects: []ProjectPlan{
+					{
+						ProjectName: "proj1",
+						Files:       []FilePlan{{RelativePath: "compose.yml", Action: ActionAdd}},
+						Compose:     &ComposePlan{ActionType: ComposeStartServices, Services: []string{"web"}},
+					},
+					{
+						ProjectName: "proj2",
+						Files:       []FilePlan{{RelativePath: "compose.yml", Action: ActionUnchanged}},
+						Compose:     &ComposePlan{ActionType: ComposeNoChange},
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	plan.Print(&buf)
+	output := buf.String()
+
+	if !strings.Contains(output, "Host: srv-a") {
+		t.Error("summary should contain host name")
+	}
+
+	if !strings.Contains(output, "changed") || !strings.Contains(output, "unchanged") {
+		t.Error("summary should show status (changed/unchanged)")
+	}
+
+	if !strings.Contains(output, "start (1)") {
+		t.Error("summary should show compose action for proj1")
+	}
 }
 
 func TestBuildPlanWithDeps_UsesInjectedDependencies(t *testing.T) {

@@ -67,10 +67,12 @@ const (
 	ActionDelete
 )
 
+const labelUnchanged = "unchanged"
+
 func (a ActionType) String() string {
 	switch a {
 	case ActionUnchanged:
-		return "unchanged"
+		return labelUnchanged
 	case ActionAdd:
 		return "add"
 	case ActionModify:
@@ -327,7 +329,8 @@ func (p *SyncPlan) Print(writer io.Writer) {
 	hosts, projects, add, mod, del, unch := p.Stats()
 	dirCreate, dirUpdate, _ := p.DirStats()
 
-	_, _ = fmt.Fprintf(writer, "\n%s %d host(s), %d project(s) — %s to add, %s to modify, %s to delete, %s unchanged",
+	_, _ = fmt.Fprintf(writer,
+		"\n%s %d host(s), %d project(s) — %s to add, %s to modify, %s to delete, %s "+labelUnchanged,
 		style.key("Summary:"),
 		hosts,
 		projects,
@@ -358,6 +361,12 @@ func (p *SyncPlan) Print(writer io.Writer) {
 	}
 
 	_, _ = fmt.Fprintln(writer)
+
+	for _, hostPlan := range p.HostPlans {
+		printHostSummaryTable(writer, style, hostPlan)
+	}
+
+	_, _ = fmt.Fprintln(writer)
 }
 
 func printHostPlan(writer io.Writer, style outputStyle, hostPlan HostPlan) {
@@ -383,6 +392,118 @@ func printHostPlan(writer io.Writer, style outputStyle, hostPlan HostPlan) {
 			printProjectPlanCollapsed(writer, style, projectPlan)
 		}
 	}
+}
+
+const (
+	summaryTableColProject       = 20
+	summaryTableColStatus        = 10
+	summaryTableColComposeAction = 18
+	summaryTableSeparator        = "----------------------------------------------------------"
+)
+
+func printHostSummaryTable(writer io.Writer, style outputStyle, hostPlan HostPlan) {
+	_, _ = fmt.Fprintf(writer, "\n%s\n", style.hostHeader("Host: "+hostPlan.Host.Name))
+	_, _ = fmt.Fprintln(writer, summaryTableSeparator)
+	_, _ = fmt.Fprintf(writer, "%-*s %-*s %-*s %s\n",
+		summaryTableColProject, "PROJECT",
+		summaryTableColStatus, "STATUS",
+		summaryTableColComposeAction, "COMPOSE ACTION",
+		"RESOURCES")
+	_, _ = fmt.Fprintln(writer, summaryTableSeparator)
+
+	for _, pp := range hostPlan.Projects {
+		status := labelUnchanged
+		if pp.HasChanges() {
+			status = "changed"
+		}
+
+		composeAction := formatComposeActionSummary(pp.Compose)
+		resources := formatProjectResourcesSummary(pp)
+		_, _ = fmt.Fprintf(writer, "%-*s %-*s %-*s %s\n",
+			summaryTableColProject, pp.ProjectName,
+			summaryTableColStatus, status,
+			summaryTableColComposeAction, composeAction,
+			resources)
+	}
+}
+
+func formatComposeActionSummary(compose *ComposePlan) string {
+	if compose == nil || len(compose.Services) == 0 {
+		return "-"
+	}
+
+	n := len(compose.Services)
+	switch compose.ActionType {
+	case ComposeNoChange:
+		return "-"
+	case ComposeStartServices:
+		return fmt.Sprintf("start (%d)", n)
+	case ComposeRecreateServices:
+		return fmt.Sprintf("recreate (%d)", n)
+	case ComposeStopServices:
+		return fmt.Sprintf("stop (%d)", n)
+	default:
+		return "-"
+	}
+}
+
+func formatProjectResourcesSummary(pp ProjectPlan) string {
+	parts := fileResourceParts(pp.Files)
+
+	parts = append(parts, dirResourceParts(pp.Dirs)...)
+	if pp.Compose != nil && pp.Compose.ActionType != ComposeNoChange && len(pp.Compose.Services) > 0 {
+		parts = append(parts, fmt.Sprintf("%d svc", len(pp.Compose.Services)))
+	}
+
+	if len(parts) == 0 {
+		return "-"
+	}
+
+	return strings.Join(parts, "; ")
+}
+
+func fileResourceParts(files []FilePlan) []string {
+	add, mod, del := 0, 0, 0
+
+	for _, f := range files {
+		switch f.Action {
+		case ActionUnchanged:
+			// no op
+		case ActionAdd:
+			add++
+		case ActionModify:
+			mod++
+		case ActionDelete:
+			del++
+		}
+	}
+
+	if add+mod+del == 0 {
+		return nil
+	}
+
+	return []string{fmt.Sprintf("%d add, %d mod, %d del files", add, mod, del)}
+}
+
+func dirResourceParts(dirs []DirPlan) []string {
+	dirAdd, dirMod := 0, 0
+
+	for _, d := range dirs {
+		switch d.Action {
+		case ActionUnchanged, ActionDelete:
+			// no op
+		case ActionAdd:
+			dirAdd++
+		case ActionModify:
+			dirMod++
+		}
+	}
+
+	if dirAdd+dirMod == 0 {
+		return nil
+	}
+
+	return []string{fmt.Sprintf("%d create, %d update dirs", dirAdd, dirMod)}
 }
 
 func printProjectPlan(writer io.Writer, style outputStyle, projectPlan ProjectPlan) {
@@ -542,7 +663,7 @@ func filePlanLabel(filePlan FilePlan) string {
 	case ActionDelete:
 		return "delete"
 	case ActionUnchanged:
-		return "unchanged"
+		return labelUnchanged
 	default:
 		return "unknown"
 	}
