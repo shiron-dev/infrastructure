@@ -40,7 +40,7 @@ services:
       start_period: 20s
 
   snipeit-app:
-    image: snipe/snipe-it:v8.3.7@sha256:f277e504357a0a94f9d7afd2251f3e9b6de65ea1f69f1c9cbf27e2e2059804b6
+    image: snipe/snipe-it:v8.4.0@sha256:f6f648c419b608926f15e77ed6aaacbe170e0e125595fb23d47a49d5ec222118
     container_name: snipeit-app
     restart: unless-stopped
     depends_on:
